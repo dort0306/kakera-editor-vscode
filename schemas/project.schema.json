@@ -1,0 +1,9 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Kakera 编辑器工程", "type": "object", "additionalProperties": false,
+  "required": ["editorSchema", "engineContract", "contentRoot"],
+  "properties": {
+    "editorSchema": { "const": 1 }, "engineContract": { "const": "0.8.3" },
+    "contentRoot": { "type": "string", "minLength": 1, "description": "工程内的相对内容目录，不允许越界或链接。" }
+  }
+}

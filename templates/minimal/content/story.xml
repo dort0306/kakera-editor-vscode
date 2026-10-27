@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<story schema="8" id="new-story" content-version="1" entry="opening">
+  <interface src="ui.xml" />
+  <scripts>
+    <script src="scripts/routes.js" />
+    <script src="scripts/ui.js" />
+  </scripts>
+  <assets>
+    <font id="dialogue" src="assets/fonts/chinese.otf" />
+  </assets>
+  <characters>
+    <character id="narrator" name="旁白" />
+  </characters>
+  <variables>
+    <int id="trust" initial="0" min="0" max="100" />
+  </variables>
+  <visuals>
+    <visual id="empty" />
+  </visuals>
+  <frames>
+    <frame id="opening" speaker="narrator" visual="empty">
+      <text>故事从这里开始。你想探索哪条路？</text>
+      <options>
+        <option id="explore">出发探索</option>
+        <option id="stay">留在这里</option>
+      </options>
+    </frame>
+    <frame id="journey" speaker="narrator" visual="empty">
+      <text>每一次选择，都让新的故事发生。</text>
+    </frame>
+    <frame id="ending" speaker="narrator" visual="empty">
+      <text>这一幕落下帷幕。下一段故事，等你来写。</text>
+    </frame>
+  </frames>
+  <next end="true" />
+</story>

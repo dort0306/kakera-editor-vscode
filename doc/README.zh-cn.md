@@ -19,8 +19,9 @@ AI 接口改为用户可配置的通用 Chat Completions 兼容 HTTP API，可�
 | [09 平台方案比较](09-editor-platform-comparison.zh-cn.md) | VS Code 插件、Code-OSS 分叉、独立编辑器优劣和结论 |
 | [10 播放器调试 API](10-player-debug-api.zh-cn.md) | v0.8.3 已实现的认证、请求、命令、状态和限制 |
 | [11 VS Code 插件落地方案](11-vscode-extension-implementation-plan.zh-cn.md) | 本仓库的模块、宿主接入、事务、调试、阶段任务与验收门禁 |
+| [12 实现与验证记录](12-implementation-status.zh-cn.md) | 插件 0.1.0 的实际能力、真实工具/宿主检查与未完成项 |
 
-本仓库当前为编辑器设计资料仓库，尚无插件实现。项目状态与开发入口见 [根 README](../README.md)，协作约束见 [AGENTS](../AGENTS.md)。下文及原始手册中的部分源码、demo、版本验收与归档链接来自上游引擎工程，未随本仓库提供；不能视作已在本仓库验证的证据。
+本仓库已实现插件 0.1.0 开发预览版，当前能力与检查见 [12 实现与验证](12-implementation-status.zh-cn.md)，项目入口见 [根 README](../README.md)，协作约束见 [AGENTS](../AGENTS.md)。下文及原始 01–10 手册保留原始设计状态，部分源码、demo、版本验收与归档链接来自上游引擎工程，未随本仓库提供；不能视作已在本仓库验证的证据。
 
 ## 能力状态
 

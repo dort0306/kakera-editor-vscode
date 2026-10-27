@@ -1,0 +1,14 @@
+name: 插件检查
+on: [push, pull_request]
+jobs:
+  check:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run check
+      # 真实引擎与宿主验收使用显式准备的匹配工具；普通 CI 不外发原稿或调用 AI 服务。

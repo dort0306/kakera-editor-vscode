@@ -1,0 +1,12 @@
+**/*
+!package.json
+!README.md
+!LICENSE
+!CHANGELOG.md
+!THIRD_PARTY_NOTICES.txt
+!dist/extension.cjs
+!dist/webview.css
+!dist/webview.js
+!resources/**
+!templates/**
+!schemas/**

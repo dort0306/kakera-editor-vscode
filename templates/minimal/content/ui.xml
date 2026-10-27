@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui schema="3" width="1280" height="720" initial="hud" title="Kakera 故事">
+  <screen id="hud" modal="false" pause="false" background-click="advance">
+    <scene id="scene" width="1280" height="720" />
+    <panel id="dialogue" x="40" y="500" width="1200" height="180" color="#182A3D">
+      <label id="speaker" x="24" y="14" width="1100" height="32" bind="game.speaker" font-size="24" color="#E8C58A" />
+      <label id="text" x="24" y="55" width="1130" height="85" bind="game.text" font-size="28" />
+      <button id="continue" x="1020" y="140" width="150" height="32" bind="game.continueText" visible="game.canAdvance" event="advance" />
+      <label id="end" x="1020" y="140" width="150" height="32" text="已结束" visible="game.ended" />
+    </panel>
+    <repeat id="choices" source="choices" x="740" y="180" width="480" height="280" item-width="460" item-height="54" gap="14" visible="game.complete">
+      <button id="choice" width="460" height="54" bind="item.text" event="choose" />
+    </repeat>
+    <button id="restart" x="1080" y="24" width="150" height="42" text="重新开始" event="restart" />
+  </screen>
+</ui>
