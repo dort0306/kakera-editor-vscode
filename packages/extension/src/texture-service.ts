@@ -5,6 +5,7 @@ import type { Loaded, Session } from './session';
 import { safePath, ensureDirectory, hashFile } from './files';
 import { textureTask } from './texture-task';
 import { textureUi, assignTexture, registerTexture } from '../../source/src/texture-source';
+import { newShortId } from '../../source/src/index';
 import { WORKBENCH_FILE, readWorkbench } from '../../source/src/workbench';
 import { validateRegions, type NinePatchSpec, type AtlasRegion } from '../../domain/src/textures';
 export async function textureBytes(session: Session, loaded: Loaded, assetId: string): Promise<{ bytes: Buffer; hash: string; nine: boolean }> {
@@ -33,7 +34,7 @@ export async function saveTexture(session: Session, loaded: Loaded, worker: stri
     await session.apply(loaded, changes, signal, { save: true }); return request.assetId;
   }
   if (request.mode !== 'nine') throw new Error('不支持的资源操作');
-  const id = input.nine ? request.assetId : `nine.${randomUUID()}`;
+  const id = input.nine ? request.assetId : newShortId(loaded.story.assets.map(asset => asset.id));
   return commitTexture(session, loaded, id, 'nine-patch', result.png, undefined, request.target, request.density, signal);
 }
 export async function packTexture(session: Session, loaded: Loaded, worker: string, ids: string[], width: number, padding: number, signal?: AbortSignal): Promise<string> {
@@ -43,7 +44,7 @@ export async function packTexture(session: Session, loaded: Loaded, worker: stri
   const result = await textureTask(worker, { mode: 'pack', inputs, width, padding }, signal);
   for (let i = 0; i < ids.length; i++) if ((await textureBytes(session, loaded, ids[i])).hash !== inputs[i].hash) throw new Error('合成源图片已改变');
   validateRegions(result.regions!, result.width, result.height);
-  return commitTexture(session, loaded, `atlas.${randomUUID()}`, 'image', result.png, result.regions, undefined, undefined, signal);
+  return commitTexture(session, loaded, newShortId(loaded.story.assets.map(asset => asset.id)), 'image', result.png, result.regions, undefined, undefined, signal);
 }
 async function commitTexture(session: Session, loaded: Loaded, id: string, kind: 'image' | 'nine-patch', png: Uint8Array, regions?: AtlasRegion[], target?: string, density?: number, signal?: AbortSignal): Promise<string> {
   if (png.length > 8 * 1024 * 1024) throw new Error('生成图片超过 8MiB，请减小尺寸');

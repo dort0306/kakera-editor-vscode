@@ -30,8 +30,7 @@ test('幕卡拖动在松手时保存；缩放后的拖线、点击连接、取�
   } finally { await act(async () => root.unmount()); dom.window.close(); }
 });
 
-test('普通点击不被 SVG 捕获；拖动后下一次鼠标或键盘选中不被旧状态吞掉', async () => {
-  const dom = new JSDOM('<div id="root"></div>', { url: 'https://test.local' }); Object.assign(globalThis, { window: dom.window, document: dom.window.document, HTMLElement: dom.window.HTMLElement, IS_REACT_ACT_ENVIRONMENT: true });
+test('普通点击不被 SVG 捕获；拖动后下一次鼠标或键盘选中不被旧状态吞掉', async () => {  const dom = new JSDOM('<div id="root"></div>', { url: 'https://test.local' }); Object.assign(globalThis, { window: dom.window, document: dom.window.document, HTMLElement: dom.window.HTMLElement, IS_REACT_ACT_ENVIRONMENT: true });
   let captured: Element | undefined;
   Object.assign(dom.window.Element.prototype, { setPointerCapture(this: Element) { captured = this; }, hasPointerCapture(this: Element) { return captured === this; }, releasePointerCapture(this: Element) { if (captured === this) captured = undefined; } });
   const { createRoot } = await import('react-dom/client'), node = document.getElementById('root')!, root = createRoot(node);
@@ -53,5 +52,34 @@ test('普通点击不被 SVG 捕获；拖动后下一次鼠标或键盘选中不
     await pointer(a, 'pointerdown'); await pointer(svg, 'pointermove', 150, 160); await pointer(svg, 'pointercancel'); captured = undefined; assert.equal(moves.length, 1);
     await act(async () => root.render(React.createElement(StoryGraphView, { ...props, disabled: true })));
     await pointer(b, 'pointerdown'); assert.equal(captured, undefined); await pointer(b, 'pointerup'); await click(b); assert.equal(selections.at(-1), 'b');
+  } finally { await act(async () => root.unmount()); dom.window.close(); }
+});
+
+test('Ctrl+A 全选、方向键/Shift 扩展、Alt 批量微调与多幕拖动', async () => {
+  const dom = new JSDOM('<div id="root"></div>', { url: 'https://test.local' }); Object.assign(globalThis, { window: dom.window, document: dom.window.document, HTMLElement: dom.window.HTMLElement, IS_REACT_ACT_ENVIRONMENT: true });
+  const { createRoot } = await import('react-dom/client'); const node = document.getElementById('root')!, root = createRoot(node);
+  const story: Story = { id: 's', entry: 'a', contentVersion: '1', frames: ['a', 'b', 'c'].map(ref => ({ ref, id: ref, text: ref, file: 'story.xml', line: 1, options: [], speaker: '', visual: '', audio: {} })), files: ['story.xml'], scripts: [], assets: [], variables: [], visuals: [], characters: [] };
+  const routes: Route[] = [{ frame: 'a', kind: 'advance', target: 'b', updates: [] }, { frame: 'b', kind: 'advance', target: 'c', updates: [] }, { frame: 'c', kind: 'end', updates: [] }];
+  const selected: { refs: string[]; primary?: string }[] = [], layouts: { ref: string; point: { x: number; y: number } }[][] = [];
+  function Harness() {
+    const [selection, setSelection] = useState(['a']), [primary, setPrimary] = useState('a'), [layout, setLayout] = useState({});
+    return React.createElement(StoryGraphView, { story, routes, selected: primary, selection, query: '', layout, select: (ref: string) => { setSelection([ref]); setPrimary(ref); }, selectMany: (refs: string[], next?: string) => { selected.push({ refs, primary: next }); setSelection(refs); if (next) setPrimary(next); }, onLayoutMany: (moves: { ref: string; point: { x: number; y: number } }[]) => { layouts.push(moves); setLayout(old => ({ ...old, ...Object.fromEntries(moves.map(move => [move.ref, move.point])) })); } });
+  }
+  const key = async (key: string, options: { ctrlKey?: boolean; shiftKey?: boolean; altKey?: boolean } = {}) => { const surface = node.querySelector('.graph-scroll')!; await act(async () => surface.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key, bubbles: true, cancelable: true, ...options }))); };
+  const pointer = async (el: Element, type: string, x: number, y: number) => { const event = new dom.window.MouseEvent(type, { bubbles: true, button: 0, clientX: x, clientY: y }); Object.defineProperty(event, 'pointerId', { value: 1 }); await act(async () => el.dispatchEvent(event)); };
+  try {
+    await act(async () => root.render(React.createElement(Harness)));
+    await key('a', { ctrlKey: true });
+    assert.deepEqual(selected.at(-1), { refs: ['a', 'b', 'c'], primary: 'a' });
+    assert.equal(node.querySelectorAll('.graph-node.selected').length, 3);
+    assert.equal(node.querySelector('.graph-selection')?.textContent, '已选 3 幕');
+    await key('ArrowRight'); assert.deepEqual(selected.at(-1), { refs: ['b'], primary: 'b' });
+    await key('ArrowRight', { shiftKey: true }); assert.deepEqual(selected.at(-1), { refs: ['b', 'c'], primary: 'c' });
+    await key('a', { ctrlKey: true });
+    const before = layouts.length; await key('ArrowRight', { altKey: true }); assert.equal(layouts.length, before + 1); assert.equal(layouts.at(-1)!.length, 3);
+    assert.deepEqual(layouts.at(-1)!.map(move => move.ref), ['a', 'b', 'c']);
+    const card = node.querySelector('[data-frame-ref="a"]')!; const rect = card.getBoundingClientRect(); const svg = node.querySelector('.graph-scroll svg')!; const count = layouts.length;
+    await pointer(card, 'pointerdown', rect.left + 10, rect.top + 10); await pointer(svg, 'pointermove', rect.left + 40, rect.top + 30); await pointer(svg, 'pointerup', rect.left + 40, rect.top + 30);
+    assert.equal(layouts.length, count + 1); assert.equal(layouts.at(-1)!.length, 3);
   } finally { await act(async () => root.unmount()); dom.window.close(); }
 });

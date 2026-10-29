@@ -30,6 +30,7 @@ async function mouse(type, p) { const buttons = type === 'mousePressed' ? 1 : ty
 async function click(selector) { const p = await center(selector); await mouse('mouseMoved', p); await mouse('mousePressed', p); await mouse('mouseReleased', p); await flush(); }
 async function setValue(selector, value, event = 'input') { await evaluate(`(() => { const el=document.querySelector(${JSON.stringify(selector)}); if(!el) throw Error('Missing target'); const proto=el instanceof HTMLSelectElement ? HTMLSelectElement.prototype : HTMLInputElement.prototype; Object.getOwnPropertyDescriptor(proto,'value').set.call(el, ${JSON.stringify(value)}); el.dispatchEvent(new Event(${JSON.stringify(event)},{bubbles:true})); })()`); await flush(); }
 async function key(name, code) { await command('Input.dispatchKeyEvent', { type: 'keyDown', key: name, code: name, windowsVirtualKeyCode: code, ...(name === 'Enter' ? { text: '\r', unmodifiedText: '\r' } : {}) }); await command('Input.dispatchKeyEvent', { type: 'keyUp', key: name, code: name, windowsVirtualKeyCode: code }); await flush(); }
+async function combo(key, code, virtualKey, modifiers) { await command('Input.dispatchKeyEvent', { type: 'keyDown', key, code, windowsVirtualKeyCode: virtualKey, modifiers }); await command('Input.dispatchKeyEvent', { type: 'keyUp', key, code, windowsVirtualKeyCode: virtualKey, modifiers }); await flush(); }
 try {
   const port = await until(async () => Number((await readFile(path.join(profile, 'DevToolsActivePort'), 'utf8')).split('\n')[0]), '浏览器调试端口');
   const page = await until(async () => (await (await fetch(`http://127.0.0.1:${port}/json/list`)).json()).find(t => t.type === 'page' && t.url.includes('fixture.html')), '测试页面');
@@ -44,6 +45,15 @@ try {
   assert.deepEqual(first.selected, ['b'], `单击应选中 b；实际事件：${JSON.stringify(first.events)}`);
   assert.equal(await evaluate('document.querySelector(\'[data-frame-ref="b"]\').getAttribute("aria-pressed")'), 'true');
   assert.equal(await evaluate('graphTest.moves.length'), 0);
+  await combo('a', 'KeyA', 65, 2);
+  assert.deepEqual(await evaluate('graphTest.batches.at(-1)'), { refs: ['a', 'b', 'c'], primary: 'b' });
+  assert.equal(await evaluate('document.querySelectorAll(".graph-node.selected").length'), 3);
+  assert.equal(await evaluate('document.querySelector(".graph-selection")?.textContent'), '已选 3 幕');
+  await click('[data-frame-ref="b"] p');
+  assert.equal(await evaluate('document.querySelectorAll(".graph-node.selected").length'), 1);
+  await combo('ArrowRight', 'ArrowRight', 39, 8);
+  assert.deepEqual(await evaluate('graphTest.batches.at(-1)'), { refs: ['b', 'c'], primary: 'c' });
+  await click('[data-frame-ref="b"] p');
   for (let i = 0; i < 4; i++) await click('[aria-label="缩小分支图"]');
   const jitter = await center('[data-frame-ref="a"] p'); await mouse('mousePressed', jitter); await mouse('mouseMoved', { x: jitter.x + 2, y: jitter.y + 1 }); await mouse('mouseReleased', { x: jitter.x + 2, y: jitter.y + 1 }); await flush();
   assert.equal(await evaluate('graphTest.selections.at(-1)'), 'a'); assert.equal(await evaluate('graphTest.moves.length'), 0, '缩小后的小幅手抖不能触发拖动');
@@ -75,7 +85,7 @@ try {
   const restrictedDrag = await center('[data-ui-node="caption"] .ui-node-hit'); await mouse('mousePressed', restrictedDrag); await mouse('mouseMoved', { x: restrictedDrag.x + 30, y: restrictedDrag.y + 20 }); await evaluate('uiTest.setReadonly(true)'); await flush(); await mouse('mouseReleased', { x: restrictedDrag.x + 30, y: restrictedDrag.y + 20 }); await flush(); assert.equal(await evaluate('uiTest.operations.length'), beforeCancel, '只读状态应取消拖动');
   await evaluate('uiTest.setReadonly(true)'); await flush(); await click('[data-ui-node="advance"] .ui-node-hit'); assert.equal(await evaluate(`document.querySelector('[data-ui-node="advance"]').getAttribute("aria-pressed")`), 'true'); assert.equal(await evaluate('uiTest.operations.length'), beforeCancel);
   await evaluate('uiTest.setReadonly(false)'); await flush(); await click('[data-ui-node="caption"] .ui-node-hit');
-  await click('.ui-tree > button:nth-of-type(2)');
+  await evaluate("[...document.querySelectorAll('.ui-tree > button')].find(b => b.textContent === '页面属性')?.click()"); await flush();
   await click('[aria-label="screenClose 动作"]'); await key('ArrowDown', 40); await key('Enter', 13);
   assert.equal(await evaluate('document.querySelector(\'[aria-label="screenClose 动作"]\').value'), 'page');
   await click('[aria-label="screenClose 目标"]'); await key('ArrowDown', 40); await key('Enter', 13);
@@ -85,6 +95,41 @@ try {
   await click('.lifecycle-editor .actions button');
   assert.deepEqual(await evaluate('uiTest.operations.at(-1)'), { action: 'lifecycle', kind: 'screenClose', owner: 'hud', mode: 'page', target: 'help' });
   await writeFile(path.join(directory, 'ui-editor.png'), Buffer.from((await command('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false })).data, 'base64'));
+  await click('[data-ui-node="picker"] .ui-node-hit');
+  assert.equal(await evaluate('document.querySelector(\'select[aria-label="UI color-picker value"]\').value'), 'ui.bgDraft');
+  assert.equal(await evaluate('document.querySelector(\'select[aria-label="UI alpha"]\').value'), 'true');
+  await evaluate("[...document.querySelectorAll('.ui-tree-node')].find(b => b.textContent.includes('panel'))?.click()"); await flush();
+  assert.equal(await evaluate('document.querySelector(\'[data-ui-node="panel"]\')?.getAttribute("aria-pressed")'), 'true');
+  assert.equal(await evaluate('document.querySelector(\'[aria-label="颜色 #RRGGBB / #RRGGBBAA"]\')?.value'), '#243950');
+  await evaluate('document.querySelector(\'[aria-label="颜色 #RRGGBB / #RRGGBBAA：打开 HSV 选色器"]\').scrollIntoView({block:"nearest"})'); await flush();
+  await click('[aria-label="颜色 #RRGGBB / #RRGGBBAA：打开 HSV 选色器"]');
+  const pickerRect = await evaluate('(() => { const r=document.querySelector(\'svg[aria-label="HSV 三角选色器"]\').getBoundingClientRect(); return {x:r.x,y:r.y,w:r.width,h:r.height}; })()');
+  const ringPoint = { x: pickerRect.x + pickerRect.w * .5, y: pickerRect.y + pickerRect.h * (19 / 300) };
+  await mouse('mouseMoved', ringPoint); await mouse('mousePressed', ringPoint); await mouse('mouseReleased', ringPoint); await flush();
+  assert.equal(await evaluate('document.querySelector(\'[aria-label="颜色 #RRGGBB / #RRGGBBAA"]\')?.value !== "#243950"'), true);
+  assert.equal(await evaluate("[...document.querySelectorAll('button')].find(b => b.textContent === '保存属性')?.disabled"), false);
+  await evaluate('document.querySelector(\'button.primary\').scrollIntoView({block:"nearest"})'); await flush();
+  await evaluate("[...document.querySelectorAll('button')].find(b => b.textContent === '保存属性')?.click()"); await flush();
+  const colorPatch = await evaluate('uiTest.operations.at(-1)');
+  assert.equal(colorPatch.action, 'patchNode'); assert.equal(colorPatch.id, 'panel'); assert.match(colorPatch.patch.color, /^#[0-9A-F]{8}$/);
+  await evaluate("[...document.querySelectorAll('button')].find(b => b.textContent === '＋快捷弹窗')?.click()"); await flush();
+  await setValue('[aria-label="UI 表单 title"]', '浏览器确认');
+  await setValue('[aria-label="UI 表单 message"]', '确定继续？');
+  await setValue('[aria-label="UI 表单 accept"]', 'quit', 'change');
+  await evaluate("[...document.querySelectorAll('button')].find(b => b.textContent === '保存设置')?.click()"); await flush();
+  const popupOp = await evaluate('uiTest.operations.at(-1)');
+  assert.equal(popupOp.action, 'addPopup'); assert.equal(popupOp.accept, 'quit'); assert.equal(popupOp.title, '浏览器确认');
+  await evaluate("[...document.querySelectorAll('.tree-section > summary')].find(s => s.textContent.includes('交互事件'))?.click()"); await flush();
+  await evaluate("[...document.querySelectorAll('button')].find(b => b.textContent === '＋新建事件')?.click()"); await flush();
+  await setValue('[aria-label="UI 表单 name"]', 'browser.keybinding');
+  await setValue('[aria-label="UI 表单 command"]', 'keybinding', 'change');
+  await setValue('[aria-label="UI 表单 actionValue"]', 'advance', 'change');
+  await setValue('[aria-label="UI 表单 binding"]', 'Enter');
+  await evaluate("[...document.querySelectorAll('button')].find(b => b.textContent === '保存设置')?.click()"); await flush();
+  const keybindingOp = await evaluate('uiTest.operations.at(-1)');
+  assert.equal(keybindingOp.action, 'event'); assert.equal(keybindingOp.command, 'keybinding'); assert.equal(keybindingOp.actionValue, 'advance'); assert.equal(keybindingOp.binding, 'Enter');
+  console.log('BROWSER UI V0100 PASS: HSV ring edit saves canonical color, color-picker inspector, quick popup and keybinding event forms.');
+  await evaluate("[...document.querySelectorAll('.tree-section > summary')].find(s => s.textContent.includes('交互事件'))?.click()"); await flush();
   await evaluate("[...document.querySelectorAll('.tree-section > summary')].find(s => s.textContent.includes('交互事件'))?.click()"); await flush();
   await evaluate("[...document.querySelectorAll('button')].find(b => b.textContent === '＋新建事件')?.click()"); await flush();
   await setValue('[aria-label="UI 表单 name"]', 'browser.start');
@@ -112,6 +157,17 @@ try {
   assert.equal(await evaluate('document.querySelector(".stage img")?.getAttribute("alt")'), 'CG 画面');
   assert.equal(await evaluate('document.querySelectorAll(".side-drawer.open").length'), 0);
   await evaluate('document.querySelector(\'[data-frame-ref="opening"]\').scrollIntoView({block:"center"})'); await flush();
+  await click('[data-frame-ref="opening"] p');
+  await combo('a', 'KeyA', 65, 2);
+  assert.equal(await evaluate('document.querySelectorAll(".graph-node.selected").length'), 5);
+  assert.equal(await evaluate('document.querySelector(".graph-selection")?.textContent'), '已选 5 幕');
+  await key('Escape', 27);
+  assert.equal(await evaluate('document.querySelectorAll(".graph-node.selected").length'), 1);
+  await evaluate('document.activeElement?.blur()'); await flush();
+  await combo('a', 'KeyA', 65, 2);
+  assert.equal(await evaluate('document.querySelectorAll(".graph-node.selected").length'), 5);
+  await click('[data-frame-ref="opening"] p');
+  assert.equal(await evaluate('document.querySelectorAll(".graph-node.selected").length'), 1);
   const beforeLayouts = await evaluate('window.workbenchTest.messages.filter(m=>m==="layout").length');
   const graphStart = await center('[data-frame-ref="opening"] p');
   await mouse('mousePressed', graphStart); for (let i = 1; i <= 4; i++) await mouse('mouseMoved', { x: graphStart.x + 12 * i, y: graphStart.y + 9 * i }); await mouse('mouseReleased', { x: graphStart.x + 48, y: graphStart.y + 36 }); await flush();

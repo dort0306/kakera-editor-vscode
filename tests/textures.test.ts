@@ -5,7 +5,7 @@ import { encode as jpeg } from 'jpeg-js';
 import { decodeTexture, encodeTexture, readNinePatch, writeNinePatch, packTextures } from '../packages/extension/src/texture-codec';
 import { gridRegions, patchAxis, validateNinePatch, validateRegions, type NinePatchSpec } from '../packages/domain/src/textures';
 import { assignTexture, registerTexture, textureUi } from '../packages/source/src/texture-source';
-import { readWorkbench, moveFrame, frameLayout } from '../packages/source/src/workbench';
+import { readWorkbench, moveFrame, moveFrames, frameLayout } from '../packages/source/src/workbench';
 import { readStory, analyzeLogic } from '../packages/source/src/index';
 import { reconnectFrame } from '../packages/source/src/editing';
 import { buildStoryGraph } from '../packages/domain/src/graph';
@@ -58,13 +58,16 @@ test('图集应用只改选中控件、解除 region 绑定并保留 UI 子节�
 });
 test('既有点九编辑保持资源 ID、位置及其他章节内容；页面可追加可运行节点', () => {
   const input = sources(), changes = registerTexture(input, 'panel', 'nine-patch', 'new.9.png'); assert.equal(changes.get('story.xml'), storyXml.replace('old.9.png', 'new.9.png'));
-  assert.ok(assignTexture(input, 'panel', 'nine-patch', 'main').get('ui.xml')!.includes('<nine-patch id="texture.panel"')); assert.equal(changes.has('routes.js'), false);
+  assert.match(assignTexture(input, 'panel', 'nine-patch', 'main').get('ui.xml')!, /<nine-patch id="[0-9a-f]{16}" x="20" y="20" width="320" height="180" image="panel" density="1"\/>/); assert.equal(changes.has('routes.js'), false);
 });
 test('拖动布局使用稳定 ID 保存、不改变剧情顺序；重置只清空位置', () => {
   const input = sources(), story = readStory(input), meta = moveFrame(readWorkbench(), story, 'a', { x: 123, y: 246 }); assert.deepEqual(meta.positions.a, { x: 120, y: 250 });
   const layout = frameLayout(readWorkbench(JSON.stringify(meta)), { ...story, frames: story.frames.map(f => f.ref === 'a' ? { ...f, name: 'renamed', ref: 'renamed' } : f) }); assert.deepEqual(layout.renamed, meta.positions.a);
   const graph = buildStoryGraph(story, analyzeLogic(input, story).routes, frameLayout(meta, story)); assert.equal(graph.nodes.find(n => n.id === 'a')!.x, 120); assert.deepEqual(Object.keys(moveFrame(meta, story).positions), []); assert.equal(input.get('story.xml'), storyXml);
   assert.throws(() => moveFrame(meta, story, 'a', { x: NaN, y: 0 }));
+  const multi = moveFrames(meta, story, { a: { x: 11, y: 22 }, b: { x: 33, y: 44 } });
+  assert.deepEqual(multi.positions.a, { x: 10, y: 20 }); assert.deepEqual(multi.positions.b, { x: 30, y: 40 });
+  assert.throws(() => moveFrames(meta, story, {})); assert.throws(() => moveFrames(meta, story, { missing: { x: 1, y: 2 } })); assert.throws(() => moveFrames(meta, story, { a: { x: NaN, y: 0 } }));
 });
 test('重新连线与断开保留选项/条件/更新/注释，结束幕可接续，自循环合法，Opaque 拒绝', () => {
   const input = sources(), logic = analyzeLogic(input, readStory(input)), connected = reconnectFrame(input, logic, 'a', 'a', 'x'), next = new Map([...input, ...connected]), mapped = analyzeLogic(next, readStory(next));

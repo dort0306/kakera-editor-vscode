@@ -3,7 +3,10 @@ import type { Story } from '../../domain/src/index';
 import { previewUi, type UiPreviewNode } from '../../domain/src/ui-preview';
 import type { UiDesign, UiScreen, UiTextures } from '../../domain/src/ui';
 import { patchAxis } from '../../domain/src/textures';
-const color = (s: string | undefined, fallback: string) => s && /^#[0-9a-f]{6}([0-9a-f]{2})?$/i.test(s) ? s : fallback;
+import { normalizeColor, parseColor } from '../../domain/src/colors';
+import { HsvPickerGraphic } from './color-picker';
+const color = (s: string | undefined, fallback: string) => { try { return normalizeColor(s ?? ''); } catch { return fallback; } };
+const pickerColor = (s: string | undefined) => { try { return parseColor(s ?? '#FF0000FF'); } catch { return parseColor('#FF0000FF'); } };
 export function UiCanvas({ design, screen, story, frame, textures, selected, select, disabled, commit }: { design: UiDesign; screen: UiScreen; story?: Story; frame?: string; textures: UiTextures; selected: string; select: (id: string) => void; disabled: boolean; commit: (id: string, patch: Record<string, string>) => void }) {
   const [zoom, setZoom] = useState(.65), [snap, setSnap] = useState(true), [showHidden, setShowHidden] = useState(true), [local, setLocal] = useState<Record<string, string>>();
   const svg = useRef<SVGSVGElement>(null), gesture = useRef<{ id: string; x: number; y: number; original: [number, number, number, number]; resize: boolean; moved: boolean; pointer: number } | undefined>(undefined);
@@ -64,12 +67,18 @@ export function UiCanvas({ design, screen, story, frame, textures, selected, sel
           <title>{item.node.kind} · {item.node.id} · {item.node.file}:{item.node.line}{item.template ? ' · 模板实例' : ''}{a.effect ? ' · 效果请试玩确认' : ''}</title>
           <defs><clipPath id={clip}><rect x={item.clip[0]} y={item.clip[1]} width={item.clip[2]} height={item.clip[3]}/></clipPath></defs>
           <g clipPath={`url(#${clip})`}>
-            <rect x={x} y={y} width={w} height={h} rx={Number(a.radius ?? 0)} fill={item.node.kind === 'label' || item.node.kind === 'image' || item.node.kind === 'repeat' ? 'transparent' : color(a.color, item.node.kind === 'button' ? '#29455f' : item.node.kind === 'panel' ? '#1b2c3e' : '#1a3044')} stroke={item.node.kind === 'repeat' || item.node.kind === 'scene' ? '#476983' : 'none'} strokeDasharray={item.node.kind === 'repeat' ? '6 4' : undefined}/>
+            <rect x={x} y={y} width={w} height={h} rx={Number(a.radius ?? 0)} fill={item.node.kind === 'label' || item.node.kind === 'image' || item.node.kind === 'repeat' || item.node.kind === 'color-picker' ? 'transparent' : color(item.colorValue ?? a.color, item.node.kind === 'button' ? '#29455f' : item.node.kind === 'panel' ? '#1b2c3e' : '#1a3044')} stroke={item.node.kind === 'repeat' || item.node.kind === 'scene' ? '#476983' : 'none'} strokeDasharray={item.node.kind === 'repeat' ? '6 4' : undefined}/>
+            {item.node.kind === 'color-picker' ? <svg x={x} y={y} width={w} height={h} viewBox="0 0 260 300" preserveAspectRatio="xMidYMid meet" className="ui-color-picker-preview" aria-label="color-picker 静态预览">
+              <rect width="260" height="300" rx="10" fill="#101c28" stroke="#476983"/>
+              <HsvPickerGraphic color={pickerColor(item.colorValue)} alpha={a.alpha !== 'false'} detail={6}/>
+              <text x="14" y="284" fontSize="13" fill="#9cb2c8">color-picker{typeof item.colorValue === 'string' ? ` · ${item.colorValue}` : ''}</text>
+            </svg> : null}
             {skin(item)}
+            {item.colorValue && !['label', 'button', 'toggle', 'color-picker'].includes(item.node.kind) && <rect x={x} y={y} width={w} height={h} rx={Number(a.radius ?? 0)} fill={color(item.colorValue, '#00000000')} opacity=".45" pointerEvents="none"/>}
             {item.node.kind === 'scene' && <text x={x + 16} y={y + 30} fontSize="20" fill="#9cb2c8">剧情画面占位 · 实际舞台请用播放器查看</text>}
             {item.node.kind === 'repeat' && !item.node.children.length && <text x={x + 8} y={y + 24} fontSize="16" fill="#b1c8df">repeat：{a.source}（添加子控件设计模板）</text>}
             {item.node.kind === 'slider' && <><rect x={x + 8} y={y + h / 2 - 3} width={Math.max(1, w - 16)} height="6" rx="3" fill="#3a536b"/><rect x={x + 8} y={y + h / 2 - 3} width={Math.max(1, (w - 16) * .6)} height="6" rx="3" fill="#5fd8c4"/><circle cx={x + 8 + (w - 16) * .6} cy={y + h / 2} r={Math.min(10, h / 3)} fill="#dffaf4" stroke="#2a9e92" strokeWidth="2"/></>}
-            {['label', 'button', 'toggle'].includes(item.node.kind) && <foreignObject x={x + (item.node.kind === 'toggle' ? 32 : 0)} y={y} width={Math.max(1, w - (item.node.kind === 'toggle' ? 32 : 0))} height={h} pointerEvents="none"><div className={`ui-preview-text ${item.node.kind === 'button' ? 'center' : ''}`} style={{ fontSize: font, color: color(a.color, item.node.kind === 'button' ? '#e8f2fa' : '#dbe7f3') }}>{item.text}</div></foreignObject>}
+            {['label', 'button', 'toggle'].includes(item.node.kind) && <foreignObject x={x + (item.node.kind === 'toggle' ? 32 : 0)} y={y} width={Math.max(1, w - (item.node.kind === 'toggle' ? 32 : 0))} height={h} pointerEvents="none"><div className={`ui-preview-text ${item.node.kind === 'button' ? 'center' : ''}`} style={{ fontSize: font, color: item.node.kind === 'button' ? '#e8f2fa' : color(item.colorValue ?? a.color, '#dbe7f3') }}>{item.text}</div></foreignObject>}
             {item.node.kind === 'toggle' && <><rect x={x + 4} y={y + (h - 22) / 2} width="22" height="22" rx="6" fill="#35566e" stroke="#7ea2bb"/><path d={`M ${x + 10} ${y + h / 2} l3 3 l6 -7`} fill="none" stroke="#8fe6d8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></>}
             <rect className="ui-node-hit" x={x} y={y} width={w} height={h} fill="transparent"/>
           </g>

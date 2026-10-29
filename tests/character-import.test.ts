@@ -13,7 +13,7 @@ test('批量导入保留源文件，取消只清理本次新文件与授权记�
   const source = path.join(root, 'source'), content = path.join(root, 'content'); await fs.mkdir(source); await fs.mkdir(content); await fs.writeFile(path.join(source, 'a.png'), 'image bytes'); await fs.writeFile(path.join(source, 'b.png'), 'other image');
   const stage = new CharacterImport(content);
   try {
-    const a = await stage.image(path.join(source, 'a.png')), b = await stage.image(path.join(source, 'b.png')); assert.notEqual(a, b); assert.equal(stage.assets.length, 2); await stage.license('作者授权');
+    const a = await stage.image(path.join(source, 'a.png')), b = await stage.image(path.join(source, 'b.png')); assert.notEqual(a, b); assert.match(a, /^[0-9a-f]{16}$/); assert.match(b, /^[0-9a-f]{16}$/); assert.equal(stage.assets.length, 2); await stage.license('作者授权');
     assert.equal(await fs.readFile(path.join(content, stage.assets[0].src), 'utf8'), 'image bytes'); await stage.dispose();
     assert.equal(await fs.readFile(path.join(source, 'a.png'), 'utf8'), 'image bytes'); assert.equal((await fs.readdir(path.join(content, 'assets/licenses'))).length, 0);
     await assert.rejects(fs.access(path.join(content, stage.relative)));

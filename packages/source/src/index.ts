@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 import type { Asset, Frame, Story } from '../../domain/src/index';
 import { child, escapeXml, group, parseXml, setAttribute, type XmlNode } from './xml';
 export { emitRoutes, readManagedRoutes } from './routes';
@@ -45,7 +45,7 @@ export function readStory(sources: Sources): Story {
   return story;
 }
 export { readGameTitle, patchGameTitle, editCharacter, addCharacterLooks, characterLooks, assignCharacterLook, setFrameVisual } from './project';
-export { reconcilePendingRoutes, insertConnectedFrame, deleteConnectedFrame, setStoryEntry, setStoryEntries, addStoryVariable, editStoryVariable, deleteStoryVariable, deleteCharacter, renameFrame } from './editing';
+export { reconcilePendingRoutes, insertConnectedFrame, deleteConnectedFrame, deleteConnectedFrames, duplicateConnectedFrames, setStoryEntry, setStoryEntries, addStoryVariable, editStoryVariable, deleteStoryVariable, deleteCharacter, renameFrame } from './editing';
 function frameNode(source: string, ref: string): XmlNode {
   const node = group(parseXml(source), 'frames').find(n => (n.attrs.name || n.attrs.id) === ref);
   if (!node) throw new Error('幕已改变，请刷新');
@@ -74,10 +74,24 @@ export function patchFrame(source: string, ref: string, patch: { text?: string; 
   }
   parseXml(next); return next;
 }
-export function insertFrame(source: string, afterRef?: string, duplicateRef?: string): { source: string; ref: string } {
+/** Stable short ID shared by frames, characters, assets, visuals and UI nodes.
+ * The UUID is only a collision fallback after 64 attempts, never the normal path. */
+export function newShortId(reserved: Iterable<string> = []): string {
+  const used = new Set(reserved);
+  for (let attempt = 0; attempt < 64; attempt++) {
+    const id = randomBytes(8).toString('hex');
+    if (!used.has(id)) return id;
+  }
+  // UUID remains the collision fallback only.
+  return randomUUID();
+}
+export function newFrameRef(reserved: Iterable<string> = []): string { return newShortId(reserved); }
+export function insertFrame(source: string, afterRef?: string, duplicateRef?: string, reserved: Iterable<string> = []): { source: string; ref: string } {
   const root = parseXml(source), frames = child(root, 'frames');
   if (!frames || frames.openEnd === frames.closeStart) throw new Error('请先在源码中建立非自闭合 frames 分组');
-  const ref = randomUUID();
+  const used = new Set(reserved);
+  for (const node of frames.children) for (const value of [node.attrs.id, node.attrs.name]) if (value) used.add(value);
+  const ref = newFrameRef(used);
   let markup = `<frame id="${ref}"><text>新的一幕。</text></frame>`;
   if (duplicateRef) {
     const original = frameNode(source, duplicateRef);

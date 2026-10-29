@@ -2,7 +2,7 @@
 
 面向 Kakera AVG 的可视创作插件：以“一格一幕”的分镜工作台编辑剧情，保留普通 XML/JS 源码，使用真实播放器验证和试玩。
 
-**当前版本：0.8.8，Windows x64 本地桌面开发预览版。** Webview 重构为现代游戏编辑器/IDE 工作区：顶部应用栏、工程侧栏、舞台与分镜主区、属性检查器、底部状态栏，以及抽屉式工程设置/图片工具；UI 编辑器改为页面层级、设计画布和分组属性三栏。功能上继续适配 Kakera v0.9.1（story 8 / UI 3 / save 9）：支持专用 `<cg>` 资源、CG 完整画面、画廊中文标题/初始解锁、`game.cgId` 与 `cg.total/unlocked/progress` 绑定、`ctx.unlock` 解锁事件，以及多起始幕、UI 显式起始幕、变量编辑/删除、生命周期、末幕 frameExit、演出/音效和隐藏槽。支持幕拖动/重连线、事件编辑/删除、幕 ID 重命名、点九/图集、JS/XML 实时映射、UI 变量、标题/人物/立绘/Live2D 管理及真实试玩/调试/构建。实际验证与限制见[实现记录](doc/12-implementation-status.zh-cn.md)，日常操作见[可视化编辑器使用说明](doc/18-visual-editor-guide.zh-cn.md)。
+**当前版本：0.10.0，Windows x64 本地桌面开发预览版。** Webview 重构为现代游戏编辑器/IDE 工作区：顶部应用栏、工程侧栏、舞台与分镜主区、属性检查器、底部状态栏，以及抽屉式工程设置/图片工具；UI 编辑器改为页面层级、设计画布和分组属性三栏。功能上继续适配 Kakera v0.10.0（story 8 / UI 3 / save 9）：支持专用 `<cg>` 资源、CG 完整画面、画廊中文标题/初始解锁、`game.cgId` 与 `cg.total/unlocked/progress` 绑定、`ctx.unlock` 解锁事件，以及多起始幕、UI 显式起始幕、变量编辑/删除、生命周期、末幕 frameExit、演出/音效和隐藏槽；新增快捷确认弹窗、玩家可配置快捷键的 UI 事件、三角 HSV `color-picker`、`color-bind` 和 `palette` 配色槽位。支持幕拖动/重连线、事件编辑/删除、幕 ID 重命名、点九/图集、JS/XML 实时映射、UI 变量、标题/人物/立绘/Live2D 管理及真实试玩/调试/构建。实际验证与限制见[实现记录](doc/12-implementation-status.zh-cn.md)，日常操作见[可视化编辑器使用说明](doc/18-visual-editor-guide.zh-cn.md)。
 
 ## 项目目标
 
@@ -18,20 +18,20 @@
 
 | 范围 | 基线或计划 | 本仓库状态 |
 | --- | --- | --- |
-| 游戏格式 | v0.9.1 story 8 / UI 3 / save 9 | 模板与候选通过真实 v0.9.1 引擎检查；支持专用 CG 资源；旧 frame.video 显示错误诊断 |
+| 游戏格式 | v0.10.0 story 8 / UI 3 / save 9 | 模板与候选通过真实 v0.10.0 引擎检查；支持专用 CG 资源、palette/color-bind/color-picker；旧 frame.video 显示错误诊断 |
 | 标题与人物 | 游戏标题、人物创建/改名、批量立绘、Live2D 模型/依赖与回退图、外观编辑和放入当前幕 | 已实现；标题/人物名称均写入实际 XML，保持稳定引用 |
 | 分支分镜 | 选项分叉、目标汇合、循环和未知目标 | 分支分色、普通续接同行；拖动布局保存，拖线/点击连接；新建/删除明确调整连接 |
 | 手动创作 | 新建/打开、分镜、台词/人物/音频、独立三槽画面、选择/条件分流/有序更新、稳定 ID | 已实现；生成脚本和可逆固定注册均可编辑，按幕确定可写范围 |
 | 源码与资源 | 多章节、局部 XML 补丁、Opaque JS 保留、资源导入/已知引用、恢复记录 | 已实现基础能力、人物模型关联、点九/图集工具；复杂模型参数和合并待补 |
-| UI 编辑器 | UI 3 多文件页面、控件树/画布、属性与交互 | 已实现基础可视编辑、父级/绘制顺序、变量与常用事件创建；静态示例预览，精确效果需试玩 |
+| UI 编辑器 | UI 3 多文件页面、控件树/画布、属性与交互，快捷弹窗、玩家快捷键事件、HSV 选色器与配色槽位 | 已实现基础可视编辑、父级/绘制顺序、变量与常用事件创建、palette/color-bind/color-picker、快捷键捕获/绑定/重置事件和快捷确认弹窗；静态示例预览，精确效果需试玩 |
 | AI 辅助 | 用户配置、SecretStorage、纯文本拆幕、JSON/SSE、原文保真与审阅 | 已实现受限提案；真实服务与图片/资源关联尚未验收 |
-| IDE 调试 | DAP、XML frame 断点、当前/候选只读变量、推进、选项选择 | 已接入真实 v0.9.1 播放器；不提供 JS 行级调试 |
+| IDE 调试 | DAP、XML frame 断点、当前/候选只读变量、推进、选项选择 | 已接入真实 v0.10.0 播放器；不提供 JS 行级调试 |
 | 游戏发行 | 依赖选择、实际包内文件审阅、KPAK 2、独立目录和报告 | 已实现；底层工具 KPAK 1/2 均已测试 |
 | 插件发行 | 构建与离线 VSIX，匹配工具、模板和字体许可 | 已生成内部预览包；尚未公开发布 |
 
 ## 安装与开始使用
 
-在 VS Code 命令面板执行 **Extensions: Install from VSIX...**，选择生成的 `artifacts/kakera-editor-vscode-0.8.8.vsix`。当前预览包包含经过 SHA-256 核验的 v0.9.1 播放器、打包器和 Noto CJK 字体，不需要 Rust 或 AI 服务。
+在 VS Code 命令面板执行 **Extensions: Install from VSIX...**，选择生成的 `artifacts/kakera-editor-vscode-0.10.0.vsix`。当前预览包包含经过 SHA-256 核验的 v0.10.0 播放器、打包器和 Noto CJK 字体，不需要 Rust 或 AI 服务。
 
 1. 执行 **Kakera：打开创作首页**，新建工程或打开已有内容根。
 2. 在分镜中选择一幕，编辑台词、说话人、画面、音频与路由。
@@ -48,9 +48,15 @@
 
 **拖动与连线**：拖动幕卡片后松手，自动吸附并保存布局；“自动排列”恢复默认分支布局，不改变剧情。可拖出幕右侧的连接点，或拖动箭头端点，落到目标幕上重新连接；每个选项有独立连接点。也可点击连接点和目标，或用 Tab/Enter 操作；Alt+方向键移动幕。点击连线后可“断开所选连线”，原选项、条件和变量更新会保留。Escape/无效落点取消；有未保存编辑时先保存或还原。
 
+**选择与快捷键**：关系图支持 `Ctrl/⌘+A` 全选实际幕；`Ctrl/⌘` 单击追加/移除、`Shift` 单击范围选择，方向键/`Home`/`End` 切换当前幕，`Shift+方向键` 扩展选择。多选后可一起拖动或用 `Alt+方向键` 微调，松手一次保存布局；`Delete/Backspace` 批量删除，`Ctrl+D` 复制，`Ctrl+C/V` 在当前工作台内复制并在当前幕后粘贴副本（不写系统剪贴板），`Ctrl+F` 聚焦搜索，`Ctrl+S` 保存当前幕草稿，`Esc` 取消手势或收起到当前幕。多幕删除/复制仍逐一校验可编辑路线和生命周期引用，无法证明的入边保留待连接。
+
 **UI 编辑器**：点击工作台顶部“UI 编辑器”，或执行 **Kakera：打开 UI 编辑器**。左侧选择页面和控件，中间添加控件并拖动位置，右下角手柄调整大小；支持 8px 吸附、缩放、隐藏控件显示与方向键微调。右侧编辑文字/字号/颜色、尺寸、图片/点九/图集、数据绑定、事件及列表模板；“层级与顺序”可改父级、绘制顺序或移动到其他页面。属性点击保存，拖动/缩放松手后直接验证并保存，支持宿主撤销/重做。
 
 可新增页面（选择已加载的 UI 文件）、UI 变量、CG 画廊条目，以及打开/关闭页面、推进/重开、选项、设置、演出/音效、CG 解锁、v0.9.1 的显式起始幕和 `present`/`resume` 交接事件；已有手写回调保留原文。入口和子文件均读取当前缓冲，标题绑定、纹理应用会写到实际声明文件。画布使用初始值和示例列表，不执行游戏脚本；剧情画面为占位，动画/滤镜、演出媒体和运行交互请试玩。详见 [UI 编辑器说明](doc/16-ui-editor.zh-cn.md)。
+
+**快捷弹窗、玩家快捷键与 HSV 配色（0.10.0）**：UI 编辑器左侧的“＋快捷弹窗”可在所选 UI 文件生成一页模态确认弹窗，填写标题、正文和确认/取消文字；确认动作可关闭页面、调用已有事件或自动生成 `ctx.quit()` 事件。事件向导新增“捕获键盘快捷键 / 取消捕获 / 修改快捷键绑定 / 恢复默认快捷键 / 保存颜色覆盖 / 恢复作者默认配色 / 退出游戏”，写入普通 `on.ui` 固定调用；绑定按 Ctrl、Alt、Shift 规范校验，留空写 `null`，`shortcuts.*` 可直接作为文本/布尔绑定并在画布预览默认标签。“配色槽位”声明根级 `palette`，控件可用 `color-bind` 绑定 `colors.槽位` 或 UI string；HSV 选色器要求颜色值绑定 UI string、最小 128×224、最多 8 个、不能放入 repeat，事件值使用规范 `#RRGGBBAA`。颜色属性使用文本加 HSV 色盘编辑；编辑器只写 XML/JS，`keybindings.json`、`ui-colors.json` 由匹配播放器维护，冻结代次和发行包也会排除这两个玩家偏好文件，静态画布不执行游戏脚本。
+
+**侧栏定位、文件分组与短 ID（0.8.9）**：点击侧栏实际幕会打开/聚焦可视化编辑器并定位该幕；“剧本”改为“XML 文件 → 幕”两级，同一文件聚在同组。编辑器自动生成的幕、人物、立绘/模型资源、导入资源、visual/外观、UI 页面/控件、点九/图集和示例控件 ID 统一为 8 字节随机数的 16 位十六进制字符串（如 `9f2c...`），在对应命名空间冲突重试 64 次后才回退 UUID；已有手写/历史 ID 不批量改写。流程图多选与快捷键见上方“选择与快捷键”。
 
 **VS Code 原生工程侧栏（0.8.8）**：Activity Bar 的 Kakera 视图改用原生 TreeView，按人物、美术资源、音频与字体、剧本、变量、JS 程序、界面分类；使用 VS Code ThemeIcon、计数描述、条目提示和原生右键菜单。分类支持新建人物/变量、导入立绘/Live2D/资源；条目支持人物重命名/删除、变量编辑/删除、幕新建后续/删除、资源引用、脚本/分镜/UI 打开。侧栏在工程激活时加载，并在文档或文件变化后刷新。
 
@@ -111,7 +117,7 @@ AI 是可选功能：执行 **Kakera：配置 AI 服务**，在普通原稿编�
 - [实现与验证记录](doc/12-implementation-status.zh-cn.md)：当前可用范围、实测环境与尚未验证的功能。
 - [UI 编辑器](doc/16-ui-editor.zh-cn.md)、[JS/XML 实时映射](doc/13-live-logic-mapping.zh-cn.md)：控件写入、事件/生命周期与源码边界。
 
-原始资料中的部分相对链接指向上游引擎源码、版本验收或归档，这些文件未复制进本仓库。本轮根据开发机上的实际 v0.9.1 源码核对模板与 CLI，并通过准备脚本复制工具；没有运行上游全部测试。
+原始资料中的部分相对链接指向上游引擎源码、版本验收或归档，这些文件未复制进本仓库。本轮根据开发机上的实际 v0.10.0 源码核对模板、UI 扩展与 CLI，并通过准备脚本复制工具；没有运行上游全部测试。
 
 ## 后续目标
 
@@ -150,7 +156,7 @@ kakera-editor-vscode/
 npm ci
 npm run check                 # 类型、单元/协议测试与构建
 npm run test:browser          # Edge/Chromium：工作台/首页、流程图与 UI 控件原生交互及截图
-# 准备匹配工具，参数为实际 v0.9.1 release 二进制目录
+# 准备匹配工具，参数为实际 v0.10.0 release 二进制目录
 node scripts/prepare-tools.mjs D:\path\to\kakera\target\release
 npm run test:integration      # 真实模板、快照、KPAK 1/2 与独立宿主检查
 npm run test:host             # 本机 VS Code：未保存缓冲、undo/redo、多视图、DAP
@@ -161,7 +167,7 @@ npm run package              # 生成 artifacts/ 下的离线 VSIX
 
 浏览器交互回归使用已安装的 Edge/Chromium，创建独立临时配置，通过原生输入验证点击、拖动和键盘选中。可用 `KAKERA_TEST_BROWSER` 指定浏览器可执行文件；不会下载浏览器或操作日常浏览器会话。
 
-源码仓库不提交工具二进制，干净克隆需要执行准备脚本；现成 VSIX 已附工具。历史 UI 拆分补丁曾沿用 v0.8.3 版本号；按钮原生导航及 UI 演出增量沿用 v0.8.4 版本号；v0.9.0 增加生命周期、隐藏交接槽与 save 9，v0.9.1 增加末幕退出和 UI 显式起始幕；旧版工具不支持这些契约。请从当前 v0.9.1 源码编译 release 后重新准备工具。自定义工具目录必须含 `tools.json` 哈希清单，通过 **Kakera：配置播放器工具目录** 设置。当前不包含 Live2D Core。
+源码仓库不提交工具二进制，干净克隆需要执行准备脚本；现成 VSIX 已附工具。历史 UI 拆分补丁曾沿用 v0.8.3 版本号；按钮原生导航及 UI 演出增量沿用 v0.8.4 版本号；v0.9.0 增加生命周期、隐藏交接槽与 save 9，v0.9.1 增加末幕退出和 UI 显式起始幕；v0.10.0 增加快捷弹窗、玩家快捷键、三角 HSV/配色槽位与动态图片查看组合。请从当前 v0.10.0 源码编译 release 后重新准备工具。自定义工具目录必须含 `tools.json` 哈希清单，通过 **Kakera：配置播放器工具目录** 设置。当前不包含 Live2D Core。
 
 已采用 TypeScript Extension Host、React Webview 与独立领域/源码模块；当前通过匹配 CLI 复用 Rust 引擎，未另造运行时。独立结构化 Rust wrapper 尚未交付，诊断保留真实 CLI 文本。具体依赖边界见[落地方案](doc/11-vscode-extension-implementation-plan.zh-cn.md#3-代码组织与依赖方向)。
 
@@ -201,3 +207,13 @@ npm run package              # 生成 artifacts/ 下的离线 VSIX
 ### 幕/页面生命周期与隐藏交接（0.7.0）
 
 同步 Kakera v0.9.0：`on.frameEnter/Exit`、`on.screenOpen/Close` 被识别为独立的源码生命周期注册，不混入 `on.advance/choice/end` 或按钮事件；静态目标参与删除保护，动态/缺失目标显示约束。`ctx.present` 和 `ctx.resume` 可由事件向导追加，帧/页面目标在写入前校验。视频只在 UI `ui-media.sequence` 中创建；frame 级 `<video>`、`ctx.skipVideo` 和 `game.videoPlaying/game.videoSkippable` 等旧契约会显示诊断或不再出现在绑定建议中。隐藏 `flow-checkpoint.json` 与 `ui-audio.json` 等玩家文件一样排除出冻结代次和发行包；save 9 由真实播放器负责，编辑器不写玩家槽位。
+
+### 快捷弹窗、玩家快捷键与 HSV 配色（0.10.0）
+
+同步 Kakera v0.10.0 的三个 UI 扩展工作包：
+
+- **快捷弹窗**：使用普通 XML 模态 `screen`，不新增原生对话框样式。UI 编辑器的“＋快捷弹窗”写入遮罩、面板、可选标题、正文和确认/取消按钮；确认动作可为 `route="close"`、调用已有事件，或自动追加 `ctx.quit()` 事件。生成页面不修改剧情路由；取消按钮始终关闭当前页。
+- **玩家快捷键**：作者用 UI 控件和普通 `on.ui` 组合设置页。事件向导写入 `ctx.captureShortcut(动作, 结果事件)`、`ctx.cancelShortcutCapture()`、`ctx.keybinding(动作, 绑定或 null)`、`ctx.resetKeybindings()`；绑定只接受文档列出的 ASCII token，按 Ctrl、Alt、Shift 规范排序，拒绝 Escape、Meta、Ctrl+Alt 和系统保留组合。捕获结果通过结果事件的 `ctx.value` 交给作者草稿，不自动写文件；编辑器不创建 `keybindings.json`。XML 可绑定 `shortcuts.advanceLabel/fastForwardLabel/skipSequenceLabel/captureText/captureActive/bindings.*`，画布按默认绑定显示示例文本。
+- **三角 HSV 与配色**：根级 `<palette><color id="..." initial="#RRGGBBAA"/></palette>` 声明作者配色槽位（`[a-z][a-z0-9_]{0,63}`，最多 32 个，可在 include 中声明）；`color-bind` 可把 panel/image/nine-patch/label/button/toggle 绑定到 `ui.<string>` 或 `colors.<槽位>`，与静态 `color` 互斥。`color-picker` 必需 `value`（UI string）和 `event`，`alpha` 可隐藏透明条；控件最小 128×224、最多 8 个、不能放入 repeat。事件值为规范 `#RRGGBBAA`，拖拽只产生候选，作者用 `ctx.setUi` 决定是否提交。编辑器提供色相环 + 固定方向 SV 三角 + alpha 条的属性色盘和画布预览；玩家 `ui-colors.json` 由匹配播放器维护，编辑器不写该文件。
+
+静态画布只显示初值和默认绑定示例，不执行脚本、不模拟捕获/拖拽/焦点、不执行页面交接或玩家偏好写入。真实按键、冲突、焦点清理、偏好的原子保存和回滚由匹配 v0.10.0 播放器验收；详见 [UI 编辑器说明](doc/16-ui-editor.zh-cn.md)、[可视化编辑器使用说明](doc/18-visual-editor-guide.zh-cn.md) 和 [实现记录](doc/12-implementation-status.zh-cn.md)。

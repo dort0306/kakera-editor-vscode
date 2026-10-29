@@ -1,7 +1,6 @@
-import { randomUUID } from 'node:crypto';
 import type { Frame, Route, Story } from '../../domain/src/index';
 import { validateRoutes, routeDestinations, storyEntries, i64 } from '../../domain/src/index';
-import { appendGroup, insertFrame, readStory, type Sources } from './index';
+import { appendGroup, insertFrame, newFrameRef, newShortId, readStory, type Sources } from './index';
 import { group, parseXml, setAttribute, escapeXml } from './xml';
 import { emitRoutes } from './routes';
 import { patchLogicRoutes, protectedLogicTargets, type LogicAnalysis } from './logic';
@@ -140,13 +139,15 @@ export function setStoryEntry(sources: Sources, frameRef: string): Sources { ret
 export function reconcilePendingRoutes(input: Sources, proposed: Route[], partial = false, protectedTargets?: Set<string>): { sources: Sources; routes: Route[] } {
   const sources = new Map(input), routes = proposed.map(r => ({ ...r, ...(r.branches ? { branches: r.branches.map(b => ({ ...b })) } : {}) }));
   let story = readStory(sources);
+  const reserved = new Set(story.frames.flatMap(frame => [frame.ref, frame.id, frame.name].filter((value): value is string => !!value)));
   for (const route of [...routes]) {
     for (const destination of routeDestinations(route)) {
       if (destination.target) continue;
       const owner = resolve(story, route.frame); if (!owner) throw new Error('路由所属幕不存在');
-      const id = randomUUID(), name = `kakera.pending.${id}`;
+      const id = newFrameRef(reserved), name = `kakera.pending.${id}`;
       const markup = `<frame id="${id}" name="${name}"><!-- Kakera pending route v1 --><text>后续剧情尚未连接。</text></frame>`;
       sources.set(owner.file, appendGroup(sources.get(owner.file)!, 'frames', markup));
+      reserved.add(id); reserved.add(name);
       if (destination.branch === undefined) route.target = name; else route.branches![destination.branch].target = name;
       routes.push({ frame: name, kind: 'end', updates: [] });
     }
@@ -185,7 +186,7 @@ export function insertConnectedFrame(input: Sources, routes: Route[], managedFil
     if (connection?.branches?.length) { const open = openDestination(connection); if (!open) throw new Error('所有条件线路都已有后续幕。请先添加条件线路，或选择线路上的幕继续创作。'); branch = open.branch; }
   }
   if (!connection) throw new Error('这段高级逻辑暂不能自动连接，请选择可视编辑的幕');
-  const inserted = insertFrame(input.get(selected.file)!, selected.ref), candidate = new Map(input);
+  const inserted = insertFrame(input.get(selected.file)!, selected.ref, undefined, story.frames.flatMap(frame => [frame.ref, frame.id, frame.name].filter((value): value is string => !!value))), candidate = new Map(input);
   candidate.set(selected.file, inserted.source);
   const oldTargetRef = branch === undefined ? connection.target : connection.branches![branch].target;
   const oldTarget = connection.kind === 'advance' ? resolve(story, oldTargetRef) : undefined;
@@ -221,4 +222,118 @@ export function deleteConnectedFrame(input: Sources, routes: Route[], managedFil
   removeFrame(sources, frame);
   const ready = reconcilePendingRoutes(sources, nextRoutes);
   return { changes: changesFor(input, ready.sources, managedFile, ready.routes, logic), selected: next.ref };
+}
+/** Delete several author frames in one validated transaction. Every incoming
+ * route is rewired to the selected chain's explicit exit, or to a marked pending
+ * placeholder, never to an arbitrary neighbouring branch. */
+export function deleteConnectedFrames(input: Sources, routes: Route[], managedFile: string, refs: string[], logic?: LogicAnalysis): { changes: Sources; selected: string } {
+  if (!Array.isArray(refs) || !refs.length) throw new Error('请选择要删除的幕');
+  if (logic && !logic.complete) throw new Error('仍有动态路线无法确定入边，暂不能安全删除幕；台词和可识别路线仍可编辑');
+  const story = readStory(input), authors = story.frames.filter(frame => !frame.pending), selected: Frame[] = [], seen = new Set<string>();
+  for (const value of refs) {
+    const frame = resolve(story, value);
+    if (!frame || frame.pending) throw new Error('请选择要删除的幕');
+    if (seen.has(frame.ref)) throw new Error('删除列表中的幕不能重复');
+    seen.add(frame.ref); selected.push(frame);
+  }
+  if (authors.length <= selected.length) throw new Error('故事至少需要保留一幕');
+  if (logic?.references?.dynamicFrames) throw new Error('仍有动态 on.frameEnter/Exit 或 ctx.resume 目标，暂不能安全删除幕；请先在源码中明确目标');
+  for (const frame of selected) {
+    if (logic && !logic.frames[frame.ref]?.editable) throw new Error(logic.frames[frame.ref]?.reason ?? `幕 ${frame.ref} 的路线尚不能安全删除`);
+    if (logic?.references?.frames.has(frame.ref)) throw new Error(`幕 ${frame.ref} 仍被 on.frameEnter/on.frameExit 或 ctx.resume 目标引用，请先在已声明脚本中移除相关注册`);
+  }
+  const selectedRefs = new Set(selected.map(frame => frame.ref));
+  const exitOf = (frame: Frame, trail = new Set<string>()): Frame | undefined => {
+    if (trail.has(frame.ref)) return undefined;
+    trail.add(frame.ref);
+    const owned = routes.filter(route => resolve(story, route.frame)?.ref === frame.ref);
+    const forward = owned.length === 1 && owned[0].kind === 'advance' && !owned[0].branches?.length ? resolve(story, owned[0].target) : undefined;
+    if (!forward || forward.pending) return undefined;
+    return selectedRefs.has(forward.ref) ? exitOf(forward, trail) : forward;
+  };
+  const fallback = (frame: Frame): Frame | undefined => {
+    const incoming = routes.find(route => resolve(story, route.frame)?.ref !== frame.ref && routeDestinations(route).some(destination => resolve(story, destination.target)?.ref === frame.ref));
+    const owner = incoming ? resolve(story, incoming.frame) : undefined;
+    if (owner && !owner.pending && !selectedRefs.has(owner.ref)) return owner;
+    const index = authors.indexOf(frame);
+    for (let offset = 1; offset <= authors.length; offset++) {
+      const candidate = authors[(index + offset) % authors.length];
+      if (!selectedRefs.has(candidate.ref)) return candidate;
+    }
+    return undefined;
+  };
+  const exits = new Map(selected.map(frame => [frame.ref, exitOf(frame)] as const));
+  const nextRoutes = routes.flatMap(route => {
+    const owner = resolve(story, route.frame);
+    if (owner && selectedRefs.has(owner.ref)) return [];
+    let next = route;
+    for (const destination of routeDestinations(route)) {
+      const target = resolve(story, destination.target);
+      if (target && selectedRefs.has(target.ref)) next = setDestination(next, exits.get(target.ref)?.ref ?? '', destination.branch);
+    }
+    return [next];
+  });
+  const sources = new Map(input);
+  const entryRefs = storyEntries(story);
+  if (entryRefs.some(ref => selectedRefs.has(ref))) {
+    const remaining = entryRefs.filter(ref => !selectedRefs.has(ref));
+    if (!remaining.length) {
+      const replacement = selected.map(frame => exits.get(frame.ref)).find((frame): frame is Frame => !!frame && !selectedRefs.has(frame.ref)) ?? authors.find(frame => !selectedRefs.has(frame.ref));
+      if (!replacement) throw new Error('故事至少需要保留一幕');
+      remaining.push(replacement.ref);
+    }
+    for (const [file, text] of setStoryEntries(input, remaining)) sources.set(file, text);
+  }
+  for (const frame of selected) removeFrame(sources, frame);
+  const ready = reconcilePendingRoutes(sources, nextRoutes);
+  const next = selected.map(frame => exits.get(frame.ref) ?? fallback(frame)).find((frame): frame is Frame => !!frame && !selectedRefs.has(frame.ref)) ?? authors.find(frame => !selectedRefs.has(frame.ref))!;
+  return { changes: changesFor(input, ready.sources, managedFile, ready.routes, logic), selected: next.ref };
+}
+/** Duplicate one or more recognised frames and the routes they own. Targets that
+ * stay inside the copied set are remapped to the new IDs; external targets are
+ * preserved. A paste anchor may be in another chapter file. */
+export function duplicateConnectedFrames(input: Sources, routes: Route[], managedFile: string, refs: string[], logic?: LogicAnalysis, afterRef?: string): { changes: Sources; selected: string } {
+  if (!Array.isArray(refs) || !refs.length) throw new Error('请选择要复制的幕');
+  const story = readStory(input), selected: Frame[] = [], seen = new Set<string>();
+  for (const value of refs) {
+    const frame = resolve(story, value);
+    if (!frame || frame.pending) throw new Error('请选择要复制的实际幕');
+    if (seen.has(frame.ref)) throw new Error('复制列表中的幕不能重复');
+    seen.add(frame.ref); selected.push(frame);
+  }
+  if (logic && selected.some(frame => !logic.frames[frame.ref]?.editable)) throw new Error(selected.map(frame => logic.frames[frame.ref]?.reason).find(Boolean) ?? '此幕路线尚不能安全复制');
+  const anchor = afterRef ? resolve(story, afterRef) : undefined;
+  if (afterRef && (!anchor || anchor.pending)) throw new Error('粘贴位置必须是实际幕');
+  const reserved = new Set(story.frames.flatMap(frame => [frame.ref, frame.id, frame.name].filter((value): value is string => !!value)));
+  const changes: Sources = new Map(), mapping = new Map<string, string>();
+  for (const frame of [...selected].reverse()) {
+    const source = changes.get(frame.file) ?? input.get(frame.file)!;
+    const node = group(parseXml(source), 'frames').find(candidate => (candidate.attrs.name || candidate.attrs.id) === frame.ref);
+    if (!node) throw new Error('幕已改变，请刷新');
+    const newRef = newShortId(reserved); reserved.add(newRef);
+    let markup = source.slice(node.start, node.end);
+    markup = setAttribute(markup, parseXml(markup), 'name', '');
+    markup = setAttribute(markup, parseXml(markup), 'id', newRef);
+    const file = anchor?.file ?? frame.file;
+    const target = changes.get(file) ?? input.get(file)!;
+    const position = anchor ? group(parseXml(target), 'frames').find(candidate => (candidate.attrs.name || candidate.attrs.id) === anchor.ref) : group(parseXml(target), 'frames').find(candidate => (candidate.attrs.name || candidate.attrs.id) === frame.ref);
+    if (!position) throw new Error(anchor ? '粘贴位置已改变，请刷新' : '幕已改变，请刷新');
+    changes.set(file, target.slice(0, position.end) + `\n    ${markup}\n` + target.slice(position.end));
+    mapping.set(frame.ref, newRef);
+  }
+  const copies: Route[] = [];
+  const remap = (target: string) => mapping.get(resolve(story, target)?.ref ?? '') ?? target;
+  for (const frame of selected) {
+    const newRef = mapping.get(frame.ref)!;
+    for (const route of routes.filter(item => resolve(story, item.frame)?.ref === frame.ref)) copies.push({
+      ...route,
+      frame: newRef,
+      ...(route.kind === 'end' || route.target === undefined ? {} : { target: remap(route.target) }),
+      ...(route.branches ? { branches: route.branches.map(branch => ({ ...branch, target: remap(branch.target) })) } : {}),
+      updates: route.updates.map(update => ({ ...update }))
+    });
+  }
+  const candidate = new Map([...input, ...changes]);
+  const ready = reconcilePendingRoutes(candidate, [...routes, ...copies], logic ? !logic.complete : false, logic ? protectedLogicTargets(logic) : undefined);
+  return { changes: changesFor(input, ready.sources, managedFile, ready.routes, logic), selected: mapping.get(selected[0].ref)! };
 }

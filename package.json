@@ -2,7 +2,7 @@
   "name": "kakera-editor-vscode",
   "displayName": "Kakera 可视分镜编辑器",
   "description": "Kakera AVG XML/JS 分镜创作、校验、试玩与帧级调试。",
-  "version": "0.8.8",
+  "version": "0.10.0",
   "publisher": "dort0306",
   "license": "MIT",
   "repository": {
@@ -172,6 +172,11 @@
         "icon": "$(trash)"
       },
       {
+        "command": "kakera.frame.open",
+        "title": "Kakera：在可视化编辑器中定位此幕",
+        "icon": "$(go-to-file)"
+      },
+      {
         "command": "kakera.frame.create",
         "title": "Kakera：新建后续幕",
         "icon": "$(add)"
@@ -302,14 +307,24 @@
           "group": "navigation@1"
         },
         {
-          "command": "kakera.frame.create",
+          "command": "kakera.storyboard.open",
+          "when": "view == kakera.project && viewItem == kakera.frameFile",
+          "group": "navigation@1"
+        },
+        {
+          "command": "kakera.frame.open",
           "when": "view == kakera.project && viewItem == kakera.frame",
           "group": "navigation@1"
         },
         {
-          "command": "kakera.frame.delete",
+          "command": "kakera.frame.create",
           "when": "view == kakera.project && viewItem == kakera.frame",
           "group": "navigation@2"
+        },
+        {
+          "command": "kakera.frame.delete",
+          "when": "view == kakera.project && viewItem == kakera.frame",
+          "group": "navigation@3"
         },
         {
           "command": "kakera.variable.edit",
@@ -335,7 +350,7 @@
           "type": "string",
           "default": "",
           "scope": "application",
-          "description": "包含 v0.9.1 kakera-avg.exe 和 kakera-pack.exe 的本地目录。仅用户级设置。"
+          "description": "包含 v0.10.0 kakera-avg.exe 和 kakera-pack.exe 的本地目录。仅用户级设置。"
         },
         "kakera.tools.cubismCore": {
           "type": "string",
@@ -382,7 +397,7 @@
     "test:integration": "node scripts/integration.mjs",
     "test:host": "node scripts/test-host.mjs",
     "check": "npm run typecheck && npm test && npm run build",
-    "package": "npm run build && node scripts/verify-release.mjs && vsce package --target win32-x64 --no-dependencies --out artifacts/kakera-editor-vscode-0.8.8.vsix",
+    "package": "npm run build && node scripts/verify-release.mjs && vsce package --target win32-x64 --no-dependencies --out artifacts/kakera-editor-vscode-0.10.0.vsix",
     "vscode:prepublish": "npm run build",
     "test:browser": "node scripts/test-graph-browser.mjs"
   },

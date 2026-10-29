@@ -32,7 +32,7 @@
 工作台顶部点击“UI 编辑器”，或命令面板执行“Kakera：打开 UI 编辑器”；后者以实际 UI 入口打开 Custom Editor。直接“打开方式 → Kakera 分镜”打开所属 UI 文件也会进入 UI 模式。
 
 1. 左侧选择页面，再从控件树或画布选择控件；树显示稳定 ID 与原文件位置。
-2. 中间选择控件类型、父容器及必要的图片/事件，点击“添加控件”。支持 scene、panel、image、nine-patch、label、button、slider、toggle、repeat。
+2. 中间选择控件类型、父容器及必要的图片/事件，点击“添加控件”。支持 scene、panel、image、nine-patch、label、button、slider、toggle、repeat 与 v0.10.0 的 color-picker。
 3. 拖动调整相对父级位置，右下角手柄调整宽高；移动超过 4 屏幕像素才开始拖动，支持 8px 吸附、缩放和 Escape 取消。方向键微调 1px，Shift+方向键 8px。
 4. 右侧填写尺寸、样式、文字/图片与绑定、事件、图集 region、点九 density、列表数据源及单元格等实际属性。“保存属性”后台验证后直接保存；拖动/缩放松手自动提交。
 5. “层级与顺序”可选择目标页面和父容器，移动到绘制最底层/最顶层。坐标继续相对新父级，不自动改写事件脚本。复制为整棵子树生成新 ID，复用既有资源和事件。
@@ -84,6 +84,63 @@ UI 页面的“页面属性”底部提供“页面结束后（关闭时）”�
 “新建事件”新增 `ctx.present(页面)` 和 `ctx.resume()`/`ctx.resume(幕)`。present 目标必须是已加载页面；resume 可选实际幕，留空表示恢复待续位置；不允许待连接占位或保留生命周期名。写入仍只追加白名单回调，已有手写 JS 不重写。
 
 旧 `frame.video` 在故事工作台显示错误诊断，旧 `game.video*` 绑定在 UI 编辑器给出源码警告并从绑定建议移除；画布不模拟视频、演出、生命周期或隐藏槽。每次保存仍由真实 v0.9.0 引擎校验，`flow-checkpoint.json`、`ui-audio.json` 与玩家槽位不进入冻结代次或发行包。编辑器不写隐藏槽、不迁移 save 8、不执行 UI 返回。
+
+## 快捷弹窗、玩家快捷键与 HSV 配色（0.10.0，播放器 v0.10.0）
+
+扫描依据为相邻 `kakera-avg-rust` v0.10.0（提交 `9924e85`）的 `src/color.rs`、`src/interface/palette.rs`、`src/app/colors.rs`、`src/shortcuts.rs`、`src/app/shortcuts.rs`、`src/interface.rs`、`src/interface/render.rs`、demo `ui/confirmation.xml`、`ui/shortcuts.xml`、`ui/colors.xml`，以及 API 第 33–35 节和 UI 扩展性验收。story 8 / UI 3 / save 9、KPAK 1/2 与 demo content-version=11 不变；`keybindings.json` 和 `ui-colors.json` 是玩家偏好，匹配播放器负责加载、校验和原子保存，编辑器既不读取也不写入它们，冻结代次和发行包按文件名大小写不敏感排除。
+
+### 快捷确认弹窗
+
+“＋快捷弹窗”把所选 UI 文件作为写入目标，可填写页面 ID（留空由短 ID 生成器创建）、标题、正文、确认/取消文字和确认动作。生成内容是一页普通 XML 模态 `screen`：
+
+```xml
+<screen id="…" modal="true" pause="true">
+  <panel … color="#000000B8" />
+  <panel … color="#18232AF2" radius="16">
+    <label … text="退出游戏" … />
+    <label … text="确定退出吗？" … />
+    <button … text="退出" event="…" … />
+    <button … text="取消" route="close" … />
+  </panel>
+</screen>
+```
+
+确认动作有三种：`route="close"`、调用已注册普通事件、或生成 `ctx.quit()` 事件（自动选择不冲突的事件名）。遮罩、面板、按钮尺寸按画布居中计算，全部使用现有控件属性和短 ID。标题留空时不生成标题 label；取消始终 `route="close"`。工具不自动创建打开弹窗的按钮/事件，也不把正文改为绑定；作者可继续用属性检查器改成 `bind`/`visible` 或添加入口。`ctx.quit()` 只在普通 `on.ui` 中合法，不写剧情、存档或玩家偏好；真实退出补写由播放器负责。
+
+### 玩家快捷键
+
+事件向导新增四个普通 UI 动作：
+
+| 动作 | 写入 |
+| --- | --- |
+| 捕获键盘快捷键 | `ctx.captureShortcut("动作", "结果事件");` |
+| 取消快捷键捕获 | `ctx.cancelShortcutCapture();` |
+| 修改快捷键绑定 | `ctx.keybinding("动作", "规范绑定");` 或 `ctx.keybinding("动作", null);` |
+| 恢复默认快捷键 | `ctx.resetKeybindings();` |
+
+“动作”只列 `advance` / `fast_forward` / `skip_sequence`。绑定输入接受作者大小写并规范化：修饰键固定 Ctrl、Alt、Shift 顺序，主键为文档 token 表，最多 64 字节 ASCII；拒绝 Escape、Meta/Windows、Ctrl+Alt、系统保留组合、重复 token、空白和裸 `+`。留空绑定写 `null` 表示禁用该键盘动作；编辑器逐条校验 token 和保留组合，跨动作的按住前缀冲突、整批交换和最终偏好写入由匹配播放器事务校验。
+
+捕获结果事件通过 `ctx.value` 收到规范绑定，`ctx.item.action` 收到动作 ID；编辑器只在表单中关联已注册普通 `on.ui`，不实现捕获状态机，也不自动写文件。作者通常用 UI string 保存草稿，再由“应用”按钮生成 `keybinding` 事件。设计画布把 `shortcuts.advanceLabel`、`fastForwardLabel`、`skipSequenceLabel`、`captureText`、`captureActive` 和 `shortcuts.bindings.*` 作为默认示例值预览；显示 Label 只用于界面，不能当存储格式回解析。
+
+### 三角 HSV、配色槽位与 color-bind
+
+`palette` 只能声明在 UI 根级（入口或 include 子文件均可），槽位 ID 为 `[a-z][a-z0-9_]{0,63}`，每项必需 `initial`，装配后全局唯一、最多 32 个。编辑器的“配色槽位”区域可新增、改初值或删除；ID 创建后固定，删除会先检查控件 `color-bind` 与已识别 `colorPreference` 事件。未覆盖的动态 JS 引用交给真实引擎校验，编辑器不猜。
+
+`color-picker` 的编辑约束与引擎一致：
+
+- 必需 `value`，且只能指向已声明 UI string；该变量初始值必须能解析为 `#RRGGBB` 或 `#RRGGBBAA`。
+- 必需 `event`，必须是已注册普通 `on.ui`。
+- 可选 `alpha="true|false"`，默认显示透明条；隐藏 alpha 条不强制改写原颜色的 alpha。
+- 宽、高至少 128×224；整个 UI 最多 8 个；不能放入 repeat；不接受子控件、图片、region、route、color 或未知属性。
+- 拖动只产生候选颜色；事件值规范为九个 ASCII 字符的 `#RRGGBBAA`，由作者回调 `ctx.setUi` 决定是否更新绑定。外部 setUi、打开页面、读档和改布局不回发事件。
+
+颜色属性（`color`、palette 初值、`colorPreference` 事件）使用文本加 HSV 色盘编辑：色相环包围固定方向 SV 三角，三角 H 顶点为当前色相纯色、W 为白、B 为黑；可选 alpha 条。组件按编码 sRGB 的 HSV 计算，输出大写十六进制并保留 alpha=0 时的 RGB；这些数学只用于编辑/预览，最终显示由匹配播放器校验。画布上的 `color-picker` 是只读示意图，不能拖动指针或获取焦点。
+
+`color-bind` 可用于 panel、image、nine-patch、label、button、toggle，与静态 `color` 互斥，来源只能是 `ui.<string>` 或 `colors.<槽位>`；不支持 scene、repeat 容器、slider 或任意 JS 表达式。设计画布按当前 palette 初值/UI string 初值着色：panel/image 显示 tint 近似，label/toggle 显示文字颜色，button 只显示背景 tint 并把文字保持默认白色；nine-patch 用半透明覆盖近似整段 tint，精确分段结果需试玩。`colors` 本身只是 JS 只读快照，不作为普通 `bind` 的 XML 绑定源。
+
+### 验证范围
+
+新增的源码/表单/浏览器回归覆盖 palette 解析与预算、color-picker 尺寸/重复/repeat/绑定限制、color-bind 互斥、快捷键规范化与保留组合、快捷弹窗生成、HSV 色盘交互和快捷键事件写入。真实 v0.10.0 `--check` 与 KPAK 1/2 集成工程包含 palette、color-bind、color-picker、快捷键捕获/绑定/重置、颜色偏好和 `ctx.quit` 弹窗，证明生成内容可被匹配引擎接受；实际按键捕获、焦点清理、跨动作冲突、偏好文件写入/回滚和 D3D11 原生窗口仍需在真实播放器中验收。静态画布不替代这些运行态检查。
 
 ## 界面重构（0.8.0）
 

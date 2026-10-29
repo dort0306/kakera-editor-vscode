@@ -52,6 +52,32 @@ export async function verifyUiEditor(tools: { player: string; packer: string }, 
   assert.ok(next.get('scripts/ui.js')!.includes('on.ui("editor.temp.next"'));
   apply({action:'deleteEvent',name:'editor.temp.next'});
   assert.ok(!next.get('scripts/ui.js')!.includes('editor.temp.next'));
+  // v0.10.0 authoring surface: palette/color-bind/HSV picker, shortcut commands and a quick modal popup.
+  apply({ action: 'variable', file: 'ui/state.xml', name: 'dialogueBgDraft', type: 'string', initial: '#10253BFF' });
+  apply({ action: 'variable', file: 'ui/state.xml', name: 'shortcutDraft', type: 'string', initial: '' });
+  apply({ action: 'palette', file: 'ui/state.xml', id: 'dialogue_background', initial: '#10253BFF' });
+  apply({ action: 'palette', file: 'ui/state.xml', id: 'dialogue_text', initial: '#F4EAD8FF' });
+  next.set('scripts/ui.js', next.get('scripts/ui.js')! + '\non.ui("editor.colorBg", ctx => { ctx.setUi("dialogueBgDraft", ctx.value); });\non.ui("editor.shortcutCaptured", ctx => { ctx.setUi("shortcutDraft", ctx.value); });\n');
+  const picker = apply({ action: 'addNode', screen: page, kind: 'color-picker', value: 'ui.dialogueBgDraft', event: 'editor.colorBg', alpha: 'true' }).selected!;
+  apply({ action: 'patchNode', id: label, patch: { color: '', 'color-bind': 'colors.dialogue_text' } });
+  const shortcutLabel = apply({ action: 'addNode', screen: page, kind: 'label' }).selected!;
+  apply({ action: 'patchNode', id: shortcutLabel, patch: { text: '', bind: 'shortcuts.advanceLabel' } });
+  apply({ action: 'event', name: 'editor.capture', command: 'captureShortcut', actionValue: 'fast_forward', resultEvent: 'editor.shortcutCaptured' });
+  apply({ action: 'event', name: 'editor.captureCancel', command: 'cancelShortcutCapture' });
+  apply({ action: 'event', name: 'editor.keybinding', command: 'keybinding', actionValue: 'advance', binding: 'Enter' });
+  apply({ action: 'event', name: 'editor.resetKeys', command: 'resetKeybindings' });
+  apply({ action: 'event', name: 'editor.colorApply', command: 'colorPreference', slot: 'dialogue_background', color: '#FF2630' });
+  apply({ action: 'event', name: 'editor.colorReset', command: 'resetColors' });
+  const popup = apply({ action: 'addPopup', file: 'ui/state.xml', title: '退出游戏', message: '确定退出吗？', confirmText: '退出', cancelText: '取消', accept: 'quit' }).screen!;
+  apply({ action: 'event', name: 'editor.askQuit', command: 'open', target: popup });
+  const premium = readUiDesign(next);
+  assert.equal(premium.palette.find(item => item.id === 'dialogue_background')!.initial, '#10253BFF');
+  assert.equal(premium.screens.find(screen => screen.id === page)!.children.find(item => item.id === picker)!.kind, 'color-picker');
+  assert.ok(next.get('scripts/ui.js')!.includes('ctx.captureShortcut("fast_forward", "editor.shortcutCaptured")'));
+  assert.ok(next.get('scripts/ui.js')!.includes('ctx.keybinding("advance", "Enter")'));
+  assert.ok(next.get('scripts/ui.js')!.includes('ctx.colorPreference("dialogue_background", "#FF2630FF")'));
+  assert.ok(next.get('scripts/ui.js')!.includes('ctx.quit();'));
+  assert.ok(next.get('ui/state.xml')!.includes('id="' + popup + '"'));
   await fs.mkdir(path.join(content, 'assets/cg'), { recursive: true }); await fs.writeFile(path.join(content, 'assets/cg/test.png'), pngFixture());
   next.set('story.xml', next.get('story.xml')!.replace('</assets>', '<cg id="cg.test" src="assets/cg/test.png"/></assets>').replace('<visuals>', '<visuals><visual id="cg.testVisual" cg="cg.test" />').replace('visual="empty"', 'visual="cg.testVisual"'));
   next.set('ui/state.xml', next.get('ui/state.xml')!.replace('</ui>', '<gallery><cg id="cg.test" image="cg.test" title="测试 CG" unlocked="true" /></gallery></ui>'));
@@ -73,6 +99,8 @@ export async function verifyUiEditor(tools: { player: string; packer: string }, 
   await fs.writeFile(path.join(content,'ui/pages.xml'),next.get('ui/pages.xml')!);
   await fs.writeFile(path.join(content,'ui-audio.json'),'private preference');
   await fs.writeFile(path.join(content,'flow-checkpoint.json'),'{"schema":1,"active":true}');
+  await fs.writeFile(path.join(content,'keybindings.json'),'{"schema_version":1,"story_id":"s","bindings":{"advance":"Enter","fast_forward":"Ctrl","skip_sequence":null}}');
+  await fs.writeFile(path.join(content,'ui-colors.json'),'{"schema_version":1,"story_id":"s","overrides":{"dialogue_background":"#FF2630FF"}}');
   const before = new Map(next);
   for (const format of [1, 2]) {
     const output = path.join(root, `ui-editor-${format}.kpak`);
@@ -80,9 +108,10 @@ export async function verifyUiEditor(tools: { player: string; packer: string }, 
     await launch(tools.player, ['--package', output, '--check', '--no-audio', '--no-live2d'], () => {}).done;
     const entries = format === 2 ? await archiveEntries(output) : await pathsV1(output);
     assert.ok(!entries.some(e => e.path === 'ui-audio.json')); assert.ok(!entries.some(e => e.path === 'flow-checkpoint.json'));
+    assert.ok(!entries.some(e => e.path === 'keybindings.json')); assert.ok(!entries.some(e => e.path === 'ui-colors.json'));
     assert.ok(entries.some(e => e.path === 'ui-tone.wav')); assert.ok(entries.some(e => e.path === 'ui.xml')); assert.ok(!entries.some(e => e.path.startsWith('ui/'))); assert.ok(entries.some(e => e.path === 'scripts/ui.js'));
   }
   for (const [file, text] of before) assert.equal(await fs.readFile(path.join(content, file), 'utf8'), text);
   assert.ok(next.get('ui/pages/hud.xml')!.includes(button));
-  console.log('UI EDITOR NATIVE PASS: nested includes, cross-file title/control edits, pages/buttons/toggle/events/UI i64 variables, CG asset/visual/gallery/progress/unlock bindings, UI sequences/sound groups/sound-only buttons, present/resume events, frame/screen lifecycle registrations, invalid fade target rejection, audio preference and hidden-checkpoint exclusion, real engine validation, KPAK 1/2 merge, independent package check and original source preservation.');
+  console.log('UI EDITOR NATIVE PASS: nested includes, cross-file title/control edits, pages/buttons/toggle/events/UI i64 variables, CG asset/visual/gallery/progress/unlock bindings, UI sequences/sound groups/sound-only buttons, present/resume events, frame/screen lifecycle registrations, palette/color-bind/color-picker, shortcut capture/keybinding/reset/color-preference/quit commands, quick modal popup, invalid fade target rejection, audio preference and hidden-checkpoint exclusion, real engine validation, KPAK 1/2 merge, independent package check and original source preservation.');
 }

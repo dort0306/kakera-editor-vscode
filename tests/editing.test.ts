@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { Route } from '../packages/domain/src/index';
 import { validateRoutes } from '../packages/domain/src/index';
-import { readStory, readManagedRoutes, emitRoutes, reconcilePendingRoutes, insertConnectedFrame, deleteConnectedFrame, renameFrame, setFrameVisual, setStoryEntries, editStoryVariable, deleteStoryVariable, addStoryVariable, deleteCharacter, type Sources } from '../packages/source/src/index';
+import { readStory, readManagedRoutes, emitRoutes, reconcilePendingRoutes, insertConnectedFrame, deleteConnectedFrame, deleteConnectedFrames, duplicateConnectedFrames, renameFrame, setFrameVisual, setStoryEntries, editStoryVariable, deleteStoryVariable, addStoryVariable, deleteCharacter, type Sources } from '../packages/source/src/index';
 import { analyzeLogic } from '../packages/source/src/logic';
 const managed = 'routes.js';
 const xml = `<story schema="8" id="s" content-version="1" entry="a"><scripts><script src="routes.js"/></scripts><frames><!-- 留下备注 --><frame id="a"><text>开场</text></frame><frame id="b"><text>中间</text></frame><frame id="c"><text>结尾</text></frame></frames><next end="true"/></story>`;
@@ -11,6 +11,7 @@ const source = (text = xml, routes = baseRoutes): Sources => new Map([['story.xm
 function merged(input: Sources, changes: Sources) { const next = new Map([...input, ...changes]); const routes = readManagedRoutes(next.get(managed)!)!; validateRoutes(readStory(next), routes); return { sources: next, story: readStory(next), routes }; }
 test('新幕插入已选推进幕之后，保留原后续与稳定 ID', () => {
   const input = source(), added = insertConnectedFrame(input, baseRoutes, managed, 'a'), next = merged(input, added.changes);
+  assert.match(added.selected, /^[0-9a-f]{16}$/);
   assert.equal(next.routes.find(r => r.frame === 'a')!.target, added.selected); assert.equal(next.routes.find(r => r.frame === added.selected)!.target, 'b');
   assert.deepEqual(next.story.frames.filter(f => f.id !== added.selected).map(f => f.id), ['a', 'b', 'c']); assert.ok(next.sources.get('story.xml')!.includes('<!-- 留下备注 -->')); assert.equal(next.sources.get('ui.js'), input.get('ui.js'));
 });
@@ -60,11 +61,41 @@ test('自循环插入保持循环且只生成一个新幕，删除后还原原�
   assert.equal(next.routes.find(r => r.frame === added.selected)!.target, 'a');
   const back = merged(next.sources, deleteConnectedFrame(next.sources, next.routes, managed, added.selected).changes); assert.equal(back.routes.find(r => r.frame === 'a')!.target, 'a');
 });
+test('批量删除按选中链的明确出口重连，不猜测分支；入口与至少一幕受保护', () => {
+  const four = `<story schema="8" id="s" content-version="1" entry="a"><scripts><script src="routes.js"/></scripts><frames><frame id="a"><text>A</text></frame><frame id="b"><text>B</text></frame><frame id="c"><text>C</text></frame><frame id="d"><text>D</text></frame></frames><next end="true"/></story>`;
+  const routes: Route[] = [{ frame: 'a', kind: 'advance', target: 'b', updates: [] }, { frame: 'b', kind: 'advance', target: 'c', updates: [] }, { frame: 'c', kind: 'advance', target: 'd', updates: [] }, { frame: 'd', kind: 'end', updates: [] }];
+  const input = source(four, routes), removed = deleteConnectedFrames(input, routes, managed, ['b', 'c']), next = merged(input, removed.changes);
+  assert.deepEqual(next.story.frames.map(f => f.ref), ['a', 'd']); assert.equal(next.routes.find(r => r.frame === 'a')!.target, 'd'); assert.equal(removed.selected, 'd');
+  const entry = merged(source(four, routes), deleteConnectedFrames(source(four, routes), routes, managed, ['a', 'b']).changes);
+  assert.deepEqual(entry.story.frames.map(f => f.ref), ['c', 'd']); assert.equal(entry.story.entry, 'c');
+  assert.throws(() => deleteConnectedFrames(input, routes, managed, ['a', 'b', 'c', 'd']), /至少/);
+  assert.throws(() => deleteConnectedFrames(input, routes, managed, ['a', 'a']), /重复/);
+  const choice = `<story schema="8" id="s" content-version="1" entry="a"><scripts><script src="routes.js"/></scripts><frames><frame id="a"><text>A</text></frame><frame id="b"><text>B</text></frame><frame id="c"><text>C</text></frame></frames><next end="true"/></story>`;
+  const split: Route[] = [{ frame: 'a', kind: 'choice', option: 'x', target: 'b', updates: [] }, { frame: 'a', kind: 'choice', option: 'y', target: 'c', updates: [] }, { frame: 'b', kind: 'end', updates: [] }, { frame: 'c', kind: 'end', updates: [] }];
+  const branched = merged(source(choice.replace('<text>A</text>', '<text>A</text><options><option id="x">X</option><option id="y">Y</option></options>'), split), deleteConnectedFrames(source(choice.replace('<text>A</text>', '<text>A</text><options><option id="x">X</option><option id="y">Y</option></options>'), split), split, managed, ['b']).changes);
+  const xRoute = branched.routes.find(r => r.frame === 'a' && r.option === 'x')!;
+  assert.ok(branched.story.frames.find(frame => frame.ref === xRoute.target)?.pending);
+  assert.equal(branched.routes.find(r => r.frame === 'a' && r.option === 'y')!.target, 'c');
+});
+test('批量复制生成短 ID，内部目标重映射，外部目标和其他源码保留', () => {
+  const input = source(), copied = duplicateConnectedFrames(input, baseRoutes, managed, ['a', 'b']), next = merged(input, copied.changes);
+  assert.match(copied.selected, /^[0-9a-f]{16}$/);
+  const copyA = copied.selected, copyB = next.story.frames.find(frame => !['a', 'b', 'c'].includes(frame.ref) && frame.ref !== copyA)!.ref;
+  assert.match(copyB, /^[0-9a-f]{16}$/);
+  assert.equal(next.routes.find(route => route.frame === copyA)!.target, copyB);
+  assert.equal(next.routes.find(route => route.frame === copyB)!.target, 'c');
+  assert.equal(next.routes.find(route => route.frame === 'a')!.target, 'b');
+  assert.ok(next.sources.get('story.xml')!.includes('<!-- 留下备注 -->')); assert.equal(next.sources.get('ui.js'), input.get('ui.js'));
+  const pasted = duplicateConnectedFrames(input, baseRoutes, managed, ['a'], undefined, 'c'), pastedNext = merged(input, pasted.changes);
+  assert.deepEqual(pastedNext.story.frames.map(frame => frame.ref).slice(0, 4), ['a', 'b', 'c', pasted.selected]);
+  assert.equal(pastedNext.routes.find(route => route.frame === pasted.selected)!.target, 'b');
+  assert.throws(() => duplicateConnectedFrames(input, baseRoutes, managed, ['a', 'a']), /重复/);
+});
 test('CG 专用资源可创建无人物的完整画面，拒绝与背景/立绘混用', () => {
   const cgXml = xml.replace('<frames>', '<assets><cg id="cg.test" src="assets/cg/test.png"/></assets><visuals><visual id="cg.visual" cg="cg.test"/></visuals><frames>');
   const input = source(cgXml), next = new Map([...input, ...setFrameVisual(input, 'a', '', [], 'cg.test')]), story = readStory(next), frame = story.frames.find(f => f.ref === 'a')!;
   const visual = story.visuals.find(v => v.id === frame.visual)!;
-  assert.equal(visual.cg, 'cg.test'); assert.equal(visual.background, ''); assert.deepEqual(visual.portraits, []);
+  assert.match(visual.id, /^[0-9a-f]{16}$/); assert.equal(visual.cg, 'cg.test'); assert.equal(visual.background, ''); assert.deepEqual(visual.portraits, []);
   const reverted = new Map([...next, ...setFrameVisual(next, 'a', '', [], '')]), revertedStory = readStory(reverted), revertedFrame = revertedStory.frames.find(f => f.ref === 'a')!;
   assert.equal(revertedStory.visuals.find(v => v.id === revertedFrame.visual)!.cg, undefined);
   assert.throws(() => setFrameVisual(input, 'a', 'bg.room', [], 'cg.test'), /不能同时/);

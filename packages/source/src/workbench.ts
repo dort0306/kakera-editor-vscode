@@ -17,6 +17,17 @@ export function frameLayout(meta: Workbench, story: Story): Record<string, Point
 }
 export function moveFrame(meta: Workbench, story: Story, ref?: string, point?: Point): Workbench {
   if (!ref) return { ...meta, positions: Object.create(null) };
-  const f = story.frames.find(f => f.ref === ref && !f.pending); if (!f || !point || ![point.x, point.y].every(n => Number.isFinite(n) && n >= 0 && n <= 100000)) throw new Error('幕或拖动坐标无效');
-  return { ...meta, positions: { ...meta.positions, [f.id ?? f.ref]: { x: Math.round(point.x / 10) * 10, y: Math.round(point.y / 10) * 10 } } };
+  return moveFrames(meta, story, { [ref]: point });
+}
+/** Persist several frame positions in one layout transaction (multi-select drag). */
+export function moveFrames(meta: Workbench, story: Story, points: Record<string, Point | undefined>): Workbench {
+  const entries = Object.entries(points);
+  if (!entries.length) throw new Error('至少需要一个幕布局位置');
+  const positions = { ...meta.positions };
+  for (const [ref, point] of entries) {
+    const frame = story.frames.find(candidate => candidate.ref === ref && !candidate.pending);
+    if (!frame || !point || ![point.x, point.y].every(n => Number.isFinite(n) && n >= 0 && n <= 100000)) throw new Error('幕或拖动坐标无效');
+    positions[frame.id ?? frame.ref] = { x: Math.round(point.x / 10) * 10, y: Math.round(point.y / 10) * 10 };
+  }
+  return { ...meta, positions };
 }

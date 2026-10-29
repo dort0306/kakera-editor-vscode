@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import type { EditorState } from '../../protocol/src/index';
 import type { Expr, Frame, Route, Story, Update, Variable } from '../../domain/src/index';
@@ -12,6 +12,7 @@ import { Icon } from './icons';
 import { routeDestinations, storyEntries } from '../../domain/src/index';
 declare function acquireVsCodeApi(): { postMessage: (message: unknown) => void };
 const host = acquireVsCodeApi();
+const shortId = () => Array.from(crypto.getRandomValues(new Uint8Array(8)), byte => byte.toString(16).padStart(2, '0')).join('');
 const command = (name: string, characterId?: string) => host.postMessage({ type: 'command', command: name, ...(characterId ? { characterId } : {}) });
 function send(state: EditorState, type: string, payload: Record<string, unknown> = {}) { const requestId = crypto.randomUUID(); host.postMessage({ version: 1, requestId, revision: state.revision, type, payload }); return requestId; }
 function Select({ value, onChange, items, empty = '无' }: { value: string; onChange: (value: string) => void; items: { id: string; name?: string }[]; empty?: string }) {
@@ -20,7 +21,7 @@ function Select({ value, onChange, items, empty = '无' }: { value: string; onCh
 function Updates({ value, change, story }: { value: Update[]; change: (u: Update[]) => void; story: Story }) {
   return <div>{value.map((u, i) => <div className="update" key={i}><span>{i + 1}</span><Select value={u.variable} items={story.variables} onChange={id => { const v = story.variables.find(v => v.id === id); if (v) change(value.map((item, at) => at === i ? { op: 'set', variable: id, value: { kind: 'constant', type: v.type, value: v.initial } } : item)); }} /><select value={u.op} onChange={e => change(value.map((item, at) => at === i ? { ...item, op: e.target.value as 'set' | 'add' } : item))}><option value="set">赋值</option>{story.variables.find(v => v.id === u.variable)?.type === 'int' && <option value="add">加减</option>}</select>{u.value.kind === 'constant' ? <input aria-label="更新值" value={u.value.value} onChange={e => change(value.map((item, at) => at === i ? { ...item, value: { ...u.value, value: e.target.value } as Expr } : item))} /> : <span>表达式（源码中编辑）</span>}<button onClick={() => change(value.filter((_, at) => at !== i))}>移除</button></div>)}<button disabled={!story.variables.length} onClick={() => { const v = story.variables[0]; change([...value, { op: 'set', variable: v.id, value: { kind: 'constant', type: v.type, value: v.initial } }]); }}>＋变量更新</button></div>;
 }
-function Editor({ frame, state, onDirty }: { frame: Frame; state: EditorState; onDirty: (value: boolean) => void }) {
+function Editor({ frame, state, onDirty, saveSignal = 0 }: { frame: Frame; state: EditorState; onDirty: (value: boolean) => void; saveSignal?: number }) {
   const story = state.story!, entryRefs = storyEntries(story);
   const routeEditable = state.logic ? state.logic.frames[frame.ref]?.editable === true : !!state.routes;
   const changeEntries = (refs: string[]) => setPending(send({ ...state, revision: base }, 'entry', { refs }));
@@ -51,6 +52,9 @@ function Editor({ frame, state, onDirty }: { frame: Frame; state: EditorState; o
     routeChange(kind === 'choice' ? [{ frame: frame.ref, kind, option: 'choice1', target: '', updates: [] }] : [{ frame: frame.ref, kind, ...(kind === 'advance' ? { target: '' } : {}), updates: [] }]);
   };
   const routeLabel = routes.length ? routes[0].kind === 'choice' ? '选择幕' : routes[0].kind === 'end' ? '结束幕' : '推进幕' : '脚本路线';
+  const save = () => { if (!dirty || conflict || !!pending) return; setPending(send({ ...state, revision: base }, 'patch', { ref: frame.ref, patch: { text: draft.text, speaker: draft.speaker, visual: draft.visual, audio: draft.audio, ...(routeEditable ? { options: draft.options } : {}) }, ...(routeEditable ? { routes } : {}) })); };
+  const lastSave = useRef(saveSignal);
+  useEffect(() => { if (saveSignal === lastSave.current) return; lastSave.current = saveSignal; save(); }, [saveSignal]);
   return <section className="properties inspector-panel">
     <header className="inspector-head">
       <div><span className="panel-kicker">SCENE / {frame.ref}</span><h2>当前幕</h2><p className="muted mono">{frame.file}:{frame.line}</p></div>
@@ -87,7 +91,7 @@ function Editor({ frame, state, onDirty }: { frame: Frame; state: EditorState; o
               {route.kind !== 'end' && <Updates story={story} value={route.updates} change={updates => routeChange(routes.map((r, at) => at === index ? { ...r, updates } : r))} />}
               {route.kind === 'choice' && routes.length > 1 && <button className="subtle danger-ghost" onClick={() => { mark({ options: draft.options.filter(o => o.id !== route.option) }); routeChange(routes.filter((_, i) => i !== index)); }}><Icon name="trash" size={13} />移除此选项</button>}
             </div>)}
-            {routes[0]?.kind === 'choice' && <button className="subtle" onClick={() => { const id = `choice.${crypto.randomUUID()}`; mark({ options: [...draft.options, { id, text: '新的选择' }] }); routeChange([...routes, { frame: frame.ref, kind: 'choice', option: id, target: '', updates: [] }]); }}><Icon name="plus" size={13} />＋添加选项</button>}
+            {routes[0]?.kind === 'choice' && <button className="subtle" onClick={() => { let id = shortId(); while (draft.options.some(option => option.id === id)) id = shortId(); mark({ options: [...draft.options, { id, text: '新的选择' }] }); routeChange([...routes, { frame: frame.ref, kind: 'choice', option: id, target: '', updates: [] }]); }}><Icon name="plus" size={13} />＋添加选项</button>}
           </> : <p className="notice">此幕路线由脚本控制：{state.logic?.frames[frame.ref]?.reason ?? '尚未识别到固定注册'}。已知目标显示在分支图中，仍可保存台词、人物与画面。</p>}
           {!!state.logic?.frames[frame.ref]?.locations.length && <button className="subtle" onClick={() => send(state, 'source', { ref: frame.ref, logic: true })}><Icon name="code" size={13} />查看此幕逻辑</button>}
         </div>
@@ -105,7 +109,7 @@ function Editor({ frame, state, onDirty }: { frame: Frame; state: EditorState; o
       </fieldset>
       <LifecycleEditor key={frame.ref} state={state} kind="frameExit" owner={frame.ref} disabled={dirty || !!pending} onDirty={setLifecycleDirty} save={(operation, revision) => send({ ...state, revision }, 'uiEdit', { operation })}/>
     </div>
-    <div className="inspector-savebar"><div className="actions"><button className="primary" disabled={!dirty || conflict || !!pending} onClick={() => { setPending(send({ ...state, revision: base }, 'patch', { ref: frame.ref, patch: { text: draft.text, speaker: draft.speaker, visual: draft.visual, audio: draft.audio, ...(routeEditable ? { options: draft.options } : {}) }, ...(routeEditable ? { routes } : {}) })); }}>{pending ? '正在保存…' : '保存幕'}</button><button className="subtle" disabled={!!pending} onClick={reload}><Icon name="undo" size={14} />还原编辑</button></div></div>
+    <div className="inspector-savebar"><div className="actions"><button className="primary" disabled={!dirty || conflict || !!pending} onClick={save}>{pending ? '正在保存…' : '保存幕'}</button><button className="subtle" disabled={!!pending} onClick={reload}><Icon name="undo" size={14} />还原编辑</button></div></div>
   </section>;
 }
 function Home() {
@@ -151,7 +155,7 @@ function Variables({ state }: { state: EditorState }) {
   </div></details>;
 }
 export function App() {
-  const [state, setState] = useState<EditorState>(), [selected, setSelected] = useState(''), [error, setError] = useState(''), [query, setQuery] = useState(''), [offset, setOffset] = useState(0);
+  const [state, setState] = useState<EditorState>(), [selected, setSelected] = useState(''), [selection, setSelection] = useState<string[]>([]), [error, setError] = useState(''), [query, setQuery] = useState(''), [offset, setOffset] = useState(0);
   const [draftDirty, setDraftDirty] = useState(false);
   const [uiMode, setUiMode] = useState(false), [uiDirty, setUiDirty] = useState(false);
   useEffect(() => { if (state?.view) setUiMode(state.view === 'ui'); }, [state?.view]);
@@ -159,6 +163,8 @@ export function App() {
   const [settingsDirty, setSettingsDirty] = useState(false), [view, setView] = useState<'branches' | 'files'>('branches');
   const [structural, setStructural] = useState('');
   const [drawer, setDrawer] = useState<'settings' | 'images' | null>(null);
+  const [copied, setCopied] = useState<string[]>([]), [saveSignal, setSaveSignal] = useState(0);
+  const search = useRef<HTMLInputElement>(null);
   useEffect(() => {
     if (!drawer) return;
     const close = (event: KeyboardEvent) => { if (event.key === 'Escape') setDrawer(null); };
@@ -167,23 +173,80 @@ export function App() {
     window.addEventListener('keydown', close);
     return () => { window.removeEventListener('keydown', close); document.body.style.overflow = previous; };
   }, [drawer]);
-  useEffect(() => { if (state?.selected) { setSelected(state.selected); setQuery(''); } }, [state?.selected, state?.appliedRequestId]);
+  useEffect(() => { if (state?.selected) { setSelected(state.selected); setSelection(previous => previous.includes(state.selected!) ? previous : [state.selected!]); setQuery(''); } }, [state?.selected]);
+  useEffect(() => { const available = new Set(state?.story?.frames.filter(frame => !frame.pending).map(frame => frame.ref) ?? []); setSelection(previous => { const next = previous.filter(ref => available.has(ref)); return next.length === previous.length ? previous : next; }); }, [state?.appliedRequestId, state?.story?.frames]);
   useEffect(() => {
     const listener = (event: MessageEvent) => { if (event.data.type === 'state') { setState(event.data.state); setError(''); } else if (event.data.type === 'error') { setError(event.data.message); setStructural(''); } else if (event.data.type === 'settled') setStructural(''); };
     window.addEventListener('message', listener); host.postMessage({ version: 1, requestId: crypto.randomUUID(), revision: '', type: 'ready', payload: {} }); return () => window.removeEventListener('message', listener);
   }, []);
+  useEffect(() => {
+    const typing = (target: EventTarget | null) => { const element = target as HTMLElement | null; return !!element && (element.isContentEditable || !!element.closest('input, textarea, select, [contenteditable="true"]')); };
+    const handler = (event: KeyboardEvent) => {
+      if (!state?.story || uiMode || drawer || event.defaultPrevented || typing(event.target)) return;
+      const storyFrames = state.story.frames.filter(item => !item.pending);
+      const current = storyFrames.find(item => item.ref === selected) ?? storyFrames[0];
+      const listed = selection.filter(ref => storyFrames.some(item => item.ref === ref));
+      const targets = listed.length ? listed : current ? [current.ref] : [];
+      const structuralLocked = !state.writable || draftDirty || settingsDirty || assetDirty || !!structural;
+      const editable = (ref: string) => state.logic ? state.logic.frames[ref]?.editable === true : !!state.routes;
+      const mod = event.ctrlKey || event.metaKey, key = event.key.toLowerCase();
+      if (mod && !event.altKey && !event.shiftKey && key === 'a' && view === 'branches') { event.preventDefault(); setSelection(storyFrames.map(item => item.ref)); return; }
+      if (mod && !event.altKey && !event.shiftKey && key === 'f') { event.preventDefault(); search.current?.focus(); search.current?.select(); return; }
+      if (mod && !event.altKey && !event.shiftKey && key === 's') { event.preventDefault(); setSaveSignal(value => value + 1); return; }
+      if (mod && !event.altKey && !event.shiftKey && key === 'c') { event.preventDefault(); if (targets.length) { setCopied(targets); setError(''); } return; }
+      if (mod && !event.altKey && !event.shiftKey && key === 'v') {
+        event.preventDefault();
+        if (!copied.length) { setError('尚未复制幕：先选中并按 Ctrl+C。'); return; }
+        if (structuralLocked) { setError('请先保存或还原当前编辑，再粘贴幕。'); return; }
+        if (!state.routes || copied.some(ref => !editable(ref))) { setError('复制的幕路线已不可编辑，请刷新后重试。'); return; }
+        setStructural(send(state, 'duplicate', { ref: copied[0], refs: copied, after: current?.ref }));
+        return;
+      }
+      if (mod && !event.altKey && !event.shiftKey && key === 'd') {
+        event.preventDefault();
+        if (!targets.length) return;
+        if (structuralLocked) { setError('请先保存或还原当前编辑，再复制幕。'); return; }
+        if (!state.routes || targets.some(ref => !editable(ref))) { setError('选中幕的路线尚不能安全复制。'); return; }
+        setStructural(send(state, 'duplicate', { ref: targets[0], refs: targets }));
+        return;
+      }
+      if (!mod && !event.altKey && (event.key === 'Delete' || event.key === 'Backspace')) {
+        event.preventDefault();
+        if (!targets.length) return;
+        if (structuralLocked) { setError('请先保存或还原当前编辑，再删除幕。'); return; }
+        if (!state.routes || targets.some(ref => !editable(ref))) { setError('选中幕的路线尚不能安全删除。'); return; }
+        if (state.logic?.complete === false) { setError('仍有动态路线无法确定入边，暂不能安全删除幕。'); return; }
+        if (storyFrames.length <= targets.length) { setError('故事至少需要保留一幕。'); return; }
+        setStructural(send(state, 'delete', { ref: targets[0], refs: targets }));
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [state, uiMode, drawer, selected, selection, copied, draftDirty, settingsDirty, assetDirty, structural, view]);
   if (!state) return <Home />;
   if (!state.story) return <main><h1>工程暂时无法解析</h1>{state.issues.map((i, n) => <p key={n}>{i}</p>)}<p>请用普通源码编辑器修复。修复后分镜会自动刷新。</p></main>;
   if (uiMode) return <UiEditor state={state} send={send} onDirty={setUiDirty} onBack={() => { if (uiDirty) return; setUiMode(false); send(state, 'preview', { view: 'story' }); }} />;
   const frames = state.story.frames.filter(f => !f.pending), frame = frames.find(f => f.ref === selected) ?? frames[0], visual = state.story.visuals.find(v => v.id === frame?.visual);
   const filtered = frames.filter(f => !query || f.text.includes(query) || f.ref.includes(query));
   const visible = filtered.slice(offset, offset + 50);
-  const selectFrame = (ref: string) => { if ((draftDirty || settingsDirty || assetDirty || structural) && ref !== frame?.ref) { setError('请先保存或还原当前编辑，再切换幕。'); return; } setSelected(ref); send(state, 'preview', { ref }); };
+  const selectFrames = (refs: string[], primary?: string) => {
+    const available = new Set(frames.map(item => item.ref));
+    const unique = [...new Set(refs)].filter(ref => available.has(ref));
+    const next = primary && available.has(primary) ? primary : unique[0] ?? selected;
+    if ((draftDirty || settingsDirty || assetDirty || structural) && next !== frame?.ref) { setError('请先保存或还原当前编辑，再切换幕。'); return; }
+    setSelection(unique);
+    if (next && next !== selected) { setSelected(next); send(state, 'preview', { ref: next }); }
+  };
+  const selectFrame = (ref: string) => selectFrames([ref], ref);
   const ownedRoutes = state.routes?.filter(r => r.frame === frame?.ref) ?? [];
   const hasOpenTarget = ownedRoutes.flatMap(routeDestinations).some(d => !d.target || state.story!.frames.some(f => f.pending && (f.ref === d.target || f.id === d.target)));
   const canInsert = !frame?.options.length && !ownedRoutes.some(r => r.branches?.length) || hasOpenTarget;
   const locked = !state.writable || draftDirty || settingsDirty || assetDirty || !!structural;
   const routeEditable = !!frame && (state.logic ? state.logic.frames[frame.ref]?.editable === true : !!state.routes);
+  const selectedRefs = (selection.length ? selection : frame ? [frame.ref] : []).filter(ref => frames.some(item => item.ref === ref));
+  const canEditSelected = !!state.routes && selectedRefs.length > 0 && selectedRefs.every(ref => state.logic ? state.logic.frames[ref]?.editable === true : true);
+  const duplicateSelected = (after?: string) => { if (!selectedRefs.length) return; setStructural(send(state, 'duplicate', { ref: selectedRefs[0], refs: selectedRefs, ...(after ? { after } : {}) })); };
+  const deleteSelected = () => { if (!selectedRefs.length) return; setStructural(send(state, 'delete', { ref: selectedRefs[0], refs: selectedRefs })); };
   const move = (delta: number) => { if (!frame) return; const local = frames.filter(f => f.file === frame.file).map(f => f.ref), index = local.indexOf(frame.ref), to = index + delta; if (to < 0 || to >= local.length) return; [local[index], local[to]] = [local[to], local[index]]; send(state, 'reorder', { ref: frame.ref, refs: local }); };
   const routeKind = state.routes?.find(r => r.frame === frame?.ref)?.kind;
   return <main className="workspace app-shell">
@@ -253,12 +316,12 @@ export function App() {
           <div className="panel-head story-head">
             <div className="panel-title"><span className="panel-kicker">STORYBOARD</span><h2>分镜</h2></div>
             <div className="view-tabs"><button aria-pressed={view === 'branches'} onClick={() => setView('branches')}><Icon name="layout" size={14} />分支视图</button><button aria-pressed={view === 'files'} onClick={() => setView('files')}><Icon name="film" size={14} />文件顺序</button></div>
-            <label className="search-box"><Icon name="search" size={14} /><input aria-label="搜索分镜" placeholder="搜索台词或幕 ID" value={query} onChange={e => { setQuery(e.target.value); setOffset(0); }} /></label>
+            <label className="search-box"><Icon name="search" size={14} /><input ref={search} aria-label="搜索分镜" placeholder="搜索台词或幕 ID" value={query} onChange={e => { setQuery(e.target.value); setOffset(0); }} /></label>
           </div>
           <div className="frame-tools">
             <button className="subtle" disabled={locked || !routeEditable || !canInsert} onClick={() => setStructural(send(state, 'insert', { ref: frame!.ref }))}><Icon name="plus" size={14} />＋新增幕</button>
-            <button className="subtle" disabled={locked || !routeEditable} onClick={() => setStructural(send(state, 'duplicate', { ref: frame!.ref }))}><Icon name="copy" size={14} />复制幕</button>
-            <button className="subtle danger-ghost" disabled={locked || !routeEditable || state.logic?.complete === false || frames.length <= 1} onClick={() => setStructural(send(state, 'delete', { ref: frame!.ref }))}><Icon name="trash" size={14} />删除幕</button>
+            <button className="subtle" disabled={locked || !canEditSelected} title={selectedRefs.length > 1 ? `复制选中的 ${selectedRefs.length} 幕` : '复制当前幕'} onClick={() => duplicateSelected()}><Icon name="copy" size={14} />复制幕</button>
+            <button className="subtle danger-ghost" disabled={locked || !canEditSelected || state.logic?.complete === false || frames.length <= selectedRefs.length} title={selectedRefs.length > 1 ? `删除选中的 ${selectedRefs.length} 幕` : '删除当前幕'} onClick={deleteSelected}><Icon name="trash" size={14} />删除幕</button>
             <button className="subtle" disabled={locked || !frame} onClick={() => setStructural(send(state, 'entry', { refs: [frame.ref] }))}><Icon name="flag" size={14} />设为唯一入口</button>
             {view === 'files' && <><button className="subtle" disabled={locked || !frame} onClick={() => move(-1)}>前移</button><button className="subtle" disabled={locked || !frame} onClick={() => move(1)}>后移</button></>}
             {structural && <span className="saving-status"><span className="spinner" />正在保存…</span>}
@@ -273,12 +336,12 @@ export function App() {
             {(draftDirty || settingsDirty) && <p className="muted">保存当前编辑后，即可继续新建或删除幕。</p>}
           </div>
           <div className="story-view">
-            {view === 'branches' ? <StoryGraphView story={state.story} routes={state.logic?.links ?? state.routes} selected={frame?.ref} query={query} select={selectFrame} layout={state.layout} disabled={locked} onExport={() => setStructural(send(state, 'graphExport'))} editable={ref => state.logic ? state.logic.frames[ref]?.editable === true : !!state.routes} onLayout={(ref, point) => setStructural(send(state, 'layout', ref && point ? { ref, ...point } : { reset: true }))} onReconnect={(ref, target, option, branch) => setStructural(send(state, 'reconnect', { ref, target, option, branch }))}/> : <><p className="muted">排序只改变组织顺序，不修改剧情路线。</p><div className="frames">{visible.map(f => <button className={`frame ${frame?.ref === f.ref ? 'selected' : ''}`} key={f.ref} onClick={() => selectFrame(f.ref)}><span className="frame-top">{String(frames.indexOf(f) + 1).padStart(2, '0')} <small>{state.routes?.find(r => r.frame === f.ref)?.kind === 'choice' ? '选择' : state.routes?.find(r => r.frame === f.ref)?.kind === 'end' ? '结束' : state.logic && !state.logic.frames[f.ref]?.editable ? '脚本路线' : state.routes ? '推进' : '高级逻辑'}</small></span><p>{f.text}</p><span className="muted">{f.ref.slice(0, 12)}</span></button>)}</div>{filtered.length > 50 && <div className="pager"><button className="subtle" disabled={!offset} onClick={() => setOffset(Math.max(0, offset - 50))}>上一批</button><span>{offset + 1}–{Math.min(offset + 50, filtered.length)} / {filtered.length}</span><button className="subtle" disabled={offset + 50 >= filtered.length} onClick={() => setOffset(offset + 50)}>下一批</button></div>}</>}
+            {view === 'branches' ? <StoryGraphView story={state.story} routes={state.logic?.links ?? state.routes} selected={frame?.ref} selection={selection} query={query} select={selectFrame} selectMany={selectFrames} layout={state.layout} disabled={locked} onExport={() => setStructural(send(state, 'graphExport'))} editable={ref => state.logic ? state.logic.frames[ref]?.editable === true : !!state.routes} onLayout={(ref, point) => setStructural(send(state, 'layout', ref && point ? { ref, ...point } : { reset: true }))} onLayoutMany={moves => setStructural(send(state, 'layout', { positions: Object.fromEntries(moves.map(move => [move.ref, move.point])) }))} onReconnect={(ref, target, option, branch) => setStructural(send(state, 'reconnect', { ref, target, option, branch }))}/> : <><p className="muted">排序只改变组织顺序，不修改剧情路线。</p><div className="frames">{visible.map(f => <button className={`frame ${frame?.ref === f.ref ? 'selected' : ''}`} key={f.ref} onClick={() => selectFrame(f.ref)}><span className="frame-top">{String(frames.indexOf(f) + 1).padStart(2, '0')} <small>{state.routes?.find(r => r.frame === f.ref)?.kind === 'choice' ? '选择' : state.routes?.find(r => r.frame === f.ref)?.kind === 'end' ? '结束' : state.logic && !state.logic.frames[f.ref]?.editable ? '脚本路线' : state.routes ? '推进' : '高级逻辑'}</small></span><p>{f.text}</p><span className="muted">{f.ref.slice(0, 12)}</span></button>)}</div>{filtered.length > 50 && <div className="pager"><button className="subtle" disabled={!offset} onClick={() => setOffset(Math.max(0, offset - 50))}>上一批</button><span>{offset + 1}–{Math.min(offset + 50, filtered.length)} / {filtered.length}</span><button className="subtle" disabled={offset + 50 >= filtered.length} onClick={() => setOffset(offset + 50)}>下一批</button></div>}</>}
           </div>
         </section>
       </section>
 
-      {frame && <Editor key={frame.ref} frame={frame} state={assetDirty ? { ...state, writable: false } : state} onDirty={setDraftDirty} />}
+      {frame && <Editor key={frame.ref} frame={frame} state={assetDirty ? { ...state, writable: false } : state} saveSignal={saveSignal} onDirty={setDraftDirty} />}
     </div>
 
     <footer className="status-bar">
@@ -286,6 +349,7 @@ export function App() {
       <span className="status-item"><Icon name="film" size={13} />{frames.length} 幕</span>
       <span className="status-item"><Icon name="layers" size={13} />{state.story.variables.length} 变量</span>
       <span className="status-item"><Icon name="alert" size={13} />{state.issues.length} 条提示</span>
+      {copied.length > 0 && <span className="status-item" title="Ctrl+V 在当前幕之后粘贴副本">已复制 {copied.length} 幕</span>}
       <span className="status-spacer" />
       <span className="status-item">{routeKind === 'end' ? '结束幕' : routeKind === 'choice' ? '选择幕' : routeKind ? '推进幕' : '脚本路线'}</span>
       <span className="status-item"><Icon name="check" size={13} />Kakera v0.9.1</span>

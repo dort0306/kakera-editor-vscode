@@ -4,7 +4,7 @@
 
 ## 1. 先确认事实与任务边界
 
-- 当前基线为 Kakera 播放器 v0.9.1：story 8、UI 3、save 9，调试协议 v1，demo content-version=11。插件已有 0.8.8 开发预览实现；实际能力和未完成项见 [实现记录](doc/12-implementation-status.zh-cn.md)，不要把全部规划当成交付。
+- 当前基线为 Kakera 播放器 v0.10.0：story 8、UI 3、save 9，调试协议 v1，demo content-version=11。插件已有 0.10.0 开发预览实现；实际能力和未完成项见 [实现记录](doc/12-implementation-status.zh-cn.md)，不要把全部规划当成交付。
 - 本文件初次编写时仓库只有文档与许可证，没有插件源码、引擎源码、构建系统或测试。开始任务时重新检查实际文件，不把规划目录和命令当作已经存在。
 - 当前实际检查命令为 `npm run check`、`npm run test:browser`、`npm run test:integration`、`npm run test:host` 和 `npm run package`。浏览器测试需本机 Edge/Chromium；引擎/宿主检查需要已准备的匹配工具/本机 VS Code，详见 README。独立 Rust wrapper 仍未实现，当前通过真实 CLI 复用引擎。
 - 本仓库负责 VS Code 插件及其内容工具适配，不默认承担上游引擎改造、Code-OSS 分叉或独立桌面壳。
@@ -86,7 +86,7 @@
 - 断点停在候选提交前，区分当前幕与 `pending_frame`，包括自循环；`next` 不保证每次跨一幕。
 - 不提供引擎没有的任意 jump、setVariables、eval、条件断点、JS 行级步进或推送事件。变量面板只读。
 - 试玩从入口启动，使用独立 save-dir；只管理自己启动的播放器。既有会话不悄悄替换成新代次。
-- 使用匹配的 `kakera-pack` 及 v0.9.1 依赖选择，额外文件只走 `kakera.package.json` 显式文件清单，保留排除规则。
+- 使用匹配的 `kakera-pack` 及 v0.10.0 依赖选择，额外文件只走 `kakera.package.json` 显式文件清单，保留排除规则。
 - 包和发行候选位于内容根之外，失败保留旧产物；发布前全包检查、许可证/隐私清单检查及源码外运行验证。公开上传需另有任务授权。
 
 ## 8. 验证与交付
@@ -142,6 +142,14 @@
 - `game.cgId` 是当前幕专用标记，普通幕为空；`cg.total/unlocked/progress` 来自独立 profile 集合。编辑器只读展示/生成绑定，不写 profile.json 或隐藏槽，不把加载资源当解锁。
 - CG 资产导入必须走有界图片校验、许可记录和撤销/保存链；资源引用检查需覆盖 visual/portrait/UI 与 gallery。真实引擎 `--check` 和 KPAK 回归不能由静态源码测试替代。
 
+## 短 ID、侧栏定位与流程图快捷键（0.8.9）
+
+- 幕条目定位必须复用已打开的工作台并设置 `selectedFrames` 后刷新，不重复开 tab；无工作台时通过文件 URI 的待选映射在首次 ready 前注入。
+- “剧本”必须是 XML 文件 → 幕两级；文件节点使用稳定文件路径 id，幕仍按全工程稳定 ref 关联。
+- 编辑器自动生成的稳定 ID 统一为 8 字节随机数的 16 位十六进制短格式：幕、人物、立绘/模型资源、导入资源、visual/外观、UI 页面/控件、点九/图集与图片工具示例控件。必须检查对应命名空间冲突，64 次后才回退 UUID；已有手写或历史 ID 不批量改写。待连接占位、复制、AI 拆幕和工程模板都走同一生成器。
+- 幕流程图支持 `Ctrl+A` 全选、`Ctrl/⌘/Shift` 单击多选、方向键/`Home`/`End` 切换、`Shift+方向键` 扩展、`Alt+方向键` 批量微调、`Delete/Backspace` 批量删除、`Ctrl+D` 复制、`Ctrl+C/V` 在当前工作台内复制粘贴、`Ctrl+F` 搜索、`Ctrl+S` 保存当前幕草稿；输入框、下拉框和 contenteditable 中的原生快捷键不得被拦截。
+- 批量删除/复制/布局必须一次源事务提交：删除保留至少一幕，无法证明的多入边保留待连接，不替作者猜分支；批量布局一次写 `.editor/workbench.json`，不改剧情。只读状态允许选择查看但禁止写入。
+
 ## VS Code 原生工程侧栏（0.8.8）
 
 - Activity Bar 的 `kakera.project` 使用原生 `TreeView`，不得用 Webview 模拟侧栏。分类、图标、计数、描述、工具提示和右键菜单都使用 VS Code API/主题，保持与本体一致。
@@ -165,3 +173,10 @@
 
 - 空白背景拖动只改变 `.graph-scroll` 的滚动位置，不得写入 `.editor/workbench.json`、移动幕卡或触发布局保存；幕卡/端点/边缘的指针手势优先，背景命中层必须位于它们下方。
 - 使用窗口级 pointermove/pointerup 回退处理 pointer capture 丢失；Escape 和取消应清理平移状态。真实工作台 DOM 回归必须同时验证“空白拖动改变滚动”和“未新增 layout 消息”。
+
+## UI 扩展：快捷弹窗、快捷键与 HSV（0.10.0 / 引擎 v0.10.0）
+
+- 快捷确认弹窗使用普通 XML 模态 `screen`、现有控件/颜色/绑定和 `route="close"`，不得新增固定原生对话框或动态执行字符串。`ctx.quit()` 只允许普通 `on.ui`；编辑器不触发 frameExit/screenClose、不写新手动槽或隐藏槽。
+- 玩家快捷键只写 `ctx.captureShortcut`、`ctx.cancelShortcutCapture`、`ctx.keybinding`、`ctx.resetKeybindings` 等普通 UI 命令；绑定须符合 v0.10.0 token/ASCII/保留组合/前缀冲突规则。`keybindings.json` 是玩家偏好，由匹配播放器加载和原子保存；编辑器不读取、不写入、不把显示 Label 当存储格式。冻结代次和发行包排除 `keybindings.json`/`ui-colors.json` 的大小写变体。
+- HSV/配色只使用 UI 3 扩展：`color-picker`（必需 UI string `value` 与普通 event，`alpha` 可选，≥128×224，最多 8 个，不能放入 repeat）、`color-bind`（panel/image/nine-patch/label/button/toggle，来源限 `ui.<string>`/`colors.<槽位>`，与 `color` 互斥）、根级 `palette`（`[a-z][a-z0-9_]{0,63}`，最多 32 个）。颜色值规范为未预乘大写 `#RRGGBBAA`；拖动只产生候选，由作者 `ctx.setUi` 决定提交。`ui-colors.json` 同样由匹配播放器维护，编辑器不创建或修改。
+- 静态画布/预览只读初值与示例，不执行捕获、焦点、策略或偏好写入；真实按键所有权、冲突、回滚、DPI/指针与原生窗口必须由匹配播放器单独验收。工具升级时同步 `tools.json`、工程清单/调试/构建版本检查和真实 `--check`。

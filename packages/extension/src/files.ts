@@ -43,7 +43,7 @@ export async function ensureDirectory(root: string, relative: string): Promise<s
   }
   return safePath(root, logical);
 }
-const excluded = /^(\.git|\.editor|\.cache|\.work|target|node_modules|builds|saves|settings\.json|read\.json|profile\.json|ui-audio\.json|flow-checkpoint\.json|(?:slot-|auto-).*\.json)$|\.tmp$/i;
+const excluded = /^(\.git|\.editor|\.cache|\.work|target|node_modules|builds|saves|settings\.json|read\.json|profile\.json|ui-audio\.json|flow-checkpoint\.json|keybindings\.json|ui-colors\.json|(?:slot-|auto-).*\.json)$|\.tmp$/i;
 export interface Frozen { directory: string; hashes: Record<string, string>; fingerprint: string; assertCurrent: () => Promise<void>; dispose: () => Promise<void> }
 export async function freezeContent(root: string, work: string, buffers: Map<string, string>, signal?: AbortSignal): Promise<Frozen> {
   await fs.mkdir(work, { recursive: true });

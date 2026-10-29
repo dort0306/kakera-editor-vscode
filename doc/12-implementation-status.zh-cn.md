@@ -1,8 +1,10 @@
 # 12 实现与验证记录
 
-日期：2026-10-29。插件 0.8.8，匹配播放器 0.9.1，story 8 / UI 3 / save 9（demo content-version=11）。
+日期：2026-10-30。插件 0.10.0，匹配播放器 0.10.0，story 8 / UI 3 / save 9（demo content-version=11）。
 
-2026-10-29 工作区修复：补齐 `on.screenOpen/Close` 与 `ctx.present` 的缺失页面静态诊断，按 UI 入口/include 当前缓冲核对；分镜工作台与 UI 编辑器均显示脚本文件/行号，动态页面目标标为不确定。UI 尚未完整解析时避免级联误报，诊断不执行脚本或改写原文。`npm run check` 的 88 项测试、类型检查与构建通过；真实宿主结果见 [0.7.0 独立验收及修复复验](17-v0.7.0-acceptance.zh-cn.md)。媒体运行态等原有未验收范围仍保留。
+2026-10-30 播放器 v0.10.0 UI 扩展：核对相邻 `kakera-avg-rust` 的 `9924e85`（v0.10.0），把自定义确认弹窗、玩家可配置快捷键和三角 HSV 控件接入可视化 UI 编辑器。UI 编辑器新增“快捷弹窗”、palette/color-bind/color-picker 编辑和 HSV 色盘；事件向导新增 `ctx.captureShortcut`、`cancelShortcutCapture`、`keybinding`、`resetKeybindings`、`colorPreference`、`resetColors`、`quit`。编辑器只写实际 UI XML/JS，玩家偏好文件 `keybindings.json`、`ui-colors.json` 仍由匹配播放器维护；静态画布不执行捕获、脚本、偏好落盘或交接。工具升级并重新准备 v0.10.0 哈希，工程清单和调试版本检查接受 0.10.0。详见 [16 UI 编辑器](16-ui-editor.zh-cn.md)、[18 使用说明](18-visual-editor-guide.zh-cn.md)。
+
+2026-10-29 短 ID 与流程图快捷键：编辑器自动生成的人物、立绘/模型资源、导入资源、visual/外观、UI 页面/控件、点九/图集和图片工具示例控件 ID 统一改用 `newShortId` 的 8 字节随机数 16 位十六进制格式；各命名空间检查冲突，64 次后才回退 UUID，已有历史/手写 ID 不批量改写。幕流程图新增多选状态和快捷键：`Ctrl+A` 全选、`Ctrl/⌘/Shift` 单击多选、方向键/`Home`/`End` 切换、`Shift+方向键` 扩展、`Alt+方向键` 批量微调、`Delete/Backspace` 批量删除、`Ctrl+D` 复制、`Ctrl+C/V` 复制粘贴、`Ctrl+F` 搜索、`Ctrl+S` 保存草稿。批量删除/复制作为一次 source/session 事务，删除保留至少一幕并按明确出口重连，无法证明的入边生成待连接占位；多幕拖动/微调通过 `positions` payload 一次写 `.editor/workbench.json`。输入框、下拉框和 contenteditable 不拦截原生快捷键。
 
 2026-10-29 常用生命周期可视编辑：当前幕属性可设置离幕打开页面，UI 页面属性可设置关闭后续接指定幕、恢复待续剧情或打开另一页面。只编辑可证明的单条固定 open/resume 回调；其他手写回调保持只读。真实播放器新增三组运行态验证，覆盖自动淡出关页、待续与指定幕返回、页面串接、隐藏槽建立和变量只提交一次；未运行视频/音频、跨进程恢复或 save 9 历史重放。使用方式见 [16 UI 编辑器](16-ui-editor.zh-cn.md)。
 
@@ -11,6 +13,8 @@
 2026-10-29 界面重构 0.8.0：Webview 改为现代游戏编辑器/IDE 壳层（应用栏、工程侧栏、舞台/分镜主区、属性检查器、状态栏），工程设置与图片工具收进可关闭抽屉；UI 编辑器改为页面层级/设计画布/分组检查器三栏，并新增首页快速开始布局。此次只改变 React 呈现、CSS 与内联图标，不改变 XML/JS 写回、命令 payload、保存事务、冻结代次或引擎契约；0.7.0 的独立验收记录保持其原版本范围。
 
 0.8.1 修复流程图和 UI 设计画布拖动：0.8.0 重写 CSS 时遗漏了 `touch-action:none`/`user-select:none`；拖动阈值后宿主重绘可能立即丢失 pointer capture，而原 `onLostPointerCapture` 会清空手势，导致幕卡在第一次移动后回弹或不再跟随。现在恢复触摸/选择样式，捕获丢失后保留已开始的手势，并增加窗口级 pointerup 提交与取消；浏览器回归新增“完整工作台内拖动必须发出 layout 请求”，普通点击、缩放、连线、Escape 和只读取消仍保留。
+
+0.8.9 改进原生侧栏、自动短 ID 与流程图快捷键：幕条目定位复用/打开工作台并注入选中幕；“剧本”按 XML 文件分两级；幕、人物、资源、visual、UI 节点、点九/图集等自动 ID 改为 8 字节随机数 16 位十六进制，同名空间冲突重试后仅以 UUID 兜底。关系图新增多选、`Ctrl+A` 全选和常用编辑快捷键，批量删除/复制走一次事务。
 
 0.8.8 重构 VS Code Activity Bar 工程侧栏：原生 TreeView 按人物、美术资源、音频与字体、剧本、变量、JS 程序、界面分类，使用主题图标、计数/描述和工具提示；新增原生右键菜单和新建/编辑/删除命令，侧栏在激活及文档/文件变化后刷新。
 
@@ -39,7 +43,7 @@
 | 模块 | 实际范围 |
 | --- | --- |
 | 宿主 | Windows 本地扩展、Activity Bar、首页、CustomTextEditor、源码导航、基本 Problems 诊断、命令与可取消进度 |
-| 手工创作 | 新建模板工程、稳定 UUID、自动接续新幕、删除幕并处理入边、设置入口、幕复制/文件内排序、台词/人物/画面/音频、选择/类型化条件分流/组合条件/有序变量更新、新增类型化变量 |
+| 手工创作 | 新建模板工程、稳定短 ID、自动接续新幕、删除幕并处理入边、设置入口、幕复制/文件内排序、台词/人物/画面/音频、选择/类型化条件分流/组合条件/有序变量更新、新增类型化变量 |
 | 标题 | UI title 与 title-bind 初始值编辑、显式解除绑定；工作台/工程树展示标题，故事和幕 ID 保持不变 |
 | 人物 | 创建/改名、批量 PNG/JPEG 导入、已有资源批量关联、Live2D model3 与声明依赖导入、回退图/模型编辑、外观放入当前幕 |
 | 分支图 | 真实路由、分支分色/同行、共用汇合节点、循环/动态目标/待连接；支持缩放、幕拖动与布局保存、拖线/点击/键盘重新连线、断线和自动排列；另保留文件顺序列表 |
@@ -51,6 +55,7 @@
 | 多起始幕 | 空白分隔 `story.entry` 列表、加入/移除/唯一入口、多根关系图、入口标记、删除/重命名只改对应项；UI `restart` 目标/先打开页面；调试 `game_started=false`、空当前幕；播放器初始 UI 等待显式起点，不自动进入第一项 |
 | 变量编辑 | 变量初始值及 int min/max 编辑，ID/类型固定；删除变量并检查路线条件/更新引用；范围与类型校验、XML 范围补丁和宿主撤销/保存链 |
 | 原生工程侧栏 | 原生 TreeView 分类人物/美术资源/音频与字体/剧本/变量/JS 程序/界面；ThemeIcon、计数/描述、激活加载与变化刷新；分类/条目右键新建、重命名、删除、导入、打开和引用命令，跟随 VS Code 主题 |
+| 侧栏定位与分组 | 点击实际幕定位工作台并选中该幕；剧本按 XML 文件→幕两级；编辑器自动生成的幕/人物/资源/visual/UI 节点/点九图集使用 16 位十六进制短 ID，64 次冲突后才回退 UUID |
 | AI | 单一用户 profile/SecretStorage、Chat Completions 文本/JSON/SSE、取消/连接与总任务预算、连续 UTF-16 原文片段白名单、差异审阅后新增幕 |
 | 试玩/调试 | 私有内容代次、隔离存档、自有进程；JSON Lines 串行控制/修订、只读变量、XML 行/帧断点、候选语义、DAP sourceReference 冻结源码、状态轮询 |
 | 构建 | 匹配打包 CLI、KPAK 2、全包检查、实际索引文件清单审阅、新发行目录、哈希与构建报告；不自动上传 |
@@ -228,3 +233,32 @@
 - `npm run test:host`：真实 VS Code 宿主命令贡献、激活、撤销/重做、inline DAP 和受限宿主通过。
 - `npm run package`：`kakera-editor-vscode-0.8.8.vsix` 共 25 文件、19.77MB；隔离安装后 CLI 确认 `dort0306.kakera-editor-vscode@0.8.8`。SHA-256 `41DA2134C82A7E6FDC5E9574DA99B67E43800B5D676D084313D939CAD80F2374`。
 - 未执行：右键“新建人物/变量/后续幕”逐项真实点击并写入磁盘的人工验收；这些命令的源码/表单/命令注册已覆盖，但完整 GUI 交互仍需单独确认。资源/脚本/人物删除只覆盖安全可证明范围，动态引用由引擎校验兜底。
+
+## 0.8.9 本轮验证
+
+- 侧栏定位：新增 `kakera.frame.open`；已打开工作台时设置 `selectedFrames`/story 视图后刷新并聚焦，不重复开 tab；未打开时以目标 XML 绝对路径保存待选映射，在自定义编辑器首次加载时注入。幕条目点击和右键都走该命令。
+- 分组：剧本分类先按 `frame.file` 生成 XML 文件节点，再按源码顺序展示该文件的幕；文件节点显示幕数并可打开分镜。
+- 短 ID：`newShortId` 用 `randomBytes(8)` 生成 16 位十六进制字符串，供幕、人物、资源、visual、UI 节点、点九/图集和示例控件共用；生成器按对应命名空间检查冲突，64 次后才 `randomUUID()`。幕的 `insertFrame`、待连接占位、复制、AI 拆幕和工程模板共用同一路径。
+- 流程图快捷键：多选状态由 Webview 持有，实际幕的批量删除/复制走一次 source/session 事务；批量删除保留至少一幕、按明确出口重连，无法证明的入边生成待连接占位。多幕拖动/微调一次提交 `positions`，只写 `.editor/workbench.json`；`Ctrl+S` 只保存当前幕草稿。
+- 真实窗口检查：隔离 VS Code 中确认剧本分类展开为 `story.xml 3 幕` → `opening/journey/ending` 两级，文件节点与幕节点均使用主题图标和原生树样式；幕点击定位的自动化/手工完整矩阵仍待逐项验收。
+- `npm run check`：类型检查、**104 项**回归和构建通过；新增短 ID 格式、批量删除/复制、多幕布局、`kakera.frame.open` 贡献/菜单、文件分组命令断言。
+- `npm run test:browser`：真实 Edge 156 下流程图 `Ctrl+A` 全选、`Shift+方向键` 扩展、多选状态/计数、工作台全选/Escape、背景平移和原有点击/拖动/连线/UI 编辑回归通过；输出更新后的工作台与 UI 截图。
+- `npm run test:host`：真实 VS Code 宿主激活、命令贡献、撤销/重做、短 ID 人物/外观、多幕布局、批量复制/删除、inline DAP 和受限宿主通过。
+- `npm run test:integration`：原真实播放器条件/生命周期/CG/UI/KPAK 回归通过。
+- `npm run package`：`kakera-editor-vscode-0.8.9.vsix` 共 25 文件、19.78MB；隔离安装后 CLI 确认 `dort0306.kakera-editor-vscode@0.8.9`。SHA-256 `D99294AE0A9731604E20CC4F9B831602906A147AF2E0F7F2A84AAECD9618633C`。
+- 未执行：所有跨章节文件的 16 位 ID 碰撞压力、真实 GUI 点击后工作台选中状态的人工截图；短 ID 碰撞由 64 次重试与 UUID 兜底，仍需真实长工程验收。
+
+## 0.10.0 本轮验证
+
+- 上游核对：v0.10.0 提交增加 `color-picker`/`color-bind`/`palette`、纯颜色几何、玩家快捷键捕获/偏好、确认弹窗与 `ctx.quit`、动态图片查看组合。格式仍为 story 8 / UI 3 / save 9 / profile 1 / read 1 / KPAK 1/2；新增固定偏好 `keybindings.json`、`ui-colors.json`，不属于 KPAK、工程监控或编辑器冻结代次（冻结/打包按文件名大小写不敏感排除）。
+- 快捷弹窗：新增 `addPopup` 源码事务，生成模态 `screen`、遮罩、可选标题/正文、确认按钮和 `route="close"` 取消按钮；确认动作支持关闭、已有事件或自动追加 `ctx.quit()` 事件。页面/控件使用 16 位短 ID，标题留空不生成 label。
+- 玩家快捷键：新增 `normalizeShortcutBinding`/`shortcutDisplay` 及事件向导字段。绑定按 ASCII token、Ctrl/Alt/Shift 顺序、64 字节、保留组合和 Ctrl+Alt 约束校验；`keybinding` 留空写 `null`，捕获结果事件必须已注册普通 `on.ui`。设计预览提供 `shortcuts.*` 默认标签/捕获状态；跨动作前缀冲突和偏好写回仍由匹配播放器校验。
+- HSV 与配色：读取/编辑根级 `palette`（ID 正则、唯一、最多 32、初值严格颜色）；`color-picker` 校验 UI string 绑定、事件、alpha、128×224、最多 8 个且不能在 repeat；`color-bind` 限制节点类型、来源和与静态 `color` 互斥。颜色属性使用文本 + HSV 色相环/固定方向 SV 三角/可选 alpha 条编辑，画布提供只读控件预览。
+- 预览：`previewUi` 增加 palette `colors` 快照、`shortcuts` 默认绑定与标签；button 的 `color-bind` 只影响背景 tint，不再误染默认白字；nine-patch 颜色用半透明覆盖近似，精确分段需试玩。
+- 工具链：从相邻 v0.10.0 源码构建 release，`prepare-tools` 重新生成 `tools.json` 哈希；`tools.ts`、`session.ts`、调试 client、工程 schema、测试宿主清单、构建提示与 `verify-release` 接受/要求 0.10.0，同时保留 0.8.3–0.9.1 打开兼容。
+- `npm run check`：类型检查、**112 项**回归和构建通过（新增 palette/color-picker/color-bind、快捷键、快捷弹窗、HSV 数值/显示名测试）。
+- `npm run test:browser`：真实 Edge 156 下 HSV 色相环拖动保存规范颜色、color-picker 检查器、快捷弹窗和快捷键事件表单通过；原流程图/工作台/UI 拖动回归保持通过。
+- `npm run test:integration`：真实 v0.10.0 `--check` 接受含 palette、color-bind、color-picker、快捷键捕获/绑定/重置、颜色偏好和 `ctx.quit` 弹窗的整合工程；条件、生命周期、幕重命名、KPAK 1/2 与独立包检查通过。
+- `npm run test:host`：真实 VS Code 激活、未保存缓冲、冻结 CLI、撤销/重做、多 Custom Editor、真实 v0.10.0 inline DAP 与受限宿主通过。
+- `npm run package`：生成 `artifacts/kakera-editor-vscode-0.10.0.vsix`（25 文件、19.94MB），工具哈希与模板字体/许可检查通过；SHA-256 `09FC8AC88FE0CFC5358A9F061E60E2147D6E5BCFCA287531331143DAB252A7A6`。未在本轮隔离安装该包，安装后的命令/宿主人工矩阵仍按下方未执行项处理。
+- 未执行：真实播放器的按键捕获/冲突/释放屏障、`keybindings.json`/`ui-colors.json` 原子写与坏文件回滚、HSV 指针/键盘焦点、DPI 矩阵和 D3D11 原生窗口；静态 `--check`、KPAK 与浏览器/宿主测试不能替代这些运行态验收。动态图片查看组合复用现有 image-bind，本轮未新增编辑器专用页面。

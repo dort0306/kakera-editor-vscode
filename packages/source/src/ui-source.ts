@@ -1,12 +1,13 @@
-import { randomUUID } from 'node:crypto';
 import { parse } from 'acorn';
 import type { Sources } from './index';
-import { appendGroup, readStory } from './index';
+import { appendGroup, newShortId, readStory } from './index';
 import { child, escapeXmlAttribute as escapeXml, parseXml, setAttribute, type XmlNode } from './xml';
 import { uiFragments, type UiFragment } from './ui-files';
-import { UI_ATTRIBUTES, UI_CONTAINERS, UI_KINDS, uiNodes, type UiDesign, type UiEdit, type UiEvent, type UiEventCommand, type UiGalleryEntry, type UiKind, type UiNode, type UiScreen } from '../../domain/src/ui';
+import { UI_ATTRIBUTES, UI_CONTAINERS, UI_KINDS, uiNodes, type UiDesign, type UiEdit, type UiEvent, type UiEventCommand, type UiGalleryEntry, type UiKind, type UiNode, type UiPaletteSlot, type UiScreen } from '../../domain/src/ui';
 import { readUiMedia, editUiMedia } from './ui-media';
 import { i64 } from '../../domain/src/index';
+import { normalizeColor, parseColor } from '../../domain/src/colors';
+import { isShortcutAction, normalizeShortcutBinding } from '../../domain/src/shortcuts';
 import { analyzeLogic } from './logic';
 import { readLifecycle, editLifecycle } from './lifecycle';
 
@@ -18,24 +19,29 @@ function walkJs(n: Ast, visit: (node: Ast) => void): void {
   while (stack.length) { if (!--budget) throw new Error('UI 脚本节点超过预算'); const node = stack.pop()!; visit(node); for (const [key, value] of Object.entries(node)) if (!['loc', 'start', 'end'].includes(key)) { if (Array.isArray(value)) stack.push(...value.filter(v => v?.type)); else if (value?.type) stack.push(value); } }
 }
 function scriptAst(sources: Sources): { file: string; ast: Ast }[] { return readStory(sources).scripts.map(file => ({ file, ast: parse(sources.get(file) ?? '', { ecmaVersion: 2022, locations: true }) as Ast })); }
-const uiCommandNames: UiEventCommand[] = ['open', 'close', 'advance', 'restart', 'choose', 'setting', 'sequence', 'playSound', 'soundEnabled', 'soundActor', 'soundExclude', 'present', 'resume', 'unlock'];
+const uiCommandNames: UiEventCommand[] = ['open', 'close', 'advance', 'restart', 'choose', 'setting', 'sequence', 'playSound', 'soundEnabled', 'soundActor', 'soundExclude', 'present', 'resume', 'unlock', 'captureShortcut', 'cancelShortcutCapture', 'keybinding', 'resetKeybindings', 'colorPreference', 'resetColors', 'quit'];
 const eventSettings = ['text_speed', 'auto_delay', 'bgm_volume', 'voice_volume', 'se_volume', 'video_volume', 'muted', 'autosave', 'skip_all', 'fullscreen'];
 const ctxMember = (n: Ast | undefined, ctx: string): string | undefined => n?.type === 'MemberExpression' && !n.optional && n.object?.name === ctx ? n.computed ? typeof n.property?.value === 'string' ? n.property.value : undefined : n.property?.name : undefined;
 function literalArg(n: Ast | undefined): string | undefined { return n?.type === 'Literal' && typeof n.value === 'string' ? n.value : undefined; }
-function eventCall(n: Ast, ctx: string): { command: UiEventCommand; target?: string; page?: string } | undefined {
+function nullableLiteralArg(n: Ast | undefined): string | null | undefined { return n?.type === 'Literal' && (typeof n.value === 'string' || n.value === null) ? n.value : undefined; }
+type EventShape = { command: UiEventCommand; target?: string; page?: string; action?: string; resultEvent?: string; binding?: string | null; slot?: string; color?: string | null };
+function eventCall(n: Ast, ctx: string): EventShape | undefined {
   if (n?.type !== 'ExpressionStatement' || n.expression?.type !== 'CallExpression') return;
   const call = n.expression, method = ctxMember(call.callee, ctx); if (!method) return;
   if (call.arguments.length > 2) return;
   const first = literalArg(call.arguments[0]), second = call.arguments[1];
   const valueArg = (arg: Ast | undefined) => ctxMember(arg, ctx) === 'value';
   if (method === 'open') { if (call.arguments.length !== 1 || first === undefined) return; return { command: 'open', target: first }; }
-  if (['close', 'advance'].includes(method)) { if (call.arguments.length) return; return { command: method as UiEventCommand }; }
+  if (['close', 'advance', 'cancelShortcutCapture', 'resetKeybindings', 'resetColors', 'quit'].includes(method)) { if (call.arguments.length) return; return { command: method as UiEventCommand }; }
   if (method === 'restart') { if (!call.arguments.length) return { command: 'restart' }; if (call.arguments.length === 1 && first !== undefined) return { command: 'restart', target: first }; return; }
   if (method === 'choose') { const arg = call.arguments[0]; if (call.arguments.length !== 1 || arg?.type !== 'MemberExpression' || arg.object?.type !== 'MemberExpression' || arg.object.object?.name !== ctx || arg.object.property?.name !== 'item' || arg.property?.name !== 'id') return; return { command: 'choose' }; }
   if (method === 'soundEnabled') { if (call.arguments.length !== 1 || !valueArg(call.arguments[0])) return; return { command: 'soundEnabled' }; }
   if (method === 'soundActor' || method === 'soundExclude') { if (call.arguments.length !== 2 || first === undefined || !valueArg(second)) return; return { command: method, target: first }; }
   if (method === 'sequence' || method === 'playSound' || method === 'present') { if (call.arguments.length !== 1 || first === undefined) return; return { command: method, target: first }; }
   if (method === 'setting') { if (call.arguments.length !== 2 || first === undefined || !valueArg(second)) return; return { command: 'setting', target: first }; }
+  if (method === 'captureShortcut') { if (call.arguments.length !== 2 || first === undefined) return; const resultEvent = literalArg(second); if (!resultEvent) return; return { command: 'captureShortcut', action: first, resultEvent }; }
+  if (method === 'keybinding') { if (call.arguments.length !== 2 || first === undefined) return; const binding = nullableLiteralArg(second); if (binding === undefined) return; return { command: 'keybinding', action: first, binding }; }
+  if (method === 'colorPreference') { if (call.arguments.length !== 2 || first === undefined) return; const color = nullableLiteralArg(second); if (color === undefined) return; return { command: 'colorPreference', slot: first, color }; }
   if (method === 'resume') { if (call.arguments.length > 1 || call.arguments.length === 1 && first === undefined) return; return { command: 'resume', ...(first === undefined ? {} : { target: first }) }; }
   if (method === 'unlock') {
     if (call.arguments.length !== 1) return;
@@ -45,7 +51,7 @@ function eventCall(n: Ast, ctx: string): { command: UiEventCommand; target?: str
     return;
   }
 }
-function readEventCallback(c: Ast): { command: UiEventCommand; target?: string; page?: string } | undefined {
+function readEventCallback(c: Ast): EventShape | undefined {
   if (c.arguments.length !== 2) return;
   const cb = c.arguments[1];
   if (!cb || !['ArrowFunctionExpression', 'FunctionExpression'].includes(cb.type) || cb.async || cb.generator || cb.params.length !== 1 || cb.params[0].type !== 'Identifier') return;
@@ -93,38 +99,32 @@ function numeric(file: string, n: XmlNode, key: string, fallback?: number): numb
 }
 export function readUiDesign(sources: Sources): UiDesign {
   const fragments = uiFragments(sources), byFile = new Map(fragments.map(f => [f.file, f])), entry = fragments[0];
-  const result: UiDesign = { entry: entry.file, files: fragments.map(f => f.file), width: Number(entry.root.attrs.width ?? 1280), height: Number(entry.root.attrs.height ?? 720), initial: entry.root.attrs.initial, attrs: entry.root.attrs, screens: [], variables: [], gallery: [], events: [], warnings: [] };
+  const result: UiDesign = { entry: entry.file, files: fragments.map(f => f.file), width: Number(entry.root.attrs.width ?? 1280), height: Number(entry.root.attrs.height ?? 720), initial: entry.root.attrs.initial, attrs: entry.root.attrs, screens: [], variables: [], palette: [], gallery: [], events: [], warnings: [] };
   if (![result.width, result.height].every(Number.isFinite) || result.width < 640 || result.height < 360 || Math.abs(result.width * 9 - result.height * 16) > .1) throw new Error('UI 画布需要至少 640×360 的 16:9 尺寸');
-  const ids = new Set<string>(), screens = new Set<string>(), vars = new Set<string>(), gallery = new Set<string>(); let count = 0;
-  function nodes(items: XmlNode[], fragment: UiFragment, depth: number, repeat = false): UiNode[] {
-    return items.map(n => {
-      if (depth > 8 || ++count > 1024) error(fragment.file, n, '超过 UI 深度 8 / 节点 1024 预算');
-      if (!(UI_KINDS as readonly string[]).includes(n.tag)) error(fragment.file, n, '不是支持的 UI 控件');
-      checkAttrs(fragment.file, n, ['id', ...UI_ATTRIBUTES[n.tag as UiKind]]);
-      if (!n.attrs.id || ids.has(n.attrs.id)) error(fragment.file, n, '控件 ID 为空或全局重复'); ids.add(n.attrs.id);
-      if (numeric(fragment.file, n, 'width') <= 0 || numeric(fragment.file, n, 'height') <= 0) error(fragment.file, n, '宽高必须大于零');
-      numeric(fragment.file, n, 'x', 0); numeric(fragment.file, n, 'y', 0);
-      if (n.children.length && !UI_CONTAINERS.includes(n.tag)) error(fragment.file, n, '不能包含子控件');
-      if (n.tag === 'repeat' && repeat) error(fragment.file, n, '不支持嵌套 repeat');
-      return { id: n.attrs.id, kind: n.tag as UiKind, attrs: n.attrs, file: fragment.file, line: fragment.source.slice(0, n.start).split('\n').length, children: nodes(n.children, fragment, depth + 1, repeat || n.tag === 'repeat') };
-    });
-  }
-  function expand(fragment: UiFragment): void {
+  const ids = new Set<string>(), screens = new Set<string>(), vars = new Map<string, { type: 'int' | 'bool' | 'string'; initial: string }>(), palette = new Set<string>(), gallery = new Set<string>(); let count = 0, pickers = 0;
+  const line = (fragment: UiFragment, node: XmlNode) => fragment.source.slice(0, node.start).split('\n').length;
+  function groups(fragment: UiFragment): void {
     for (const n of fragment.root.children) {
-      if (n.tag === 'include') { expand(byFile.get(n.attrs.src)!); continue; }
-      if (n.tag === 'screen') {
-        checkAttrs(fragment.file, n, ['id', 'modal', 'pause', 'background-click', 'background-right-click', 'sequence']);
-        if (!n.attrs.id || screens.has(n.attrs.id)) error(fragment.file, n, '页面 ID 为空或重复'); screens.add(n.attrs.id);
-        result.screens.push({ id: n.attrs.id, attrs: n.attrs, file: fragment.file, line: fragment.source.slice(0, n.start).split('\n').length, children: nodes(n.children, fragment, 1) });
-      } else if (n.tag === 'variables') {
+      if (n.tag === 'include') { groups(byFile.get(n.attrs.src)!); continue; }
+      if (n.tag === 'variables') {
         checkAttrs(fragment.file, n, []);
         for (const v of n.children) {
           if (!['int', 'bool', 'string'].includes(v.tag) || !v.attrs.id || vars.has(v.attrs.id) || v.children.length) error(fragment.file, v, 'UI 变量类型或 ID 无效');
-          checkAttrs(fragment.file, v, ['id', 'initial', 'min', 'max']); vars.add(v.attrs.id);
+          checkAttrs(fragment.file, v, ['id', 'initial', 'min', 'max']); vars.set(v.attrs.id, { type: v.tag as 'int' | 'bool' | 'string', initial: v.attrs.initial ?? '' });
           if (v.attrs.initial === undefined) error(fragment.file, v, '变量缺少 initial');
           if (v.tag === 'int') { const initial = BigInt(i64(v.attrs.initial)); if (v.attrs.min !== undefined && initial < BigInt(i64(v.attrs.min)) || v.attrs.max !== undefined && initial > BigInt(i64(v.attrs.max))) error(fragment.file, v, '变量初始值超出范围'); }
           if (v.tag === 'bool' && !['true', 'false'].includes(v.attrs.initial)) error(fragment.file, v, '布尔值必须是 true/false');
-          result.variables.push({ id: v.attrs.id, type: v.tag as 'int' | 'bool' | 'string', initial: v.attrs.initial, min: v.attrs.min, max: v.attrs.max, file: fragment.file, line: fragment.source.slice(0, v.start).split('\n').length });
+          result.variables.push({ id: v.attrs.id, type: v.tag as 'int' | 'bool' | 'string', initial: v.attrs.initial, min: v.attrs.min, max: v.attrs.max, file: fragment.file, line: line(fragment, v) });
+        }
+      } else if (n.tag === 'palette') {
+        checkAttrs(fragment.file, n, []);
+        for (const slot of n.children) {
+          if (slot.tag !== 'color' || !slot.attrs.id || !slot.attrs.initial || palette.has(slot.attrs.id) || slot.children.length) error(fragment.file, slot, '配色槽位需要唯一 ID、initial 且不能有子节点');
+          checkAttrs(fragment.file, slot, ['id', 'initial']);
+          if (!/^[a-z][a-z0-9_]{0,63}$/.test(slot.attrs.id)) error(fragment.file, slot, '配色槽位 ID 必须为 [a-z][a-z0-9_]{0,63}');
+          try { parseColor(slot.attrs.initial); } catch (e) { error(fragment.file, slot, `配色初值非法：${e instanceof Error ? e.message : '格式错误'}`); }
+          palette.add(slot.attrs.id);
+          result.palette.push({ id: slot.attrs.id, initial: slot.attrs.initial, file: fragment.file, line: line(fragment, slot) });
         }
       } else if (n.tag === 'gallery') {
         checkAttrs(fragment.file, n, []);
@@ -133,8 +133,50 @@ export function readUiDesign(sources: Sources): UiDesign {
           checkAttrs(fragment.file, cg, ['id', 'image', 'title', 'unlocked']);
           if (cg.attrs.unlocked !== undefined && !['true', 'false'].includes(cg.attrs.unlocked)) error(fragment.file, cg, 'CG unlocked 必须是 true/false');
           gallery.add(cg.attrs.id);
-          result.gallery.push({ id: cg.attrs.id, image: cg.attrs.image, title: cg.attrs.title, unlocked: cg.attrs.unlocked === 'true', file: fragment.file, line: fragment.source.slice(0, cg.start).split('\n').length });
+          result.gallery.push({ id: cg.attrs.id, image: cg.attrs.image, title: cg.attrs.title, unlocked: cg.attrs.unlocked === 'true', file: fragment.file, line: line(fragment, cg) });
         }
+      }
+    }
+  }
+  groups(entry);
+  if (result.variables.length > 128 || result.palette.length > 32 || result.gallery.length > 256) throw new Error('UI 变量/配色槽位/CG 超过引擎预算');
+  function nodes(items: XmlNode[], fragment: UiFragment, depth: number, repeat = false): UiNode[] {
+    return items.map(n => {
+      if (depth > 8 || ++count > 1024) error(fragment.file, n, '超过 UI 深度 8 / 节点 1024 预算');
+      if (!(UI_KINDS as readonly string[]).includes(n.tag)) error(fragment.file, n, '不是支持的 UI 控件');
+      checkAttrs(fragment.file, n, ['id', ...UI_ATTRIBUTES[n.tag as UiKind]]);
+      if (!n.attrs.id || ids.has(n.attrs.id)) error(fragment.file, n, '控件 ID 为空或全局重复'); ids.add(n.attrs.id);
+      if (numeric(fragment.file, n, 'width') <= 0 || numeric(fragment.file, n, 'height') <= 0) error(fragment.file, n, '宽高必须大于零');
+      numeric(fragment.file, n, 'x', 0); numeric(fragment.file, n, 'y', 0);
+      if (n.attrs.color !== undefined) { try { parseColor(n.attrs.color); } catch (e) { error(fragment.file, n, `颜色非法：${e instanceof Error ? e.message : '格式错误'}`); } }
+      if (n.children.length && !UI_CONTAINERS.includes(n.tag)) error(fragment.file, n, '不能包含子控件');
+      if (n.tag === 'repeat' && repeat) error(fragment.file, n, '不支持嵌套 repeat');
+      if (n.tag === 'color-picker') {
+        if (repeat) error(fragment.file, n, 'color-picker 不能放在 repeat 中');
+        if (++pickers > 8) error(fragment.file, n, 'color-picker 最多 8 个');
+        if (numeric(fragment.file, n, 'width') < 128 || numeric(fragment.file, n, 'height') < 224) error(fragment.file, n, 'color-picker 至少 128×224');
+        if (n.attrs.alpha !== undefined && !['true', 'false'].includes(n.attrs.alpha)) error(fragment.file, n, 'alpha 必须是 true/false');
+        if (!n.attrs.value?.startsWith('ui.')) error(fragment.file, n, 'color-picker 的 value 必须是 ui.<string> 变量');
+        const variable = vars.get(n.attrs.value.slice(3));
+        if (!variable || variable.type !== 'string') error(fragment.file, n, 'color-picker 的 value 必须是已声明的 UI string');
+        try { parseColor(variable.initial); } catch (e) { error(fragment.file, n, `color-picker 初值非法：${e instanceof Error ? e.message : '格式错误'}`); }
+        if (!n.attrs.event) error(fragment.file, n, 'color-picker 需要 event');
+      }
+      if (n.attrs['color-bind'] !== undefined) {
+        if (n.attrs.color !== undefined) error(fragment.file, n, 'color 与 color-bind 不能同时设置');
+        const path = n.attrs['color-bind'], valid = path.startsWith('ui.') ? vars.get(path.slice(3))?.type === 'string' : path.startsWith('colors.') ? palette.has(path.slice(7)) : false;
+        if (!valid) error(fragment.file, n, 'color-bind 需要 ui 字符串或已声明的 colors 槽位');
+      }
+      return { id: n.attrs.id, kind: n.tag as UiKind, attrs: n.attrs, file: fragment.file, line: line(fragment, n), children: nodes(n.children, fragment, depth + 1, repeat || n.tag === 'repeat') };
+    });
+  }
+  function expand(fragment: UiFragment): void {
+    for (const n of fragment.root.children) {
+      if (n.tag === 'include') { expand(byFile.get(n.attrs.src)!); continue; }
+      if (n.tag === 'screen') {
+        checkAttrs(fragment.file, n, ['id', 'modal', 'pause', 'background-click', 'background-right-click', 'sequence']);
+        if (!n.attrs.id || screens.has(n.attrs.id)) error(fragment.file, n, '页面 ID 为空或重复'); screens.add(n.attrs.id);
+        result.screens.push({ id: n.attrs.id, attrs: n.attrs, file: fragment.file, line: line(fragment, n), children: nodes(n.children, fragment, 1) });
       }
     }
   }
@@ -143,16 +185,18 @@ export function readUiDesign(sources: Sources): UiDesign {
     const route = node.attrs.route;
     if (route !== undefined && (node.attrs.event !== undefined || route !== 'close' && (!route.startsWith('open:') || !screens.has(route.slice(5))))) error(node.file, { attrs: node.attrs } as XmlNode, '按钮导航需要合法目标且不能同时设置 event');
   }
-  if (!result.screens.length || result.screens.length > 64 || result.variables.length > 128 || result.gallery.length > 256) throw new Error('UI 页面/变量/CG 超过引擎预算');
+  if (!result.screens.length || result.screens.length > 64) throw new Error('UI 页面数量超过引擎预算');
   const initial = result.screens.find(s => s.id === result.initial); if (!initial || initial.attrs.modal !== 'false') throw new Error('初始 UI 页面必须存在且 modal=false');
   // v0.9.0 removed frame video bindings; keep the old text visible as a source warning instead of silently previewing it.
   const removedVideoBinding = /^(?:not:)?game\.(?:videoPlaying|videoSkippable)$/;
-  for (const screen of result.screens) for (const node of uiNodes(screen.children)) for (const key of ['bind', 'value', 'visible', 'enabled', 'image-bind', 'region-bind']) {
+  for (const screen of result.screens) for (const node of uiNodes(screen.children)) for (const key of ['bind', 'value', 'visible', 'enabled', 'image-bind', 'region-bind', 'color-bind']) {
     const value = node.attrs[key];
     if (value && removedVideoBinding.test(value)) result.warnings.push(`${node.file}:${node.line}：${key} 引用了 v0.9.0 已移除的 ${value}`);
   }
   result.media = readUiMedia(sources);
   result.events = uiEvents(sources, result.warnings);
+  const eventNames = new Set(result.events.map(event => event.name));
+  for (const screen of result.screens) for (const node of uiNodes(screen.children)) if (node.kind === 'color-picker' && !eventNames.has(node.attrs.event)) throw new Error(`${node.file}:${node.line} 的 color-picker 事件不存在：${node.attrs.event}`);
   const story = readStory(sources), screensById = new Set(result.screens.map(s => s.id));
   for (const entry of result.gallery) {
     const asset = story.assets.find(a => a.id === entry.image);
@@ -197,6 +241,15 @@ export function readUiDesign(sources: Sources): UiDesign {
       if (!event.target || !eventSettings.includes(event.target)) fail(event, '未知设置项');
     } else if (command === 'unlock') {
       if (event.target && !story.assets.some(a => a.id === event.target && a.kind === 'cg')) fail(event, 'CG 专用资源不存在');
+    } else if (command === 'captureShortcut') {
+      if (!isShortcutAction(event.action)) fail(event, '未知快捷键动作');
+      if (!event.resultEvent || !eventNames.has(event.resultEvent)) fail(event, '快捷键捕获结果事件未注册');
+    } else if (command === 'keybinding') {
+      if (!isShortcutAction(event.action)) fail(event, '未知快捷键动作');
+      else if (event.binding !== null) try { event.binding = normalizeShortcutBinding(event.binding!, event.action!); } catch (e) { fail(event, e instanceof Error ? e.message : '快捷键无效'); }
+    } else if (command === 'colorPreference') {
+      if (!event.slot || !palette.has(event.slot)) fail(event, '配色槽位不存在');
+      if (event.color !== null) try { event.color = normalizeColor(event.color!); } catch (e) { fail(event, e instanceof Error ? e.message : '颜色无效'); }
     }
   }
   const logic = analyzeLogic(sources, story);
@@ -220,13 +273,38 @@ function patchAttrs(sources: Sources, id: string, patch: Record<string, string>,
   for (const [key, value] of Object.entries(patch)) { const at = locateUi(sources, id, screen); if ((at.node.attrs[key] ?? '') !== value) sources.set(at.file, setAttribute(sources.get(at.file)!, at.node, key, value)); }
 }
 const str = (v: unknown, max = 256): string => { if (typeof v !== 'string' || v.length > max) throw new Error('UI 参数类型或长度错误'); return v; };
+function uiIds(design: UiDesign): Set<string> {
+  const ids = new Set(design.screens.map(screen => screen.id));
+  for (const screen of design.screens) for (const node of uiNodes(screen.children)) ids.add(node.id);
+  return ids;
+}
+function insideRepeat(nodes: UiNode[], id: string, repeat = false): boolean {
+  for (const node of nodes) {
+    if (node.id === id) return repeat || node.kind === 'repeat';
+    if (insideRepeat(node.children, id, repeat || node.kind === 'repeat')) return true;
+  }
+  return false;
+}
+function validColorBind(design: UiDesign, path: string): boolean {
+  return path.startsWith('ui.') ? design.variables.some(variable => variable.id === path.slice(3) && variable.type === 'string') : path.startsWith('colors.') ? design.palette.some(slot => slot.id === path.slice(7)) : false;
+}
+function appendEvent(sources: Sources, design: UiDesign, name: string, body: string): void {
+  const file = readStory(sources).scripts.at(-1); if (!file || !sources.has(file)) throw new Error('缺少可追加的已声明脚本');
+  sources.set(file, sources.get(file)! + `\non.ui(${JSON.stringify(name)}, (ctx) => { ${body} });\n`);
+  design.events.push({ name, file, line: sources.get(file)!.split('\n').length, start: 0, end: 0, editable: true, command: body.includes('ctx.quit()') ? 'quit' : undefined });
+}
 /** Source range edits only. The matching engine remains the final semantic validator. */
 export function editUi(input: Sources, value: unknown): { changes: Sources; selected?: string; screen?: string } {
   const op = value as UiEdit; if (!op || typeof op !== 'object' || typeof op.action !== 'string') throw new Error('UI 操作无效');
   const design = readUiDesign(input), sources = new Map(input); let selected: string | undefined, screen: string | undefined;
   if (op.action === 'lifecycle') { for (const [file, text] of editLifecycle(input, op)) sources.set(file, text); }
   else if (op.action === 'media') { for (const [file,text] of editUiMedia(input, op.item)) sources.set(file,text); }
-  else if (op.action === 'patchNode') { const at = locateUi(sources, str(op.id)); patchAttrs(sources, op.id, op.patch, UI_ATTRIBUTES[at.node.tag as UiKind]); selected = op.id; }
+  else if (op.action === 'patchNode') {
+    const at = locateUi(sources, str(op.id));
+    if (op.patch && ('color' in op.patch) && op.patch.color && at.node.attrs['color-bind'] && !('color-bind' in op.patch)) throw new Error('请先清除 color-bind 再设置静态颜色');
+    if (op.patch && ('color-bind' in op.patch) && op.patch['color-bind'] && at.node.attrs.color && !('color' in op.patch)) throw new Error('请先清除静态颜色再设置 color-bind');
+    patchAttrs(sources, op.id, op.patch, UI_ATTRIBUTES[at.node.tag as UiKind]); selected = op.id;
+  }
   else if (op.action === 'patchScreen') { patchAttrs(sources, str(op.id), op.patch, ['modal', 'pause', 'background-click', 'background-right-click', 'sequence'], true); screen = op.id; }
   else if (op.action === 'patchRoot') {
     if (!op.patch || typeof op.patch !== 'object' || Object.keys(op.patch).some(k => !['width', 'height', 'initial'].includes(k))) throw new Error('不支持的 UI 入口属性');
@@ -235,7 +313,7 @@ export function editUi(input: Sources, value: unknown): { changes: Sources; sele
     sources.set(design.entry, source);
   } else if (op.action === 'addScreen') {
     if (!design.files.includes(str(op.file))) throw new Error('只能添加到已加载的 UI 文件');
-    const id = op.name ? str(op.name) : `screen.${randomUUID()}`;
+    const id = op.name ? str(op.name) : newShortId(uiIds(design));
     if (!id.trim() || /\s/.test(id) || design.screens.some(s => s.id === id)) throw new Error('页面标识为空、含空白或重复');
     sources.set(op.file, append(sources.get(op.file)!, parseXml(sources.get(op.file)!), `<screen id="${escapeXml(id)}" modal="true" pause="true" />`)); screen = id;
   } else if (op.action === 'deleteScreen') {
@@ -253,7 +331,8 @@ export function editUi(input: Sources, value: unknown): { changes: Sources; sele
     const page = design.screens.find(s => s.id === str(op.screen)); if (!page) throw new Error('页面不存在'); screen = page.id;
     const at = op.parent ? locateUi(sources, str(op.parent)) : locateUi(sources, page.id, true);
     if (op.parent && (!uiNodes(page.children).some(n => n.id === op.parent) || !UI_CONTAINERS.includes(at.node.tag))) throw new Error('请选择当前页面中的容器作为父级');
-    const attrs: Record<string, string> = { id: `control.${randomUUID()}`, x: '24', y: '24', width: kind === 'scene' ? String(design.width) : '240', height: kind === 'scene' ? String(design.height) : kind === 'panel' || kind === 'repeat' || kind === 'nine-patch' ? '160' : '48' };
+    if (kind === 'color-picker' && (op.parent && insideRepeat(page.children, op.parent))) throw new Error('color-picker 不能放在 repeat 中');
+    const attrs: Record<string, string> = { id: newShortId(uiIds(design)), x: '24', y: '24', width: kind === 'scene' ? String(design.width) : kind === 'color-picker' ? '256' : '240', height: kind === 'scene' ? String(design.height) : kind === 'color-picker' ? '320' : kind === 'panel' || kind === 'repeat' || kind === 'nine-patch' ? '160' : '48' };
     if (['label', 'button', 'toggle'].includes(kind)) attrs.text = kind === 'label' ? '新的文字' : kind === 'button' ? '按钮' : '开关';
     if (kind === 'panel') attrs.color = '#263B4B';
     if (['image', 'nine-patch'].includes(kind)) { const asset = readStory(sources).assets.find(a => a.id === op.image && a.kind === (kind === 'nine-patch' ? 'nine-patch' : 'image')); if (!asset) throw new Error('请先选择已导入的对应图片资源'); attrs.image = asset.id; }
@@ -261,13 +340,25 @@ export function editUi(input: Sources, value: unknown): { changes: Sources; sele
     if (kind === 'slider') Object.assign(attrs, { value: 'settings.bgm_volume', min: '0', max: '1' });
     if (kind === 'toggle') attrs.value = 'settings.muted';
     if (kind === 'repeat') Object.assign(attrs, { source: 'choices', 'item-width': '220', 'item-height': '48', gap: '8' });
+    if (kind === 'color-picker') {
+      const value = typeof op.value === 'string' && op.value ? str(op.value) : '';
+      if (!value.startsWith('ui.') || !design.variables.some(variable => variable.id === value.slice(3) && variable.type === 'string')) throw new Error('请选择颜色值绑定的 UI string 变量');
+      if (!op.event || !design.events.some(event => event.name === op.event)) throw new Error('color-picker 需要已注册的普通事件');
+      attrs.value = value; attrs.event = op.event;
+      if (op.alpha === 'false') attrs.alpha = 'false';
+    }
+    if (op.colorBind !== undefined) {
+      if (!['panel', 'image', 'nine-patch', 'label', 'button', 'toggle'].includes(kind) || !validColorBind(design, str(op.colorBind))) throw new Error('color-bind 需要已声明的 ui string 或 colors 槽位');
+      delete attrs.color; attrs['color-bind'] = op.colorBind;
+    }
     sources.set(at.file, append(sources.get(at.file)!, at.node, `<${kind} ${Object.entries(attrs).map(([k, v]) => `${k}="${escapeXml(v)}"`).join(' ')} />`)); selected = attrs.id;
   } else if (op.action === 'deleteNode' || op.action === 'duplicateNode') {
     const at = locateUi(sources, str(op.id)), source = sources.get(at.file)!;
     if (op.action === 'deleteNode') { sources.set(at.file, source.slice(0, at.node.start) + source.slice(at.node.end)); }
     else {
       let markup = source.slice(at.node.start, at.node.end); const ids = uiNodes([design.screens.flatMap(s => uiNodes(s.children)).find(n => n.id === op.id)!]).map(n => n.id);
-      for (const id of ids) { const local: XmlNode[] = []; const find = (n: XmlNode) => { if (n.attrs.id === id) local.push(n); n.children.forEach(find); }; find(parseXml(markup)); const fresh = `control.${randomUUID()}`; markup = setAttribute(markup, local[0], 'id', fresh); if (id === op.id) selected = fresh; }
+      const used = uiIds(design);
+      for (const id of ids) { const local: XmlNode[] = []; const find = (n: XmlNode) => { if (n.attrs.id === id) local.push(n); n.children.forEach(find); }; find(parseXml(markup)); const fresh = newShortId(used); used.add(fresh); markup = setAttribute(markup, local[0], 'id', fresh); if (id === op.id) selected = fresh; }
       sources.set(at.file, source.slice(0, at.node.end) + '\n' + markup + source.slice(at.node.end));
     }
   } else if (op.action === 'moveNode') {
@@ -279,6 +370,55 @@ export function editUi(input: Sources, value: unknown): { changes: Sources; sele
     const target = op.parent ? locateUi(sources, str(op.parent)) : locateUi(sources, page.id, true);
     if (op.parent && !UI_CONTAINERS.includes(target.node.tag)) throw new Error('目标不是容器');
     sources.set(target.file, append(sources.get(target.file)!, target.node, markup, op.index)); selected = op.id; screen = page.id;
+  } else if (op.action === 'palette') {
+    const id = str(op.id, 64), initial = normalizeColor(str(op.initial, 64));
+    if (!/^[a-z][a-z0-9_]{0,63}$/.test(id)) throw new Error('配色槽位 ID 必须为 [a-z][a-z0-9_]{0,63}');
+    const original = typeof op.original === 'string' && op.original ? str(op.original, 64) : undefined;
+    if (original) {
+      const slot = design.palette.find(item => item.id === original);
+      if (!slot) throw new Error('配色槽位不存在，请刷新');
+      if (id !== original) throw new Error('配色槽位 ID 创建后固定；请先处理 color-bind 与颜色事件');
+      const xml = sources.get(slot.file)!, node = child(parseXml(xml), 'palette')?.children.find(item => item.attrs.id === id);
+      if (!node) throw new Error('配色槽位源码已改变，请刷新');
+      sources.set(slot.file, setAttribute(xml, node, 'initial', initial));
+    } else {
+      const file = str(op.file);
+      if (!design.files.includes(file)) throw new Error('只能添加到已加载的 UI 文件');
+      if (design.palette.some(slot => slot.id === id)) throw new Error('配色槽位 ID 已存在');
+      if (design.palette.length >= 32) throw new Error('配色槽位最多 32 个');
+      sources.set(file, appendGroup(sources.get(file)!, 'palette', `<color id="${escapeXml(id)}" initial="${escapeXml(initial)}" />`));
+    }
+  } else if (op.action === 'deletePalette') {
+    const id = str(op.id, 64), slot = design.palette.find(item => item.id === id);
+    if (!slot) throw new Error('配色槽位不存在，请刷新');
+    if (design.screens.some(screen => uiNodes(screen.children).some(node => node.attrs['color-bind'] === `colors.${id}`))) throw new Error('仍有控件 color-bind 引用此配色槽位');
+    if (design.events.some(event => event.command === 'colorPreference' && event.slot === id)) throw new Error('仍有颜色事件写入此配色槽位');
+    const xml = sources.get(slot.file)!, group = child(parseXml(xml), 'palette'), node = group?.children.find(item => item.attrs.id === id);
+    if (!group || !node) throw new Error('配色槽位源码已改变，请刷新');
+    sources.set(slot.file, xml.slice(0, node.start) + xml.slice(node.end));
+  } else if (op.action === 'addPopup') {
+    const file = str(op.file), pageId = op.name ? str(op.name) : newShortId(uiIds(design));
+    if (!design.files.includes(file)) throw new Error('只能添加到已加载的 UI 文件');
+    if (!pageId.trim() || /\s/.test(pageId) || design.screens.some(screen => screen.id === pageId)) throw new Error('页面标识为空、含空白或重复');
+    const title = op.title ? str(op.title, 1024) : '', message = op.message ? str(op.message, 4096) : '确定要执行此操作吗？';
+    const confirmText = op.confirmText ? str(op.confirmText, 256) : '确定', cancelText = op.cancelText ? str(op.cancelText, 256) : '取消';
+    const accept = op.accept ?? 'close';
+    if (!['close', 'event', 'quit'].includes(accept)) throw new Error('弹窗确认动作无效');
+    let event = typeof op.event === 'string' && op.event ? str(op.event, 128) : '';
+    if (accept === 'event' && !design.events.some(item => item.name === event)) throw new Error('弹窗确认事件不存在');
+    if (accept === 'quit') {
+      event = 'quit-confirm';
+      for (let index = 2; design.events.some(item => item.name === event); index++) event = `quit-confirm-${index}`;
+      appendEvent(sources, design, event, 'ctx.quit();');
+    }
+    const used = uiIds(design); used.add(pageId); const fresh = () => { const id = newShortId(used); used.add(id); return id; };
+    const width = Math.min(600, design.width - 80), height = title ? 300 : 250, x = Math.round((design.width - width) / 2), y = Math.round((design.height - height) / 2);
+    const buttonWidth = Math.floor((width - 104) / 2), buttonY = height - 90;
+    const shade = fresh(), panel = fresh(), titleId = title ? fresh() : '', messageId = fresh(), confirmId = fresh(), cancelId = fresh();
+    const action = accept === 'close' ? 'route="close"' : `event="${escapeXml(event)}"`;
+    const markup = `<screen id="${escapeXml(pageId)}" modal="true" pause="true">\n      <panel id="${shade}" width="${design.width}" height="${design.height}" color="#000000B8" />\n      <panel id="${panel}" x="${x}" y="${y}" width="${width}" height="${height}" color="#18232AF2" radius="16">\n        ${title ? `<label id="${titleId}" x="36" y="26" width="${width - 72}" height="42" text="${escapeXml(title)}" font-size="28" color="#F0CA89" />\n        ` : ''}<label id="${messageId}" x="36" y="${title ? 92 : 64}" width="${width - 72}" height="${title ? 84 : 96}" text="${escapeXml(message)}" font-size="23" color="#F5F1E8FF" />\n        <button id="${confirmId}" x="36" y="${buttonY}" width="${buttonWidth}" height="52" text="${escapeXml(confirmText)}" ${action} color="#315F73" font-size="22" radius="8" />\n        <button id="${cancelId}" x="${36 + buttonWidth + 32}" y="${buttonY}" width="${buttonWidth}" height="52" text="${escapeXml(cancelText)}" route="close" color="#43576FCC" font-size="22" radius="8" />\n      </panel>\n    </screen>`;
+    const source = sources.get(file)!;
+    sources.set(file, append(source, parseXml(source), markup)); screen = pageId; selected = confirmId;
   } else if (op.action === 'variable') {
     const variable = op.id ? design.variables.find(v => v.id === str(op.id)) : undefined;
     if (op.id && !variable) throw new Error('UI 变量不存在');
@@ -339,6 +479,32 @@ export function editUi(input: Sources, value: unknown): { changes: Sources; sele
       if (target && !readStory(sources).assets.some(a => a.id === target && a.kind === 'cg')) throw new Error('CG 专用资源不存在');
       body = target ? `ctx.unlock(${JSON.stringify(target)});` : 'ctx.unlock(ctx.game.cgId);';
     }
+    else if (op.command === 'captureShortcut') {
+      const action = typeof op.actionValue === 'string' ? str(op.actionValue, 32) : '';
+      if (!isShortcutAction(action)) throw new Error('请选择快捷键动作');
+      const resultEvent = typeof op.resultEvent === 'string' ? str(op.resultEvent, 128) : '';
+      if (!resultEvent || !design.events.some(item => item.name === resultEvent)) throw new Error('快捷键捕获结果事件不存在');
+      if (resultEvent === name) throw new Error('快捷键捕获结果事件不能指向自身');
+      body = `ctx.captureShortcut(${JSON.stringify(action)}, ${JSON.stringify(resultEvent)});`;
+    }
+    else if (op.command === 'cancelShortcutCapture') body = 'ctx.cancelShortcutCapture();';
+    else if (op.command === 'keybinding') {
+      const action = typeof op.actionValue === 'string' ? str(op.actionValue, 32) : '';
+      if (!isShortcutAction(action)) throw new Error('请选择快捷键动作');
+      const raw = typeof op.binding === 'string' ? op.binding.trim() : '';
+      const binding = raw ? normalizeShortcutBinding(raw, action) : null;
+      body = `ctx.keybinding(${JSON.stringify(action)}, ${binding === null ? 'null' : JSON.stringify(binding)});`;
+    }
+    else if (op.command === 'resetKeybindings') body = 'ctx.resetKeybindings();';
+    else if (op.command === 'colorPreference') {
+      const slot = typeof op.slot === 'string' ? str(op.slot, 64) : '';
+      if (!design.palette.some(item => item.id === slot)) throw new Error('请选择已声明的配色槽位');
+      const raw = typeof op.color === 'string' ? op.color.trim() : '';
+      const color = raw ? normalizeColor(raw) : null;
+      body = `ctx.colorPreference(${JSON.stringify(slot)}, ${color === null ? 'null' : JSON.stringify(color)});`;
+    }
+    else if (op.command === 'resetColors') body = 'ctx.resetColors();';
+    else if (op.command === 'quit') body = 'ctx.quit();';
     else throw new Error('不支持的事件动作');
     if (original) {
       const event = matches[0], source = sources.get(event.file)!;
@@ -357,6 +523,7 @@ export function editUi(input: Sources, value: unknown): { changes: Sources; sele
     const event = matches[0];
     if (!event.editable) throw new Error(event.reason ?? '该事件由自定义逻辑维护，不能删除');
     if (design.screens.some(s => uiNodes(s.children).some(n => n.attrs.event === name) || s.attrs['background-click'] === name || s.attrs['background-right-click'] === name)) throw new Error('仍有控件或页面背景引用此事件，请先把相关事件改为其他动作');
+    if (design.events.some(item => item.command === 'captureShortcut' && item.resultEvent === name)) throw new Error('仍有快捷键捕获指向此结果事件，请先修改或删除捕获事件');
     const source = sources.get(event.file)!;
     let start = event.start, end = event.end;
     if (source.slice(end, end + 2) === '\r\n') end += 2; else if (source[end] === '\n') end += 1;

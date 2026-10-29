@@ -14,9 +14,9 @@ function inspect(source: string, file: string, entry: boolean): XmlNode {
   if (root.tag !== 'ui' || root.attrs.schema !== '3' || Object.keys(root.attrs).some(k => !attrs.includes(k)) || root.text.trim()) throw new Error(`${file}：UI 3 根属性不合法；子文件仅允许 schema`);
   const groups = new Set<string>();
   for (const node of root.children) {
-    if (!['include', 'variables', 'gallery', 'ui-media', 'screen'].includes(node.tag)) throw new Error(`${file}：未知 UI 根节点 ${node.tag}`);
+    if (!['include', 'variables', 'gallery', 'palette', 'ui-media', 'screen'].includes(node.tag)) throw new Error(`${file}：未知 UI 根节点 ${node.tag}`);
     if (node.tag === 'include' && (Object.keys(node.attrs).length !== 1 || !node.attrs.src || node.children.length || node.text.trim())) throw new Error(`${file}：include 仅允许 src`);
-    if (['variables', 'gallery', 'ui-media'].includes(node.tag)) { if (groups.has(node.tag)) throw new Error(`${file}：重复 UI 分组 ${node.tag}`); groups.add(node.tag); }
+    if (['variables', 'gallery', 'palette', 'ui-media'].includes(node.tag)) { if (groups.has(node.tag)) throw new Error(`${file}：重复 UI 分组 ${node.tag}`); groups.add(node.tag); }
   }
   return root;
 }

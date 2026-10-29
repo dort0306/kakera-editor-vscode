@@ -76,10 +76,11 @@ test('控件属性只改原范围，换行/实体/空值正确；ID 与手写脚
 test('新增/复制/删除控件与跨文件改父级保持稳定 ID、子树及其他内容', () => {
   let sources = uiFixture();
   const added = editUi(sources, { action: 'addNode', screen: 'settings', kind: 'panel' }); sources = merge(sources, added.changes);
-  const panel = added.selected!; assert.ok(panel.startsWith('control.'));
+  const panel = added.selected!; assert.match(panel, /^[0-9a-f]{16}$/);
   const moved = editUi(sources, { action: 'moveNode', id: 'caption', screen: 'settings', parent: panel, index: 0 }); sources = merge(sources, moved.changes);
   assert.equal(moved.changes.size, 2); assert.equal(locateUi(sources, 'caption').file, 'ui/pages.xml'); assert.equal(uiNodes(readUiDesign(sources).screens[1].children).find(n => n.id === panel)!.children[0].id, 'caption');
   const clone = editUi(sources, { action: 'duplicateNode', id: panel }); sources = merge(sources, clone.changes);
+  assert.match(clone.selected!, /^[0-9a-f]{16}$/);
   const nodes = readUiDesign(sources).screens.flatMap(s => uiNodes(s.children)); assert.equal(new Set(nodes.map(n => n.id)).size, nodes.length); assert.equal(nodes.find(n => n.id === clone.selected)!.children[0].attrs.text, '原文 & 备注');
   assert.throws(() => editUi(sources, { action: 'moveNode', id: panel, screen: 'settings', parent: 'caption', index: 0 }));
   const erased = editUi(sources, { action: 'deleteNode', id: panel }); sources = merge(sources, erased.changes); assert.ok(!readUiDesign(sources).screens.flatMap(s => uiNodes(s.children)).some(n => n.id === 'caption'));
@@ -90,6 +91,7 @@ test('新增/复制/删除控件与跨文件改父级保持稳定 ID、子树及
 
 test('页面、UI 变量和新事件使用真实 XML/JS；旧事件不重写，默认页面和引用受到保护', () => {
   let sources = uiFixture();
+  const add = editUi(sources, { action: 'addScreen', file: 'ui/pages.xml', name: '' }); assert.match(add.screen!, /^[0-9a-f]{16}$/);
   const screen = editUi(sources, { action: 'addScreen', file: 'ui/pages.xml', name: 'newPage' }); sources = merge(sources, screen.changes); assert.equal(screen.screen, 'newPage');
   const event = editUi(sources, { action: 'event', name: 'open.newPage', command: 'open', target: 'newPage' }); sources = merge(sources, event.changes);
   assert.ok(sources.get('ui.js')!.startsWith(uiFixture().get('ui.js')!)); assert.ok(sources.get('ui.js')!.includes('ctx.open("newPage")'));

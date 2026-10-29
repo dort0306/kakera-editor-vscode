@@ -1,6 +1,7 @@
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import { randomUUID } from 'node:crypto';
+import { newShortId } from '../../source/src/index';
 import { contentPath, ensureDirectory, hashFile, safePath } from './files';
 export function modelDependencies(value: unknown): string[] {
   const model = value as { Version: number; FileReferences: Record<string, unknown> };
@@ -28,8 +29,9 @@ export function modelDependencies(value: unknown): string[] {
 export class CharacterImport {
   readonly relative = `assets/characters/${randomUUID()}`;
   readonly assets: { id: string; kind: 'image' | 'live2d'; src: string }[] = [];
+  private readonly used: Set<string>;
   private licenseFile?: string;
-  constructor(readonly root: string) {}
+  constructor(readonly root: string, reserved: Iterable<string> = []) { this.used = new Set(reserved); }
   private async copy(sourceRoot: string, sourceRelative: string, outputRelative: string, signal?: AbortSignal): Promise<void> {
     signal?.throwIfAborted();
     const file = await safePath(sourceRoot, sourceRelative), stat = await fs.stat(file);
@@ -43,7 +45,8 @@ export class CharacterImport {
   async image(file: string, signal?: AbortSignal): Promise<string> {
     if (!/\.(png|jpe?g)$/i.test(file) || /\.9\.png$/i.test(file)) throw new Error('立绘需要普通 PNG/JPEG 图片，不能使用点九');
     if (this.assets.length >= 100) throw new Error('一次最多导入 100 项资源');
-    const id = `portrait.${randomUUID()}`, src = `${this.relative}/${this.assets.length + 1}-${path.basename(file)}`;
+    const id = newShortId(this.used), src = `${this.relative}/${this.assets.length + 1}-${path.basename(file)}`;
+    this.used.add(id);
     await this.copy(path.dirname(file), path.basename(file), src, signal); this.assets.push({ id, kind: 'image', src }); return id;
   }
   async model(file: string, signal?: AbortSignal): Promise<string> {
@@ -54,7 +57,7 @@ export class CharacterImport {
     const prefix = `${this.relative}/model-${randomUUID()}`;
     for (const relative of [path.basename(file), ...modelDependencies(model)]) await this.copy(root, relative, `${prefix}/${relative}`, signal);
     if (await hashFile(original, signal) !== hash) throw new Error('导入期间模型描述改变');
-    const id = `model.${randomUUID()}`; this.assets.push({ id, kind: 'live2d', src: `${prefix}/${path.basename(file)}` }); return id;
+    const id = newShortId(this.used); this.used.add(id); this.assets.push({ id, kind: 'live2d', src: `${prefix}/${path.basename(file)}` }); return id;
   }
   async license(text: string): Promise<void> {
     if (!text.trim() || text.length > 16384) throw new Error('请填写授权来源，最多 16384 字符');

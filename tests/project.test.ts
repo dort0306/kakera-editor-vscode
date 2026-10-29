@@ -19,7 +19,7 @@ test('人物改名保留稳定引用和章节范围；新建一次生成 ID', ()
   const input = sources(), edited = editCharacter(input, 'lin', '林 & 凛');
   assert.equal(edited.id, 'lin'); assert.ok(edited.changes.get('story.xml')!.includes("id='lin'")); assert.ok(edited.changes.get('story.xml')!.includes('<!-- 保留人物备注 -->'));
   assert.equal(readStory(new Map([...input, ...edited.changes])).frames[0].speaker, 'lin');
-  const created = editCharacter(input, undefined, '真纪'); assert.ok(created.id.startsWith('character.')); assert.equal(readStory(new Map([...input, ...created.changes])).characters.at(-1)!.name, '真纪');
+  const created = editCharacter(input, undefined, '真纪'); assert.match(created.id, /^[0-9a-f]{16}$/); assert.ok(!['lin', 'other'].includes(created.id)); assert.equal(readStory(new Map([...input, ...created.changes])).characters.at(-1)!.name, '真纪');
   const chapters = new Map(input); chapters.set('story.xml', base.replace(`<character id='lin' name='凛'/>`, '').replace('<next end="true"/>', '<next src="chapter.xml"/>')); chapters.set('chapter.xml', `<story schema="8"><characters><character id="lin" name="凛"/></characters><next end="true"/></story>`);
   assert.deepEqual([...editCharacter(chapters, 'lin', '新名').changes.keys()], ['chapter.xml']);
   assert.throws(() => editCharacter(input, 'missing', '名字'));
@@ -28,6 +28,8 @@ test('一批立绘和 Live2D 外观保存为合法 visual 预设；不注入编�
   const input = sources(), changes = addCharacterLooks(input, 'lin', [{ image: 'red' }, { image: 'blue', live2d: 'model' }]);
   const next = new Map([...input, ...changes]), looks = characterLooks(next, 'lin');
   assert.equal(looks.length, 2); assert.equal(looks[1].live2d, 'model'); assert.equal(readStory(next).characters.length, 2);
+  assert.deepEqual(looks.map(look => look.visualId), [...new Set(looks.map(look => look.visualId))]);
+  for (const look of looks) { assert.match(look.visualId, /^[0-9a-f]{16}$/); assert.notEqual(look.visualId, 'room'); }
   assert.ok(changes.get('story.xml')!.includes('<live2d asset="model"')); assert.throws(() => addCharacterLooks(input, 'lin', [{ image: 'model' }]));
   assert.throws(() => addCharacterLooks(input, 'lin', [{ image: 'red', live2d: 'missing' }]));
   const edited = addCharacterLooks(next, 'lin', [{ visualId: looks[1].visualId, image: 'red' }]);

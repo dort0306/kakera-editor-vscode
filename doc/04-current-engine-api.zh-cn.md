@@ -1,6 +1,6 @@
 # 04 当前引擎 API 参考
 
-状态：**现有能力**，核对日期 2026-10-29。用于开发编辑器适配器，不能替代 [完整 XML/JS 手册](../xml-js-api.zh-cn.md)。以下 Rust 名称为当前源码接口，不承诺跨版本稳定 ABI；编辑器应与引擎发布版本锁定。当前基线 v0.9.1：story 8 / UI 3 / save 9。
+状态：**现有能力**，核对日期 2026-10-30。用于开发编辑器适配器，不能替代完整 XML/JS 手册。以下 Rust 名称为当前源码接口，不承诺跨版本稳定 ABI；编辑器应与引擎发布版本锁定。当前基线 v0.10.0：story 8 / UI 3 / save 9。
 
 ## 1. 格式与入口
 
@@ -204,3 +204,12 @@ Windows 播放器为 GUI 子系统。自动化必须等待进程退出并捕获�
 - 首次显式选择只接受声明的入口，以初始变量和单条起点历史建立新会话；不沿用 inactive 隐藏槽。运行中 `resume` 保持隐藏续接语义；`ctx.restart(frame)` 始终建立新会话，多入口无参 `restart` 拒绝。活动交接槽仍按完整验证恢复。
 - 调试状态新增 `game_started`；未进入时 `frame_id` / `frame_name` 为 null、历史长度为零、候选为空，剧情步进被拒绝。工程热更新/渲染重建不把“待选择”变成已进入。
 - 上游 2026-10-29 的 GUI 修正：UI 事件先 `ctx.open("hud")` 再 `ctx.restart/resume` 时，以已准备候选栈作为幕回调比较基线，不再把标题页切 HUD 误判为 frameEnter 交接；真正交接仍保留并返回指定 HUD。
+
+## 13. v0.10.0 UI 扩展
+
+- 应用版本 0.10.0；story 8 / UI 3 / save 9 / profile 1 / read 1 / KPAK 1/2 与 demo content-version=11 不变。新增语法属于 UI 3 的受约束扩展，旧播放器应拒绝而不是猜测。
+- **动态图片查看**不新增 Rust 图片 API：同一页使用一个固定 image 控件和 `image-bind="ui.变量"`，切换时由 `ctx.setUi` 写入已声明 image/CG 资源 ID；`fit`、图集 region 和按钮工具栏仍走现有属性。编辑器只生成声明和普通绑定，不拼接文件路径或每图一页。
+- **玩家快捷键**：动作固定为 `advance`、`fast_forward`（按住）、`skip_sequence`，默认 Space/Ctrl/Space。绑定为规范 ASCII token 或 `null`，修饰键 Ctrl/Alt/Shift，最多 64 字节；拒绝 Escape、Meta、Ctrl+Alt 和系统保留组合，并检查快进按住前缀冲突。普通 `on.ui` 可用 `ctx.captureShortcut(action, resultEvent)`、`ctx.cancelShortcutCapture()`、`ctx.keybinding(action, bindingOrNull)`、`ctx.resetKeybindings()`；只读 `ctx.shortcuts` 暴露 bindings、显示 Label、captureActive/captureText。XML 可绑定 `shortcuts.advanceLabel/fastForwardLabel/skipSequenceLabel/captureText/captureActive/bindings.*`。偏好写固定 `keybindings.json`（schema 1/story_id/三个绑定），缺文件用默认、坏文件保留并提示、同目录原子替换；不进入剧情槽、隐藏槽、监控或 KPAK。
+- **三角 HSV 与玩家配色**：`color-picker` 必需 UI string 的 `value` 和普通 `event`，可选 `alpha`（默认 true）；至少 128×224、最多 8 个、不能放入 repeat，不接受子控件/图片/region/route/color。事件值为规范 `#RRGGBBAA`，拖拽只提交候选，由作者 `ctx.setUi` 决定是否更新。`color-bind` 可作用于 panel/image/nine-patch/label/button/toggle，来源限 `ui.<string>` 或 `colors.<槽位>`，与静态 `color` 互斥。根级 `<palette><color id="..." initial="#RRGGBBAA"/></palette>` 最多 32 个，ID 为 `[a-z][a-z0-9_]{0,63}`；`ctx.colors` 是只读快照，`ctx.colorPreference(slot, rgbaOrNull)`/`ctx.resetColors()` 写固定 `ui-colors.json`（schema 1/story_id/稀疏 overrides）。两个偏好文件都由匹配播放器原子维护，编辑器不读取或写入。
+- **确认弹窗与退出**：确认页是普通模态 `screen`，可用 panel/图片/点九、绑定、RGBA、按钮皮肤和 `route="close"` 组合；`ctx.quit()` 仅在普通 `on.ui` 可用，整批验证成功后请求宿主正常关闭，不触发 frameExit/screenClose、不保存新槽、不消耗隐藏交接。退出补写由播放器负责，编辑器不伪造原生对话框。
+- 编辑器边界：新控件/属性通过范围补丁写实际 XML/JS，静态画布不执行捕获、焦点、偏好落盘或页面交接；最终冲突、按键所有权、颜色缓存与偏好回滚由匹配播放器验收。

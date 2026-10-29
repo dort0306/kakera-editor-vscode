@@ -1,5 +1,5 @@
 import type { Sources } from './index';
-import { readStory, addAsset } from './index';
+import { readStory, addAsset, newShortId } from './index';
 import { child, parseXml, setAttribute, escapeXml, type XmlNode } from './xml';
 import { uiFragments } from './ui-files';
 import { locateUi } from './ui-source';
@@ -21,9 +21,10 @@ export function assignTexture(sources: Sources, assetId: string, kind: 'image' |
   const find = () => { const found: XmlNode[] = []; walk(parseXml(source), '', n => { if (n.attrs.id === target) found.push(n); }); if (found.length !== 1) throw new Error('UI 目标不存在或 ID 不唯一'); return found[0]; };
   const node = find();
   if (node.tag === 'screen') {
-    const id = `texture.${assetId.replace(/[^a-zA-Z0-9_.-]/g, '_')}`;
+    const used = new Set<string>();
+    for (const fragment of uiFragments(sources)) walk(fragment.root, '', item => { if (item.attrs.id) used.add(item.attrs.id); });
+    const id = newShortId(used);
     const extra = kind === 'nine-patch' ? ` density="${density}"` : region ? ` region="${region.x},${region.y},${region.width},${region.height}"` : '';
-    if (info.targets.some(t => t.id === id)) throw new Error('此页面示例控件已存在，请选择已有控件编辑');
     const markup = `<${kind === 'nine-patch' ? 'nine-patch' : 'image'} id="${id}" x="20" y="20" width="320" height="180" image="${escapeXml(assetId)}"${extra}/>`;
     if (source.slice(node.start, node.openEnd).endsWith('/>')) throw new Error('请先选择非空 UI 页面');
     source = source.slice(0, node.closeStart) + `\n    ${markup}\n` + source.slice(node.closeStart);
