@@ -1,9 +1,29 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "title": "Kakera 编辑器工程", "type": "object", "additionalProperties": false,
-  "required": ["editorSchema", "engineContract", "contentRoot"],
+  "title": "Kakera 编辑器工程",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "editorSchema",
+    "engineContract",
+    "contentRoot"
+  ],
   "properties": {
-    "editorSchema": { "const": 1 }, "engineContract": { "const": "0.8.3" },
-    "contentRoot": { "type": "string", "minLength": 1, "description": "工程内的相对内容目录，不允许越界或链接。" }
+    "editorSchema": {
+      "const": 1
+    },
+    "engineContract": {
+      "enum": [
+        "0.8.3",
+        "0.8.4",
+        "0.9.0",
+        "0.9.1"
+      ]
+    },
+    "contentRoot": {
+      "type": "string",
+      "minLength": 1,
+      "description": "工程内的相对内容目录，不允许越界或链接。"
+    }
   }
 }

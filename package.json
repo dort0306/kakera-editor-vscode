@@ -2,53 +2,378 @@
   "name": "kakera-editor-vscode",
   "displayName": "Kakera 可视分镜编辑器",
   "description": "Kakera AVG XML/JS 分镜创作、校验、试玩与帧级调试。",
-  "version": "0.1.0",
+  "version": "0.8.8",
   "publisher": "dort0306",
   "license": "MIT",
-  "repository": { "type": "git", "url": "https://github.com/dort0306/kakera-editor-vscode.git" },
-  "engines": { "vscode": "^1.100.0", "node": ">=22" },
-  "categories": ["Other", "Debuggers"],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/dort0306/kakera-editor-vscode.git"
+  },
+  "engines": {
+    "vscode": "^1.100.0",
+    "node": ">=22"
+  },
+  "categories": [
+    "Other",
+    "Debuggers"
+  ],
   "main": "./dist/extension.cjs",
-  "extensionKind": ["workspace"],
-  "workspaces": ["packages/*"],
-  "activationEvents": ["workspaceContains:project.kakera-editor.json", "onDebug:kakera"],
+  "extensionKind": [
+    "workspace"
+  ],
+  "workspaces": [
+    "packages/*"
+  ],
+  "activationEvents": [
+    "workspaceContains:project.kakera-editor.json",
+    "onDebug:kakera"
+  ],
   "capabilities": {
-    "untrustedWorkspaces": { "supported": "limited", "description": "未信任的工作区仅允许只读分镜查看。" },
-    "virtualWorkspaces": { "supported": false, "description": "需要 Windows 本地文件和播放器。" }
+    "untrustedWorkspaces": {
+      "supported": "limited",
+      "description": "未信任的工作区仅允许只读分镜查看。"
+    },
+    "virtualWorkspaces": {
+      "supported": false,
+      "description": "需要 Windows 本地文件和播放器。"
+    }
   },
   "contributes": {
-    "jsonValidation": [{ "fileMatch": "project.kakera-editor.json", "url": "./schemas/project.schema.json" }],
-    "commands": [
-      { "command": "kakera.home", "title": "Kakera：打开创作首页" },
-      { "command": "kakera.project.create", "title": "Kakera：新建游戏工程" },
-      { "command": "kakera.project.open", "title": "Kakera：打开游戏工程" },
-      { "command": "kakera.storyboard.open", "title": "Kakera：打开分镜" },
-      { "command": "kakera.source.open", "title": "Kakera：打开源码" },
-      { "command": "kakera.validate", "title": "Kakera：完整引擎校验" },
-      { "command": "kakera.playtest.start", "title": "Kakera：从入口试玩" },
-      { "command": "kakera.playtest.stop", "title": "Kakera：停止本次试玩" },
-      { "command": "kakera.tools.configure", "title": "Kakera：配置播放器工具目录" },
-      { "command": "kakera.asset.import", "title": "Kakera：导入资源" },
-      { "command": "kakera.asset.references", "title": "Kakera：查看资源引用" },
-      { "command": "kakera.ai.configure", "title": "Kakera：配置 AI 服务" },
-      { "command": "kakera.ai.propose", "title": "Kakera：AI 拆幕提案" },
-      { "command": "kakera.build.run", "title": "Kakera：构建独立游戏" },
-      { "command": "kakera.debug.start", "title": "Kakera：帧级调试" },
-      { "command": "kakera.debug.choose", "title": "Kakera：调试时选择选项" },
-      { "command": "kakera.recovery", "title": "Kakera：检查编辑恢复记录" }
+    "jsonValidation": [
+      {
+        "fileMatch": "project.kakera-editor.json",
+        "url": "./schemas/project.schema.json"
+      }
     ],
-    "customEditors": [{ "viewType": "kakera.storyboard", "displayName": "Kakera 分镜", "selector": [{ "filenamePattern": "*.xml" }], "priority": "option" }],
-    "viewsContainers": { "activitybar": [{ "id": "kakera", "title": "Kakera", "icon": "resources/kakera.svg" }] },
-    "views": { "kakera": [{ "id": "kakera.project", "name": "游戏工程" }] },
-    "viewsWelcome": [{ "view": "kakera.project", "contents": "[新建游戏工程](command:kakera.project.create)\n[打开已有工程](command:kakera.project.open)\n[打开创作首页](command:kakera.home)" }],
+    "commands": [
+      {
+        "command": "kakera.home",
+        "title": "Kakera：打开创作首页"
+      },
+      {
+        "command": "kakera.project.create",
+        "title": "Kakera：新建游戏工程",
+        "icon": "$(new-folder)"
+      },
+      {
+        "command": "kakera.project.open",
+        "title": "Kakera：打开游戏工程",
+        "icon": "$(folder-opened)"
+      },
+      {
+        "command": "kakera.storyboard.open",
+        "title": "Kakera：打开分镜"
+      },
+      {
+        "command": "kakera.source.open",
+        "title": "Kakera：打开源码"
+      },
+      {
+        "command": "kakera.validate",
+        "title": "Kakera：完整引擎校验"
+      },
+      {
+        "command": "kakera.playtest.start",
+        "title": "Kakera：从入口试玩"
+      },
+      {
+        "command": "kakera.playtest.stop",
+        "title": "Kakera：停止本次试玩"
+      },
+      {
+        "command": "kakera.tools.configure",
+        "title": "Kakera：配置播放器工具目录"
+      },
+      {
+        "command": "kakera.tools.configureCore",
+        "title": "Kakera：配置 Live2D Cubism Core"
+      },
+      {
+        "command": "kakera.character.importPortraits",
+        "title": "Kakera：批量导入人物立绘"
+      },
+      {
+        "command": "kakera.character.importLive2d",
+        "title": "Kakera：导入人物 Live2D 模型"
+      },
+      {
+        "command": "kakera.asset.import",
+        "title": "Kakera：导入资源"
+      },
+      {
+        "command": "kakera.asset.importCg",
+        "title": "Kakera：导入 CG 专用资源"
+      },
+      {
+        "command": "kakera.asset.references",
+        "title": "Kakera：查看资源引用"
+      },
+      {
+        "command": "kakera.ai.configure",
+        "title": "Kakera：配置 AI 服务"
+      },
+      {
+        "command": "kakera.ai.propose",
+        "title": "Kakera：AI 拆幕提案"
+      },
+      {
+        "command": "kakera.build.run",
+        "title": "Kakera：构建独立游戏"
+      },
+      {
+        "command": "kakera.debug.start",
+        "title": "Kakera：帧级调试"
+      },
+      {
+        "command": "kakera.debug.choose",
+        "title": "Kakera：调试时选择选项"
+      },
+      {
+        "command": "kakera.recovery",
+        "title": "Kakera：检查编辑恢复记录"
+      },
+      {
+        "command": "kakera.ui.open",
+        "title": "Kakera：打开 UI 编辑器"
+      },
+      {
+        "command": "kakera.tree.refresh",
+        "title": "Kakera：刷新工程侧栏",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "kakera.character.create",
+        "title": "Kakera：新建人物",
+        "icon": "$(person-add)"
+      },
+      {
+        "command": "kakera.character.rename",
+        "title": "Kakera：重命名人物",
+        "icon": "$(edit)"
+      },
+      {
+        "command": "kakera.character.delete",
+        "title": "Kakera：删除人物",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "kakera.variable.create",
+        "title": "Kakera：新建变量",
+        "icon": "$(add)"
+      },
+      {
+        "command": "kakera.variable.edit",
+        "title": "Kakera：编辑变量",
+        "icon": "$(edit)"
+      },
+      {
+        "command": "kakera.variable.delete",
+        "title": "Kakera：删除变量",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "kakera.frame.create",
+        "title": "Kakera：新建后续幕",
+        "icon": "$(add)"
+      },
+      {
+        "command": "kakera.frame.delete",
+        "title": "Kakera：删除幕",
+        "icon": "$(trash)"
+      }
+    ],
+    "customEditors": [
+      {
+        "viewType": "kakera.storyboard",
+        "displayName": "Kakera 分镜",
+        "selector": [
+          {
+            "filenamePattern": "*.xml"
+          }
+        ],
+        "priority": "option"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "kakera",
+          "title": "Kakera",
+          "icon": "resources/kakera.svg"
+        }
+      ]
+    },
+    "views": {
+      "kakera": [
+        {
+          "id": "kakera.project",
+          "name": "游戏工程"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "kakera.project",
+        "contents": "[新建游戏工程](command:kakera.project.create)\n[打开已有工程](command:kakera.project.open)\n[打开创作首页](command:kakera.home)"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "kakera.tree.refresh",
+          "when": "view == kakera.project",
+          "group": "navigation@1"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "kakera.character.create",
+          "when": "view == kakera.project && viewItem == kakera.category.characters",
+          "group": "navigation@1"
+        },
+        {
+          "command": "kakera.character.importPortraits",
+          "when": "view == kakera.project && viewItem == kakera.category.characters",
+          "group": "navigation@2"
+        },
+        {
+          "command": "kakera.character.importLive2d",
+          "when": "view == kakera.project && viewItem == kakera.category.characters",
+          "group": "navigation@3"
+        },
+        {
+          "command": "kakera.asset.import",
+          "when": "view == kakera.project && viewItem == kakera.category.art",
+          "group": "navigation@1"
+        },
+        {
+          "command": "kakera.asset.importCg",
+          "when": "view == kakera.project && viewItem == kakera.category.art",
+          "group": "navigation@2"
+        },
+        {
+          "command": "kakera.asset.import",
+          "when": "view == kakera.project && viewItem == kakera.category.media",
+          "group": "navigation@1"
+        },
+        {
+          "command": "kakera.storyboard.open",
+          "when": "view == kakera.project && viewItem == kakera.category.frames",
+          "group": "navigation@1"
+        },
+        {
+          "command": "kakera.validate",
+          "when": "view == kakera.project && viewItem == kakera.category.frames",
+          "group": "navigation@2"
+        },
+        {
+          "command": "kakera.variable.create",
+          "when": "view == kakera.project && viewItem == kakera.category.variables",
+          "group": "navigation@1"
+        },
+        {
+          "command": "kakera.ui.open",
+          "when": "view == kakera.project && viewItem == kakera.category.ui",
+          "group": "navigation@1"
+        },
+        {
+          "command": "kakera.character.rename",
+          "when": "view == kakera.project && viewItem == kakera.character",
+          "group": "navigation@1"
+        },
+        {
+          "command": "kakera.character.importPortraits",
+          "when": "view == kakera.project && viewItem == kakera.character",
+          "group": "navigation@2"
+        },
+        {
+          "command": "kakera.character.importLive2d",
+          "when": "view == kakera.project && viewItem == kakera.character",
+          "group": "navigation@3"
+        },
+        {
+          "command": "kakera.character.delete",
+          "when": "view == kakera.project && viewItem == kakera.character",
+          "group": "navigation@4"
+        },
+        {
+          "command": "kakera.asset.references",
+          "when": "view == kakera.project && viewItem == kakera.asset",
+          "group": "navigation@1"
+        },
+        {
+          "command": "kakera.frame.create",
+          "when": "view == kakera.project && viewItem == kakera.frame",
+          "group": "navigation@1"
+        },
+        {
+          "command": "kakera.frame.delete",
+          "when": "view == kakera.project && viewItem == kakera.frame",
+          "group": "navigation@2"
+        },
+        {
+          "command": "kakera.variable.edit",
+          "when": "view == kakera.project && viewItem == kakera.variable",
+          "group": "navigation@1"
+        },
+        {
+          "command": "kakera.variable.delete",
+          "when": "view == kakera.project && viewItem == kakera.variable",
+          "group": "navigation@2"
+        },
+        {
+          "command": "kakera.source.open",
+          "when": "view == kakera.project && viewItem == kakera.script",
+          "group": "navigation@1"
+        }
+      ]
+    },
     "configuration": {
       "title": "Kakera",
       "properties": {
-        "kakera.tools.directory": { "type": "string", "default": "", "scope": "application", "description": "包含 v0.8.3 kakera-avg.exe 和 kakera-pack.exe 的本地目录。仅用户级设置。" },
-        "kakera.debug.pollIntervalMs": { "type": "number", "default": 500, "minimum": 250, "maximum": 5000, "description": "调试状态轮询间隔（毫秒）。" }
+        "kakera.tools.directory": {
+          "type": "string",
+          "default": "",
+          "scope": "application",
+          "description": "包含 v0.9.1 kakera-avg.exe 和 kakera-pack.exe 的本地目录。仅用户级设置。"
+        },
+        "kakera.tools.cubismCore": {
+          "type": "string",
+          "default": "",
+          "scope": "application",
+          "description": "受信任的本机 Cubism Core DLL，仅用于校验和试玩。未配置时明确使用静态回退模式；不会随游戏自动分发。"
+        },
+        "kakera.debug.pollIntervalMs": {
+          "type": "number",
+          "default": 500,
+          "minimum": 250,
+          "maximum": 5000,
+          "description": "调试状态轮询间隔（毫秒）。"
+        }
       }
     },
-    "debuggers": [{ "type": "kakera", "label": "Kakera 帧级调试", "languages": ["xml"], "configurationAttributes": { "launch": { "required": [], "properties": {} } }, "initialConfigurations": [{ "type": "kakera", "request": "launch", "name": "Kakera：从入口调试" }] }]
+    "debuggers": [
+      {
+        "type": "kakera",
+        "label": "Kakera 帧级调试",
+        "languages": [
+          "xml"
+        ],
+        "configurationAttributes": {
+          "launch": {
+            "required": [],
+            "properties": {}
+          }
+        },
+        "initialConfigurations": [
+          {
+            "type": "kakera",
+            "request": "launch",
+            "name": "Kakera：从入口调试"
+          }
+        ]
+      }
+    ]
   },
   "scripts": {
     "build": "node scripts/build.mjs",
@@ -57,23 +382,29 @@
     "test:integration": "node scripts/integration.mjs",
     "test:host": "node scripts/test-host.mjs",
     "check": "npm run typecheck && npm test && npm run build",
-    "package": "npm run build && node scripts/verify-release.mjs && vsce package --target win32-x64 --no-dependencies --out artifacts/kakera-editor-vscode-0.1.0.vsix",
-    "vscode:prepublish": "npm run build"
+    "package": "npm run build && node scripts/verify-release.mjs && vsce package --target win32-x64 --no-dependencies --out artifacts/kakera-editor-vscode-0.8.8.vsix",
+    "vscode:prepublish": "npm run build",
+    "test:browser": "node scripts/test-graph-browser.mjs"
   },
   "dependencies": {
     "acorn": "8.15.0",
-    "saxes": "6.0.0",
+    "jpeg-js": "0.4.4",
+    "pngjs": "7.0.0",
     "react": "19.2.0",
-    "react-dom": "19.2.0"
+    "react-dom": "19.2.0",
+    "saxes": "6.0.0"
   },
   "devDependencies": {
+    "@types/jsdom": "21.1.7",
     "@types/node": "22.15.30",
+    "@types/pngjs": "6.0.5",
     "@types/react": "19.2.2",
     "@types/react-dom": "19.2.2",
     "@types/vscode": "1.100.0",
     "@vscode/test-electron": "2.5.2",
     "@vscode/vsce": "4.0.0",
     "esbuild": "0.25.12",
+    "jsdom": "26.1.0",
     "tsx": "4.20.6",
     "typescript": "5.9.3"
   }

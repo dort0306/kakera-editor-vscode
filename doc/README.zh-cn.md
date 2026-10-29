@@ -1,6 +1,6 @@
 # Kakera 编辑器规划与开发手册
 
-更新：2026-10-27，基线为播放器 **v0.8.3**。编辑器仍是设计交付；本版已实际增加播放器远程帧级断点/状态 API，并将真实打包 CLI 改为依赖文件集。旧规划保存在 doc/archive/editor-v0.8.2。
+更新：2026-10-29，基线为播放器 **v0.9.1**（story 8 / UI 3 / save 9）。插件 0.8.8 已交付现代 IDE 风格工作区、可视分镜、UI 编辑器、生命周期映射、UI 显式起始幕、事件编辑/删除、幕 ID 重命名、CG 专用资源/画廊/共享解锁、多起始幕与 UI 首次进入、变量编辑/删除、VS Code 原生分类侧栏与右键菜单、流程图背景平移、试玩/调试与构建适配，并修复真实工作台的流程图/画布拖动；实际能力见 [12 实现与验证](12-implementation-status.zh-cn.md)，日常操作见 [18 可视化编辑器使用说明](18-visual-editor-guide.zh-cn.md)。旧规划保存在 doc/archive/editor-v0.8.2。
 
 AI 接口改为用户可配置的通用 Chat Completions 兼容 HTTP API，可连接自部署或远程服务，不再强制内置 Qwen3.8-27B。推荐先开发 **VS Code 插件 + 可视分镜工作台 + 可复用 Rust 工具**，不先分叉 Code-OSS；比较依据和后续独立壳条件见第 09 篇。
 
@@ -17,22 +17,29 @@ AI 接口改为用户可配置的通用 Chat Completions 兼容 HTTP API，可�
 | [07 路线与验收](07-roadmap-validation.zh-cn.md) | 实施阶段、验收标准和待测范围 |
 | [08 依据与外部 API](08-references.zh-cn.md) | 仓库与官方接口资料、版本锁定 |
 | [09 平台方案比较](09-editor-platform-comparison.zh-cn.md) | VS Code 插件、Code-OSS 分叉、独立编辑器优劣和结论 |
-| [10 播放器调试 API](10-player-debug-api.zh-cn.md) | v0.8.3 已实现的认证、请求、命令、状态和限制 |
+| [10 播放器调试 API](10-player-debug-api.zh-cn.md) | 已实现的认证、请求、命令、状态和限制（协议 v1） |
 | [11 VS Code 插件落地方案](11-vscode-extension-implementation-plan.zh-cn.md) | 本仓库的模块、宿主接入、事务、调试、阶段任务与验收门禁 |
-| [12 实现与验证记录](12-implementation-status.zh-cn.md) | 插件 0.1.0 的实际能力、真实工具/宿主检查与未完成项 |
+| [12 实现与验证记录](12-implementation-status.zh-cn.md) | 插件 0.8.8 的实际能力、真实工具/宿主检查与未完成项 |
+| [18 可视化编辑器使用说明](18-visual-editor-guide.zh-cn.md) | 工作台、UI、事件、幕 ID、设置、试玩与常见问题 |
+| [13 JS/XML 实时同步映射](13-live-logic-mapping.zh-cn.md) | 语法树关联、逐幕能力、源码局部补丁和自定义逻辑边界 |
+| [14 拖动连线与图片工具](14-graph-and-texture-tools.zh-cn.md) | 幕布局/重新连线、点九生成编辑、图集生成/裁切与 UI 应用 |
 
-本仓库已实现插件 0.1.0 开发预览版，当前能力与检查见 [12 实现与验证](12-implementation-status.zh-cn.md)，项目入口见 [根 README](../README.md)，协作约束见 [AGENTS](../AGENTS.md)。下文及原始 01–10 手册保留原始设计状态，部分源码、demo、版本验收与归档链接来自上游引擎工程，未随本仓库提供；不能视作已在本仓库验证的证据。
+[15 变量条件分流](15-variable-conditional-routes.zh-cn.md)：布尔/整数范围、优先级、默认线路与源码映射。
+
+[16 UI 编辑器](16-ui-editor.zh-cn.md)：上游 UI 拆分扫描、可视布局、属性/绑定/事件和实际验收。
+
+本仓库已实现插件 0.8.8 开发预览版，当前能力与检查见 [12 实现与验证](12-implementation-status.zh-cn.md)，日常操作见 [18 使用说明](18-visual-editor-guide.zh-cn.md)，项目入口见 [根 README](../README.md)，协作约束见 [AGENTS](../AGENTS.md)。下文及原始 01–10 手册保留原始设计状态，部分源码、demo、版本验收与归档链接来自上游引擎工程，未随本仓库提供；不能视作已在本仓库验证的证据。
 
 ## 能力状态
 
-- 已有：story 8/UI 3/save 8、KPAK 1/2、点九/图集/别名/标题，以及本版 loopback 调试 API、发布依赖选择和显式附加清单。
-- 编辑器待实现：VSIX、可视分镜、资源管理、源码往返、AI API 客户端、提案/编译服务和 DAP 适配器。配置 API 的文档不是已实现的联网客户端。
+- 已有：v0.9.1 story 8/UI 3/save 9、KPAK 1/2、点九/图集/别名/标题、CG 专用资源/画廊/共享解锁、UI 演出与生命周期映射、显式起始幕/交接编辑、事件编辑/删除、幕 ID 重命名、loopback 调试、发布依赖选择和显式附加清单。
+- 插件已有 VSIX、可视分镜、资源管理、源码往返、AI 客户端、提案/编译服务和 DAP 适配；AI 真实服务与部分高级资源工具仍未验收。
 - 播放器后续能力：条件断点、JS 行级调试、推送事件、通用 JSON 诊断、源码指纹及受控跨代次替换；当前 API 不开放任意状态注入。
 
 ## 核心原则
 
 一格对应一个完整 XML frame，不是视频帧或隐式顺序剧情。XML/JS 是源文件事实来源，任意手写 JS 保留 Opaque 代码块；AI 输出结构化提案，由确定性编译器生成并验证代码。新幕创建一次稳定显式 ID，避免重打包随机 ID 改变存档契约。
 
-编辑器、用户服务配置/密钥和原稿仍与 content 分离。v0.8.3 打包 CLI 自动收集实际运行依赖与约定许可证，额外普通文件只通过 kakera.package.json 的显式 include 加入；低层原始容器 API 仍可编码任意授权数据，不等于 CLI 发布策略。
+编辑器、用户服务配置/密钥和原稿仍与 content 分离。打包 CLI 自动收集实际运行依赖与约定许可证，额外普通文件只通过 kakera.package.json 的显式 include 加入；低层原始容器 API 仍可编码任意授权数据，不等于 CLI 发布策略。
 
-调试 API 只在显式工程模式开启，发布模式拒绝；AI HTTP 服务与调试 JSON Lines 是不同边界。实际运行证据见 [v0.8.3 验收](../v0.8.3-validation.zh-cn.md)，设计依据见 [策略](../v0.8.3-implementation-plan.zh-cn.md)。
+调试 API 只在显式工程模式开启，发布模式拒绝；AI HTTP 服务与调试 JSON Lines 是不同边界。本仓库实际运行证据见 [12 实现与验证](12-implementation-status.zh-cn.md)；上游 v0.9.1 计划/验收不在本仓库，不虚构其内容。

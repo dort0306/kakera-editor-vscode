@@ -1,5 +1,5 @@
 import { createConnection, type Socket } from 'node:net';
-export interface DebugState { protocol: string; version: number; process_id: number; engine_version: string; state_revision: number; paused: boolean; frame_id: string; frame_name: string; pending_frame: string | null; variables: Record<string, { type: string; value: string | boolean }>; pending_variables: Record<string, { type: string; value: string | boolean }> | null; ui_variables: Record<string, { type: string; value: string | boolean }>; reason: string; available_options: { id: string; text: string }[]; [key: string]: unknown }
+export interface DebugState { protocol: string; version: number; process_id: number; engine_version: string; state_revision: number; paused: boolean; game_started?: boolean; frame_id: string | null; frame_name: string | null; pending_frame: string | null; variables: Record<string, { type: string; value: string | boolean }>; pending_variables: Record<string, { type: string; value: string | boolean }> | null; ui_variables: Record<string, { type: string; value: string | boolean }>; reason: string; available_options: { id: string; text: string }[]; [key: string]: unknown }
 export class DebugClient {
   private socket?: Socket;
   private nextId = 1;
@@ -30,9 +30,9 @@ export class DebugClient {
       try {
         const value = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(frame));
         if (!this.waiter || value.version !== 1 || value.id !== this.waiter.id) throw new Error('调试响应 ID/版本不一致');
-        if (!value.ok) throw new Error('播放器拒绝控制请求；请刷新状态后检查操作条件');
+        if (!value.ok) throw new Error(`播放器拒绝控制请求：${String(value.error ?? '请刷新状态后检查操作条件')}`);
         const state = value.result as DebugState;
-        if (state.protocol !== 'KakeraEditorDebug' || state.version !== 1 || state.engine_version !== '0.8.3' || !Number.isSafeInteger(state.state_revision) || (this.processId !== undefined && state.process_id !== this.processId)) throw new Error('调试协议、引擎、进程或修订不兼容');
+        if (state.protocol !== 'KakeraEditorDebug' || state.version !== 1 || !['0.8.3', '0.8.4', '0.9.0', '0.9.1'].includes(state.engine_version) || !Number.isSafeInteger(state.state_revision) || (this.processId !== undefined && state.process_id !== this.processId)) throw new Error('调试协议、引擎、进程或修订不兼容');
         this.processId = state.process_id; this.state = state;
         const waiter = this.waiter; this.waiter = undefined; clearTimeout(waiter.timer); waiter.resolve(state);
       } catch (e) { this.fail(e as Error); socket.destroy(); }

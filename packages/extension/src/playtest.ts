@@ -6,7 +6,7 @@ import { launch } from './tools';
 import { Session, type Loaded } from './session';
 import type { Frozen } from './files';
 import { DebugClient } from '../../debug-adapter/src/client';
-export interface Playing { frozen: Frozen; loaded: Loaded; debug?: DebugClient; stop: () => Promise<void> }
+export interface Playing { frozen: Frozen; loaded: Loaded; debug?: DebugClient; pid?: number; stop: () => Promise<void> }
 export class Playtests {
   current?: Playing;
   async start(session: Session, debug: boolean, signal?: AbortSignal): Promise<Playing> {
@@ -17,7 +17,7 @@ export class Playtests {
       await session.check(frozen, signal); await frozen.assertCurrent();
       if ((await session.load()).revision !== loaded.revision) throw new Error('试玩输入已过期');
       const saveDir = path.join(session.storage, 'saves', randomUUID()); await fs.mkdir(saveDir, { recursive: true });
-      const args = ['--project', frozen.directory, '--save-dir', saveDir];
+      const args = ['--project', frozen.directory, '--save-dir', saveDir, ...await session.getEngineArgs()];
       const token = randomBytes(32).toString('hex');
       if (debug) {
         tokenFile = path.join(session.storage, `debug-${randomUUID()}.token`);
@@ -47,7 +47,7 @@ export class Playtests {
         if (tokenFile) await fs.rm(tokenFile, { force: true });
         await frozen.dispose(); if (this.current === playing) this.current = undefined;
       };
-      const playing: Playing = { frozen, loaded, stop }; this.current = playing;
+      const playing: Playing = { frozen, loaded, pid: process.child.pid, stop }; this.current = playing;
       process.done.then(() => portReject(new Error('播放器已退出')), () => portReject(new Error('播放器启动失败'))).finally(() => { void stop(); });
       if (portPromise) {
         const timer = setTimeout(() => portReject(new Error('15 秒内未发现调试端口')), 15000);

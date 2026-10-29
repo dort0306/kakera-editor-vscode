@@ -1,0 +1,148 @@
+import { build } from 'esbuild';
+import { access, mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
+import { spawn } from 'node:child_process';
+import { pathToFileURL } from 'node:url';
+import path from 'node:path';
+import assert from 'node:assert/strict';
+const candidates = [process.env.KAKERA_TEST_BROWSER, 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe', 'C:/Program Files/Microsoft/Edge/Application/msedge.exe', 'C:/Program Files/Google/Chrome/Application/chrome.exe'].filter(Boolean);
+let executable;
+for (const file of candidates) { try { await access(file); executable = file; break; } catch {} }
+if (!executable) throw new Error('需要已安装的 Edge/Chromium，或设置 KAKERA_TEST_BROWSER；测试不会下载浏览器');
+await mkdir('.test-work', { recursive: true });
+const directory = await mkdtemp(path.resolve('.test-work/graph-browser-')), profile = path.join(directory, 'profile');
+await build({ entryPoints: ['tests/graph-browser.ts'], outfile: path.join(directory, 'fixture.js'), bundle: true, platform: 'browser', target: 'es2022', define: { 'process.env.NODE_ENV': '"production"' } });
+await writeFile(path.join(directory, 'fixture.html'), '<!doctype html><meta charset="utf-8"><style>body{margin:0;font:14px sans-serif}.graph-scroll{height:600px;overflow:auto}.graph-node{width:100%;height:100%;background:#f3f7fa;border:1px solid #678;padding:12px;text-align:left;touch-action:none}.graph-node.selected{border:3px solid #28a}.graph-toolbar{padding:12px}.graph-edge path{fill:none;stroke-width:2}.edge-hit{pointer-events:stroke;stroke-width:12}.input-port,.output-port{fill:#8ca;stroke:#285;touch-action:none}</style><div id="root"></div><script src="fixture.js"></script>');
+await build({ entryPoints: ['tests/ui-browser.ts'], outfile: path.join(directory, 'ui-fixture.js'), bundle: true, platform: 'browser', target: 'es2022', define: { 'process.env.NODE_ENV': '"production"' } });
+await writeFile(path.join(directory, 'ui-style.css'), await readFile('packages/webview/src/style.css', 'utf8'));
+await writeFile(path.join(directory, 'ui-fixture.html'), '<!doctype html><meta charset="utf-8"><style>:root{--vscode-foreground:#dce5ef;--vscode-editor-background:#172230;--vscode-font-family:Segoe UI,Microsoft YaHei,sans-serif;--vscode-input-background:#101c29;--vscode-input-foreground:#dce5ef;--vscode-input-border:#526a80}</style><link rel="stylesheet" href="ui-style.css"><div id="root"></div><script src="ui-fixture.js"></script>');
+await build({ entryPoints: ['tests/workbench-browser.ts'], outfile: path.join(directory, 'workbench-fixture.js'), bundle: true, platform: 'browser', target: 'es2022', define: { 'process.env.NODE_ENV': '"production"' } });
+await writeFile(path.join(directory, 'workbench.html'), '<!doctype html><meta charset="utf-8"><style>:root{--vscode-foreground:#dce5ef;--vscode-editor-background:#0e1722;--vscode-sideBar-background:#111c29;--vscode-font-family:Segoe UI,Microsoft YaHei,sans-serif;--vscode-input-background:#0c1621;--vscode-input-foreground:#dce5ef;--vscode-input-border:#2b4056}</style><link rel="stylesheet" href="ui-style.css"><div id="root"></div><script src="workbench-fixture.js"></script>');
+const child = spawn(executable, ['--headless=new', '--disable-gpu', '--no-first-run', '--no-default-browser-check', '--disable-background-networking', '--disable-extensions', '--remote-debugging-port=0', `--user-data-dir=${profile}`, '--window-size=1280,900', pathToFileURL(path.join(directory, 'fixture.html')).href], { stdio: 'ignore', windowsHide: true });
+let client, sequence = 0; const pending = new Map();
+const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
+async function until(read, label) { const end = Date.now() + 20000; let last; do { try { const value = await read(); if (value) return value; } catch (e) { last = e; } await delay(100); } while (Date.now() < end); throw new Error(`${label} 超时${last ? `: ${last.message}` : ''}`); }
+function command(method, params = {}) { return new Promise((resolve, reject) => { const id = ++sequence, timer = setTimeout(() => { pending.delete(id); reject(new Error(`CDP timeout: ${method}`)); }, 10000); pending.set(id, { resolve: value => { clearTimeout(timer); resolve(value); }, reject: e => { clearTimeout(timer); reject(e); } }); client.send(JSON.stringify({ id, method, params })); }); }
+async function evaluate(expression) { const result = await command('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true }); if (result.exceptionDetails) throw new Error(JSON.stringify(result.exceptionDetails)); return result.result.value; }
+const flush = () => evaluate('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve(true))))');
+async function center(selector) { return evaluate(`(() => { const el=document.querySelector(${JSON.stringify(selector)}); if(!el)throw Error('Missing target'); const r=el.getBoundingClientRect(); return {x:r.x+r.width/2,y:r.y+r.height/2}; })()`); }
+let pressed = false;
+async function mouse(type, p) { const buttons = type === 'mousePressed' ? 1 : type === 'mouseReleased' ? 0 : pressed ? 1 : 0; const result = await command('Input.dispatchMouseEvent', { type, x: p.x, y: p.y, ...(type === 'mouseMoved' ? {} : { button: 'left', clickCount: 1 }), buttons }); if (type === 'mousePressed') pressed = true; if (type === 'mouseReleased') pressed = false; return result; }
+async function click(selector) { const p = await center(selector); await mouse('mouseMoved', p); await mouse('mousePressed', p); await mouse('mouseReleased', p); await flush(); }
+async function setValue(selector, value, event = 'input') { await evaluate(`(() => { const el=document.querySelector(${JSON.stringify(selector)}); if(!el) throw Error('Missing target'); const proto=el instanceof HTMLSelectElement ? HTMLSelectElement.prototype : HTMLInputElement.prototype; Object.getOwnPropertyDescriptor(proto,'value').set.call(el, ${JSON.stringify(value)}); el.dispatchEvent(new Event(${JSON.stringify(event)},{bubbles:true})); })()`); await flush(); }
+async function key(name, code) { await command('Input.dispatchKeyEvent', { type: 'keyDown', key: name, code: name, windowsVirtualKeyCode: code, ...(name === 'Enter' ? { text: '\r', unmodifiedText: '\r' } : {}) }); await command('Input.dispatchKeyEvent', { type: 'keyUp', key: name, code: name, windowsVirtualKeyCode: code }); await flush(); }
+try {
+  const port = await until(async () => Number((await readFile(path.join(profile, 'DevToolsActivePort'), 'utf8')).split('\n')[0]), '浏览器调试端口');
+  const page = await until(async () => (await (await fetch(`http://127.0.0.1:${port}/json/list`)).json()).find(t => t.type === 'page' && t.url.includes('fixture.html')), '测试页面');
+  client = new WebSocket(page.webSocketDebuggerUrl);
+  await new Promise((resolve, reject) => { client.addEventListener('open', resolve, { once: true }); client.addEventListener('error', reject, { once: true }); });
+  client.addEventListener('message', e => { const message = JSON.parse(String(e.data)), request = pending.get(message.id); if (!request) return; pending.delete(message.id); message.error ? request.reject(new Error(JSON.stringify(message.error))) : request.resolve(message.result); });
+  await command('Emulation.setDeviceMetricsOverride', { width: 1280, height: 900, deviceScaleFactor: 1, mobile: false });
+  await until(() => evaluate('window.graphTest?.ready'), '组件初始化'); await flush();
+  console.log('Browser:', (await command('Browser.getVersion')).product);
+  await click('[data-frame-ref="b"] p');
+  const first = await evaluate('({selected:graphTest.selections,events:graphTest.events})');
+  assert.deepEqual(first.selected, ['b'], `单击应选中 b；实际事件：${JSON.stringify(first.events)}`);
+  assert.equal(await evaluate('document.querySelector(\'[data-frame-ref="b"]\').getAttribute("aria-pressed")'), 'true');
+  assert.equal(await evaluate('graphTest.moves.length'), 0);
+  for (let i = 0; i < 4; i++) await click('[aria-label="缩小分支图"]');
+  const jitter = await center('[data-frame-ref="a"] p'); await mouse('mousePressed', jitter); await mouse('mouseMoved', { x: jitter.x + 2, y: jitter.y + 1 }); await mouse('mouseReleased', { x: jitter.x + 2, y: jitter.y + 1 }); await flush();
+  assert.equal(await evaluate('graphTest.selections.at(-1)'), 'a'); assert.equal(await evaluate('graphTest.moves.length'), 0, '缩小后的小幅手抖不能触发拖动');
+  await evaluate("[...document.querySelectorAll('button')].find(b=>b.textContent==='重置缩放').click()"); await flush();
+  const selections = await evaluate('graphTest.selections.length'), from = await center('[data-frame-ref="a"] p');
+  await mouse('mousePressed', from); for (let i = 1; i <= 5; i++) await mouse('mouseMoved', { x: from.x + 16 * i, y: from.y + 12 * i }); await mouse('mouseReleased', { x: from.x + 80, y: from.y + 60 }); await flush();
+  assert.equal(await evaluate('graphTest.moves.length'), 1); assert.equal(await evaluate('graphTest.selections.length'), selections, '拖动后的 click 不应误选幕');
+  await evaluate('document.querySelector(\'[data-frame-ref="b"]\').focus()'); await key('Enter', 13); assert.equal(await evaluate('graphTest.selections.at(-1)'), 'b', `拖动之后 Enter 仍能选中：${JSON.stringify(await evaluate('({focus:document.activeElement.outerHTML,events:graphTest.events.slice(-8)})'))}`);
+  await click('[data-frame-ref="c"] p'); assert.equal(await evaluate('graphTest.selections.at(-1)'), 'c');
+  const cancel = await center('[data-frame-ref="a"] p'), count = await evaluate('graphTest.moves.length'); await mouse('mousePressed', cancel); await mouse('mouseMoved', { x: cancel.x + 60, y: cancel.y + 50 }); await key('Escape', 27); await mouse('mouseReleased', { x: cancel.x + 60, y: cancel.y + 50 }); await flush();
+  assert.equal(await evaluate('graphTest.moves.length'), count); await click('[data-frame-ref="b"] p'); assert.equal(await evaluate('graphTest.selections.at(-1)'), 'b');
+  const portOut = await center('.output-port'), target = await center('[data-frame-ref="c"] p'); await mouse('mousePressed', portOut); await mouse('mouseMoved', target); await mouse('mouseReleased', target); await flush(); assert.equal(await evaluate('graphTest.wires.length'), 1);
+  await evaluate('graphTest.setDisabled(true)'); await flush(); await click('[data-frame-ref="a"] p'); assert.equal(await evaluate('graphTest.selections.at(-1)'), 'a');
+  console.log('BROWSER GRAPH PASS: native click, zoomed jitter, drag/no mis-selection, keyboard, subsequent click, Escape, rewiring and read-only selection.');
+  await command('Page.navigate', { url: pathToFileURL(path.join(directory, 'ui-fixture.html')).href });
+  await until(() => evaluate('window.uiTest?.ready'), 'UI 编辑器初始化'); await flush();
+  await click('[data-ui-node="caption"] .ui-node-hit');
+  assert.equal(await evaluate(`document.querySelector('[data-ui-node="caption"]').getAttribute("aria-pressed")`), 'true');
+  await delay(120); await flush();
+  const uiStart = await center('[data-ui-node="caption"] .ui-node-hit');
+  await mouse('mousePressed', uiStart); for (let i = 1; i <= 4; i++) { await mouse('mouseMoved', { x: uiStart.x + 13 * i, y: uiStart.y + 6.5 * i }); await flush(); } await mouse('mouseReleased', { x: uiStart.x + 52, y: uiStart.y + 26 }); await flush();
+  assert.deepEqual(await evaluate('uiTest.operations.at(-1)'), { action: 'patchNode', id: 'caption', patch: { x: '104', y: '72' } });
+  await delay(80); const handle = await center('[aria-label="调整控件大小"]'); await flush(); await mouse('mousePressed', handle); await mouse('mouseMoved', { x: handle.x + 52, y: handle.y + 26 }); await mouse('mouseReleased', { x: handle.x + 52, y: handle.y + 26 }); await flush();
+  assert.deepEqual(await evaluate('uiTest.operations.at(-1)'), { action: 'patchNode', id: 'caption', patch: { width: '384', height: '80' } });
+  const beforeCancel = await evaluate('uiTest.operations.length'), uiCancel = await center('[data-ui-node="caption"] .ui-node-hit');
+  await mouse('mousePressed', uiCancel); await mouse('mouseMoved', { x: uiCancel.x + 30, y: uiCancel.y + 20 }); await key('Escape', 27); await mouse('mouseReleased', { x: uiCancel.x + 30, y: uiCancel.y + 20 }); await flush(); assert.equal(await evaluate('uiTest.operations.length'), beforeCancel);
+  await click('[aria-label="缩小 UI 画布"]'); const uiJitter = await center('[data-ui-node="caption"] .ui-node-hit'); await mouse('mousePressed', uiJitter); await mouse('mouseMoved', { x: uiJitter.x + 2, y: uiJitter.y + 1 }); await mouse('mouseReleased', { x: uiJitter.x + 2, y: uiJitter.y + 1 }); await flush(); assert.equal(await evaluate('uiTest.operations.length'), beforeCancel);
+  const staleDrag = await center('[data-ui-node="caption"] .ui-node-hit'); await mouse('mousePressed', staleDrag); await mouse('mouseMoved', { x: staleDrag.x + 30, y: staleDrag.y + 20 }); await evaluate('uiTest.externalEdit()'); await flush(); await mouse('mouseReleased', { x: staleDrag.x + 30, y: staleDrag.y + 20 }); await flush(); assert.equal(await evaluate('uiTest.operations.length'), beforeCancel, '源码更新应取消旧拖动');
+  const restrictedDrag = await center('[data-ui-node="caption"] .ui-node-hit'); await mouse('mousePressed', restrictedDrag); await mouse('mouseMoved', { x: restrictedDrag.x + 30, y: restrictedDrag.y + 20 }); await evaluate('uiTest.setReadonly(true)'); await flush(); await mouse('mouseReleased', { x: restrictedDrag.x + 30, y: restrictedDrag.y + 20 }); await flush(); assert.equal(await evaluate('uiTest.operations.length'), beforeCancel, '只读状态应取消拖动');
+  await evaluate('uiTest.setReadonly(true)'); await flush(); await click('[data-ui-node="advance"] .ui-node-hit'); assert.equal(await evaluate(`document.querySelector('[data-ui-node="advance"]').getAttribute("aria-pressed")`), 'true'); assert.equal(await evaluate('uiTest.operations.length'), beforeCancel);
+  await evaluate('uiTest.setReadonly(false)'); await flush(); await click('[data-ui-node="caption"] .ui-node-hit');
+  await click('.ui-tree > button:nth-of-type(2)');
+  await click('[aria-label="screenClose 动作"]'); await key('ArrowDown', 40); await key('Enter', 13);
+  assert.equal(await evaluate('document.querySelector(\'[aria-label="screenClose 动作"]\').value'), 'page');
+  await click('[aria-label="screenClose 目标"]'); await key('ArrowDown', 40); await key('Enter', 13);
+  assert.equal(await evaluate('document.querySelector(\'[aria-label="screenClose 目标"]\').value'), 'help');
+  assert.equal(await evaluate('document.querySelector(".lifecycle-editor .actions button").disabled'), false);
+  await evaluate('document.querySelector(".lifecycle-editor .actions button").scrollIntoView({block:"nearest"})'); await flush();
+  await click('.lifecycle-editor .actions button');
+  assert.deepEqual(await evaluate('uiTest.operations.at(-1)'), { action: 'lifecycle', kind: 'screenClose', owner: 'hud', mode: 'page', target: 'help' });
+  await writeFile(path.join(directory, 'ui-editor.png'), Buffer.from((await command('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false })).data, 'base64'));
+  await evaluate("[...document.querySelectorAll('.tree-section > summary')].find(s => s.textContent.includes('交互事件'))?.click()"); await flush();
+  await evaluate("[...document.querySelectorAll('button')].find(b => b.textContent === '＋新建事件')?.click()"); await flush();
+  await setValue('[aria-label="UI 表单 name"]', 'browser.start');
+  await setValue('[aria-label="UI 表单 command"]', 'resume', 'change');
+  await setValue('[aria-label="UI 表单 target"]', 'a', 'change');
+  await setValue('[aria-label="UI 表单 page"]', 'help', 'change');
+  await evaluate("[...document.querySelectorAll('button')].find(b => b.textContent === '保存设置')?.click()"); await flush();
+  assert.deepEqual(await evaluate('uiTest.operations.at(-1)'), { action: 'event', name: 'browser.start', command: 'resume', target: 'a', page: 'help' });
+  console.log('BROWSER LIFECYCLE PASS: native page-close action/target selection and save request; explicit start frame plus pre-open page form save.');
+  console.log('BROWSER UI PASS: native control selection, zoomed parent-relative drag, resize, Escape, stale/readonly drag cancellation, click jitter and read-only selection. Screenshot:', path.join(directory, 'ui-editor.png'));
+
+  await command('Emulation.setDeviceMetricsOverride', { width: 1440, height: 950, deviceScaleFactor: 1, mobile: false });
+  await command('Page.navigate', { url: pathToFileURL(path.join(directory, 'workbench.html')).href });
+  await until(() => evaluate('window.workbenchTest?.ready && !!document.querySelector(".app-bar")'), '工作台初始化'); await flush();
+  assert.equal(await evaluate('document.querySelectorAll(".app-bar").length'), 1);
+  assert.equal(await evaluate('document.querySelectorAll(".project-rail").length'), 1);
+  assert.equal(await evaluate('document.querySelectorAll(".graph-node").length'), 5);
+  assert.equal(await evaluate('document.querySelectorAll(".status-bar").length'), 1);
+  assert.ok(await evaluate('document.querySelector(".stage .dialogue")?.textContent?.includes("雨")'));
+  assert.equal(await evaluate('document.querySelectorAll(".entry-chip").length'), 2);
+  assert.equal(await evaluate('document.querySelectorAll(".variable-row").length'), 2);
+  assert.ok(await evaluate('[...document.querySelectorAll(".variable-row button")].some(b=>b.textContent==="编辑" && !b.disabled)'));
+  assert.ok(await evaluate('[...document.querySelectorAll(".entry-chip")].some(e=>e.textContent?.includes("journey"))'));
+  assert.equal(await evaluate('document.querySelector(".stage-meta .badge")?.textContent'), 'CG 专用画面');
+  assert.equal(await evaluate('document.querySelector(".stage img")?.getAttribute("alt")'), 'CG 画面');
+  assert.equal(await evaluate('document.querySelectorAll(".side-drawer.open").length'), 0);
+  await evaluate('document.querySelector(\'[data-frame-ref="opening"]\').scrollIntoView({block:"center"})'); await flush();
+  const beforeLayouts = await evaluate('window.workbenchTest.messages.filter(m=>m==="layout").length');
+  const graphStart = await center('[data-frame-ref="opening"] p');
+  await mouse('mousePressed', graphStart); for (let i = 1; i <= 4; i++) await mouse('mouseMoved', { x: graphStart.x + 12 * i, y: graphStart.y + 9 * i }); await mouse('mouseReleased', { x: graphStart.x + 48, y: graphStart.y + 36 }); await flush();
+  assert.ok(await evaluate('window.workbenchTest.messages.filter(m=>m==="layout").length') > beforeLayouts, '工作台流程图拖动应发送 layout 保存请求');
+  await writeFile(path.join(directory, 'workbench.png'), Buffer.from((await command('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false })).data, 'base64'));
+  await command('Emulation.setDeviceMetricsOverride', { width: 1280, height: 900, deviceScaleFactor: 1, mobile: false }); await flush();
+  assert.equal(await evaluate('document.querySelectorAll(".project-rail").length'), 1);
+  await writeFile(path.join(directory, 'workbench-1280.png'), Buffer.from((await command('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false })).data, 'base64'));
+  const panPoint = await evaluate(`(() => { const sc=document.querySelector('.graph-scroll'), s=document.querySelector('.graph-pan-surface'); if (!sc || !s) return null; sc.scrollLeft=0; sc.scrollTop=0; const r=s.getBoundingClientRect(), box=sc.getBoundingClientRect(); for (let y=Math.max(r.y,box.y)+20; y<Math.min(r.bottom,box.bottom)-10; y+=20) for (let x=Math.max(r.x,box.x)+10; x<Math.min(r.right,box.right)-10; x+=20) { if (document.elementFromPoint(x,y)?.classList?.contains('graph-pan-surface')) return { x, y, maxLeft: sc.scrollWidth-sc.clientWidth, maxTop: sc.scrollHeight-sc.clientHeight }; } return null; })()`);
+  assert.ok(panPoint, '流程图应有可拖动的空白背景');
+  const layoutsBeforePan = await evaluate('window.workbenchTest.messages.filter(m=>m==="layout").length');
+  await mouse('mousePressed', { x: panPoint.x, y: panPoint.y }); for (let i = 1; i <= 4; i++) await mouse('mouseMoved', { x: panPoint.x - 18 * i, y: panPoint.y - 9 * i }); await mouse('mouseReleased', { x: panPoint.x - 72, y: panPoint.y - 36 }); await flush();
+  const panned = await evaluate(`(() => { const sc=document.querySelector('.graph-scroll'); return { left: sc.scrollLeft, top: sc.scrollTop }; })()`);
+  assert.ok(panned.left > 0 || panned.top > 0, '拖动空白背景应平移流程图');
+  assert.equal(await evaluate('window.workbenchTest.messages.filter(m=>m==="layout").length'), layoutsBeforePan, '拖动空白背景不应保存幕布局');
+  await evaluate(`(() => { const sc=document.querySelector('.graph-scroll'); sc.scrollLeft=0; sc.scrollTop=0; })()`);
+  await command('Emulation.setDeviceMetricsOverride', { width: 1440, height: 950, deviceScaleFactor: 1, mobile: false }); await flush();
+  await evaluate("[...document.querySelectorAll('button')].find(b=>b.textContent==='工程')?.click()"); await flush();
+  assert.equal(await evaluate('document.querySelectorAll(".side-drawer.open").length'), 1);
+  assert.ok(await evaluate('!!document.querySelector(".side-drawer.open [aria-label=\\"游戏标题\\"]")'));
+  await delay(320); await flush();
+  assert.ok(await evaluate('!!document.querySelector("[aria-label=\\"关闭工程设置\\"]")'));
+  await writeFile(path.join(directory, 'workbench-settings.png'), Buffer.from((await command('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false })).data, 'base64'));
+  await evaluate("document.querySelector('[aria-label=\\\"关闭工程设置\\\"]')?.click()"); await flush();
+  assert.equal(await evaluate('document.querySelectorAll(".side-drawer.open").length'), 0);
+  await command('Page.navigate', { url: pathToFileURL(path.join(directory, 'workbench.html')).href + '?home=1' });
+  await until(() => evaluate('window.workbenchTest?.ready && !!document.querySelector(".home-panel")'), '创作首页初始化'); await flush();
+  assert.equal(await evaluate('document.querySelectorAll(".home-card").length'), 5);
+  await writeFile(path.join(directory, 'home.png'), Buffer.from((await command('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false })).data, 'base64'));
+  console.log('BROWSER WORKBENCH PASS: app bar, project rail, stage/dialogue, graph, inspector, status bar, settings drawer and home. Screenshots:', path.join(directory, 'workbench.png'), path.join(directory, 'workbench-settings.png'), path.join(directory, 'home.png'));
+} finally {
+  if (client?.readyState === WebSocket.OPEN) { await command('Browser.close').catch(() => {}); client.close(); }
+  if (child.exitCode === null) child.kill();
+}

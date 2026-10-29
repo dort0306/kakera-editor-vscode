@@ -1,0 +1,20 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
+test('原生工程侧栏按人物/美术/剧本/变量/JS 分类，并贡献新建删除右键菜单', () => {
+  assert.ok(pkg.contributes.views.kakera.some((view: { id: string }) => view.id === 'kakera.project'));
+  const commands = new Set<string>(pkg.contributes.commands.map((command: { command: string }) => command.command));
+  for (const id of ['kakera.tree.refresh', 'kakera.character.create', 'kakera.character.rename', 'kakera.character.delete', 'kakera.variable.create', 'kakera.variable.edit', 'kakera.variable.delete', 'kakera.frame.create', 'kakera.frame.delete']) assert.ok(commands.has(id), id);
+  const context = pkg.contributes.menus['view/item/context'] as { command: string; when: string }[];
+  for (const command of context) assert.ok(commands.has(command.command), command.command);
+  const has = (command: string, viewItem: string) => context.some(menu => menu.command === command && menu.when.includes(`viewItem == ${viewItem}`));
+  for (const category of ['kakera.category.characters', 'kakera.category.art', 'kakera.category.frames', 'kakera.category.variables']) assert.ok(context.some(menu => menu.when.includes(category)), category);
+  assert.ok(has('kakera.character.create', 'kakera.category.characters'));
+  assert.ok(has('kakera.variable.create', 'kakera.category.variables'));
+  assert.ok(has('kakera.frame.create', 'kakera.frame'));
+  assert.ok(has('kakera.frame.delete', 'kakera.frame'));
+  assert.ok(has('kakera.variable.delete', 'kakera.variable'));
+  assert.ok(has('kakera.character.delete', 'kakera.character'));
+  assert.ok(pkg.contributes.menus['view/title'].some((menu: { command: string }) => menu.command === 'kakera.tree.refresh'));
+});

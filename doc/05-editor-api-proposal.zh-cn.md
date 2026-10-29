@@ -29,7 +29,7 @@
 | FrameDraft | stableId/name、chapter、displayOrder、text、speaker、visual、audio、route、provenance | 空画面/空音频是明确状态，不能继承旧幕 |
 | RouteDraft | kind、options/target、orderedUpdates、guard/branches、managementLevel | kind 为 advance/choice/end；复杂 JS 用 OpaqueRef |
 | Expression | valueType、operator、operands/constant/variableRef | 只允许类型化布尔/比较等受限节点；不是任意 eval 字符串 |
-| VisualDraft | backgroundRef、portraits、backgroundEffect | portraits 最多三槽，最终 pose 明确；保留 video/Live2D 合法声明 |
+| VisualDraft | backgroundRef、portraits、backgroundEffect | portraits 最多三槽，最终 pose 明确；保留 Live2D 合法声明，视频不再属于 frame/visual |
 | AssetRecord | assetId、kind、relativePath、hash、metadata、tags、license、dependencies | 人工/AI 标签分开；相同名字换内容更新 hash |
 | Diagnostic | code、severity、message、objectRef、sourceSpan、generation、phase | 可以没有精确行列，不能伪造位置 |
 | ChangeSet | baseRevision、inputHashes、operations、affectedRefs、compatibilityImpact、diagnostics | 不能包含跨管理范围的任意覆盖 |

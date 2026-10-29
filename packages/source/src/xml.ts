@@ -31,16 +31,17 @@ export function escapeXml(value: string): string {
   if (/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/.test(value)) throw new Error('文本包含 XML 不允许的控制字符');
   return value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&apos;');
 }
-export function setAttribute(source: string, node: XmlNode, name: string, value: string): string {
+export function escapeXmlAttribute(value: string): string { return escapeXml(value).replaceAll('\r', '&#13;').replaceAll('\n', '&#10;').replaceAll('\t', '&#9;'); }
+export function setAttribute(source: string, node: XmlNode, name: string, value: string, removeEmpty = true): string {
   // Saxes validates the opening tag; tokenize only this bounded tag to preserve other bytes.
   const opening = source.slice(node.start, node.openEnd);
   const pattern = /([^\s=<>/]+)\s*=\s*(["'])([\s\S]*?)\2/g;
   for (const match of opening.matchAll(pattern)) {
     if (match[1] !== name) continue;
     const from = node.start + match.index!, to = from + match[0].length;
-    return source.slice(0, from) + (value ? `${name}="${escapeXml(value)}"` : '') + source.slice(to);
+    return source.slice(0, from) + (value || !removeEmpty ? `${name}="${escapeXmlAttribute(value)}"` : '') + source.slice(to);
   }
-  if (!value) return source;
+  if (!value && removeEmpty) return source;
   const insert = node.openEnd - (opening.endsWith('/>') ? 2 : 1);
-  return source.slice(0, insert) + ` ${name}="${escapeXml(value)}"` + source.slice(insert);
+  return source.slice(0, insert) + ` ${name}="${escapeXmlAttribute(value)}"` + source.slice(insert);
 }

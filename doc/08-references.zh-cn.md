@@ -1,6 +1,6 @@
 # 08 依据与外部 API
 
-核对日期：2026-10-27。播放器 v0.8.3；编辑器推荐 VS Code 插件，AI 采用用户可配置的兼容 API，不绑定必需模型。
+核对日期：2026-10-29。播放器 v0.9.1（story 8 / UI 3 / save 9）；编辑器采用 VS Code 插件，AI 使用用户可配置的兼容 API，不绑定必需模型。下表部分路径属于相邻上游工程，未随本仓库提供；实际插件验证以 [12 实现记录](12-implementation-status.zh-cn.md)为准。
 
 ## 1. 仓库依据
 
@@ -8,7 +8,11 @@
 | --- | --- |
 | [主 XML/JS 手册](../xml-js-api.zh-cn.md) | 当前 story/UI/save、点九/图集/名字/标题以及本版调试/发布 |
 | [工程发布指南](../project-release-pack-guide.zh-cn.md) | 参数、Core、KPAK 和发行检查 |
-| [v0.8.3 策略](../v0.8.3-implementation-plan.zh-cn.md) / [验收](../v0.8.3-validation.zh-cn.md) | 本版实现与真实检查范围 |
+| 上游 `doc/v0.9.0-implementation-plan.zh-cn.md` / `doc/v0.9.0-validation.zh-cn.md` | 生命周期、隐藏交接、save 9 的计划与播放器验收（不在本仓库） |
+| 上游 `doc/v0.9.1-implementation-plan.zh-cn.md` / `doc/v0.9.1-validation.zh-cn.md` | 末幕 frameExit、UI 显式起始幕与隐藏续接增量（不在本仓库） |
+| 上游 `doc/cg-resources-implementation-plan.zh-cn.md` / `doc/cg-resources-validation.zh-cn.md` | 专用 CG 资源、画廊、共享解锁与验收（不在本仓库） |
+| 上游 `doc/multiple-entries-implementation-plan.zh-cn.md` / `doc/multiple-entries-validation.zh-cn.md` | 多起始幕、UI 首次进入、显式 resume/restart 与调试 game_started（不在本仓库） |
+| [v0.8.3 策略](../v0.8.3-implementation-plan.zh-cn.md) / [验收](../v0.8.3-validation.zh-cn.md) | 历史版本实现与真实检查范围 |
 | [调试 transport](../../src/debug.rs) / [App](../../src/app/debug.rs) | 真实请求、认证、修订与提交前断点 |
 | [发布选择](../../src/package/selection.rs) | 运行依赖/许可证/显式 include 的实际策略 |
 | [调试 API 手册](10-player-debug-api.zh-cn.md) | 已实现命令；不是 DAP 或 HTTP |

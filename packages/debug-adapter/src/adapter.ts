@@ -66,7 +66,7 @@ export class Adapter implements vscode.DebugAdapter {
     if (req.command === 'scopes') { this.reply(req, { scopes: [{ name: '当前剧情变量', variablesReference: 1, expensive: false }, { name: '候选变量（尚未提交）', variablesReference: 2, expensive: false }, { name: 'UI 变量', variablesReference: 3, expensive: false }, { name: '暂停与阻挡状态', variablesReference: 4, expensive: false }] }); return; }
     if (req.command === 'variables') {
       const s = await debug.request({ type: 'status' });
-      const values = args.variablesReference === 1 ? s.variables : args.variablesReference === 2 ? s.pending_variables ?? {} : args.variablesReference === 3 ? s.ui_variables : Object.fromEntries(['frame_id', 'pending_frame', 'reason', 'text_complete', 'transitioning', 'menu_paused', 'host_prompt', 'video_playing'].map(k => [k, { type: 'state', value: s[k] }]));
+      const values = args.variablesReference === 1 ? s.variables : args.variablesReference === 2 ? s.pending_variables ?? {} : args.variablesReference === 3 ? s.ui_variables : Object.fromEntries(['game_started', 'frame_id', 'frame_name', 'pending_frame', 'reason', 'text_complete', 'transitioning', 'menu_paused', 'host_prompt', 'video_playing'].map(k => [k, { type: 'state', value: s[k] }]));
       this.reply(req, { variables: Object.entries(values).map(([name, item]) => ({ name, value: typeof item.value === 'string' ? item.value : JSON.stringify(item.value), type: item.type, variablesReference: 0, presentationHint: { attributes: ['readOnly'] } })) }); return;
     }
     const command = ({ pause: 'pause', continue: 'resume', next: 'advance' } as Record<string, string>)[req.command];

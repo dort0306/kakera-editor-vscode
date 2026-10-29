@@ -1,6 +1,6 @@
-# 10 播放器调试 API v1（v0.8.3 已实现）
+# 10 播放器调试 API v1（v0.8.3 已实现，v0.9.1 保持兼容）
 
-这是已实现的播放器宿主 API，源码见 [transport](../../src/debug.rs) 与 [App 适配](../../src/app/debug.rs)。编辑器插件/DAP 适配器尚未实现；不要与通用 AI HTTP API 混淆。
+这是已实现的播放器宿主 API，源码见 [transport](../../src/debug.rs) 与 [App 适配](../../src/app/debug.rs)。本仓库 DAP 适配器已接入，但这里描述的是播放器端 TCP 契约；不要与通用 AI HTTP API 混淆。协议版本仍为 1；v0.9.0 未增加新命令/字段，v0.9.1 多起始幕增加 `game_started` 并允许未进入时 `frame_id/frame_name=null`。
 
 ## 1. 启动
 
@@ -61,11 +61,15 @@ TCP 上 UTF-8 JSON Lines，每行一条请求/响应。不是 HTTP、JSON-RPC �
 | --- | --- |
 | 协议/宿主 | protocol=KakeraEditorDebug、version、process_id、engine_version、capabilities |
 | 修订 | state_revision（控制前置条件）、presentation_revision（画面捕获修订） |
-| 故事 | story_id、content_version、frame_id、frame_name、history_length、available_options |
+| 故事 | story_id、content_version、game_started、frame_id、frame_name、history_length、available_options |
 | 事务 | paused、reason、last_error、pending_frame、pending_variables |
 | 数据 | variables、ui_variables、ui_stack、window_title |
 | 呈现 | text_complete、transitioning、transition_age、video_playing/video_position、live2d_active、auto_playing |
 | 阻挡 | host_prompt、menu_paused、autosave_pending、breakpoints |
+
+多起始幕启动只显示初始 UI：`game_started=false` 时 `frame_id/frame_name=null`、`history_length=0`、`available_options=[]`，advance/choose/reveal/skip_transition 等剧情步进被拒绝，直到 UI 显式 `resume/restart` 或读档。调试协议没有“从外部指定起点”的命令，客户端不得伪造 frame；需要真实起点时从播放器 UI 操作或加载存档。
+
+v0.9.0 起 `video_playing/video_position` 只描述 UI 演出中的视频；frame 视频已删除，字段名保留以兼容协议 v1。活动隐藏交接或 UI 演出一律会阻挡调试步进/补全，客户端应按错误提示后重新查询状态，不能假设一次 advance 未被执行。调试状态不是 save 9 槽位，也不包含 `resume_to`、隐藏槽内容或 UI 音效偏好。
 
 变量值是带 type 的对象；int 的 value 为十进制字符串，bool/string 保持 JSON 原类型。没有完整历史、指针、纹理、库句柄、物理资源路径或 API 令牌。状态是 App 更新边界的快照，呈现时钟可在两次查询间自然变化；state_revision 不是每一帧时钟的计数。
 

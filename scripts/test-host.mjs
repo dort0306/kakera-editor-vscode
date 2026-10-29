@@ -1,14 +1,22 @@
 import { build } from 'esbuild';
-import { mkdir, cp, writeFile } from 'node:fs/promises';
+import { mkdir, cp, writeFile, readFile, mkdtemp } from 'node:fs/promises';
 import path from 'node:path';
 import { runTests } from '@vscode/test-electron';
 import { spawn } from 'node:child_process';
 await mkdir('.test-work', { recursive: true });
 await build({ entryPoints: ['tests/host.ts'], outfile: '.test-work/host.cjs', bundle: true, platform: 'node', format: 'cjs', external: ['vscode'] });
-const root = path.resolve('.test-work/host-workspace');
+const root = await mkdtemp(path.resolve('.test-work/host-workspace-'));
 await mkdir(root, { recursive: true });
 await cp('templates/minimal/content', path.join(root, 'content'), { recursive: true });
-await writeFile(path.join(root, 'project.kakera-editor.json'), JSON.stringify({ editorSchema: 1, engineContract: '0.8.3', contentRoot: 'content' }));
+// The multi-entry player intentionally waits on the initial UI. Give the host
+// integration test a deterministic full-screen start control.
+const uiPath = path.join(root, 'content', 'ui.xml'), ui = await readFile(uiPath, 'utf8');
+if (!ui.includes('kakera.test.start')) await writeFile(uiPath, ui.replace('</screen>', '<button id="kakera.test.start" x="0" y="0" width="1280" height="720" text="开始" event="kakera.test.start" /></screen>'));
+const hostUiScript = path.join(root, 'content', 'scripts', 'ui.js');
+await writeFile(hostUiScript, (await readFile(hostUiScript, 'utf8')) + '\non.ui("kakera.test.start", ctx => { ctx.open("hud"); ctx.restart("opening"); });\n');
+const storyPath = path.join(root, 'content', 'story.xml');
+await writeFile(storyPath, '\uFEFF' + (await readFile(storyPath, 'utf8')).replace(/^\uFEFF/, ''));
+await writeFile(path.join(root, 'project.kakera-editor.json'), JSON.stringify({ editorSchema: 1, engineContract: '0.9.1', contentRoot: 'content' }));
 const executable = process.env.VSCODE_EXECUTABLE || path.join(process.env.LOCALAPPDATA, 'Programs', 'Microsoft VS Code', 'Code.exe');
 await runTests({
   vscodeExecutablePath: executable, extensionDevelopmentPath: process.cwd(), extensionTestsPath: path.resolve('.test-work/host.cjs'),

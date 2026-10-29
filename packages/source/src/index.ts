@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { Asset, Frame, Story } from '../../domain/src/index';
 import { child, escapeXml, group, parseXml, setAttribute, type XmlNode } from './xml';
 export { emitRoutes, readManagedRoutes } from './routes';
+export { analyzeLogic, patchLogicRoutes, protectedLogicTargets, type LogicAnalysis, type LogicSummary } from './logic';
 export { parseXml, escapeXml } from './xml';
 export type Sources = Map<string, string>;
 export function readStory(sources: Sources): Story {
@@ -18,23 +19,33 @@ export function readStory(sources: Sources): Story {
     file = next?.attrs.src;
   }
   const first = nodes[0].root;
-  const story: Story = { id: first.attrs.id ?? '', entry: first.attrs.entry ?? '', contentVersion: first.attrs['content-version'] ?? '', frames: [], assets: [], visuals: [], variables: [], characters: [], scripts: [], files };
+  const story: Story = { id: first.attrs.id ?? '', entry: first.attrs.entry ?? '', entries: [], contentVersion: first.attrs['content-version'] ?? '', frames: [], assets: [], visuals: [], variables: [], characters: [], scripts: [], files };
   for (const { file, root, source } of nodes) {
     for (const n of group(root, 'frames')) {
       if (n.tag !== 'frame') throw new Error('frames 中包含未知元素');
       const text = child(n, 'text');
       if (!text || text.children.length || n.children.filter(x => x.tag === 'text').length !== 1) throw new Error('每幕需要一个纯文本 text');
-      story.frames.push({ ref: n.attrs.name || n.attrs.id || '', id: n.attrs.id, name: n.attrs.name, speaker: n.attrs.speaker ?? '', visual: n.attrs.visual ?? '', text: text.text, audio: child(n, 'audio')?.attrs ?? {}, options: group(n, 'options').map(o => ({ id: o.attrs.id, text: o.text })), file, line: source.slice(0, n.start).split('\n').length });
+      const pending = !!n.attrs.id && !!n.attrs.name?.startsWith('kakera.pending.') && n.children.length === 1 && text.text === '后续剧情尚未连接。' && source.slice(n.openEnd, text.start).includes('<!-- Kakera pending route v1 -->');
+      const legacyVideo = n.children.some(x => x.tag === 'video');
+      story.frames.push({ ref: n.attrs.name || n.attrs.id || '', id: n.attrs.id, name: n.attrs.name, speaker: n.attrs.speaker ?? '', visual: n.attrs.visual ?? '', text: text.text, audio: child(n, 'audio')?.attrs ?? {}, options: group(n, 'options').map(o => ({ id: o.attrs.id, text: o.text })), file, line: source.slice(0, n.start).split('\n').length, ...(pending ? { pending: true } : {}), ...(legacyVideo ? { legacyVideo: true } : {}) });
     }
     story.assets.push(...group(root, 'assets').map(n => ({ id: n.attrs.id, kind: n.tag, src: n.attrs.src, file })));
     story.characters.push(...group(root, 'characters').map(n => ({ id: n.attrs.id, name: n.attrs.name })));
-    story.visuals.push(...group(root, 'visuals').map(n => ({ id: n.attrs.id, background: n.attrs.background ?? '', portraits: n.children.filter(p => p.tag === 'portrait').map(p => ({ image: p.attrs.image, character: p.attrs.character, slot: p.attrs.slot })) })));
+    story.visuals.push(...group(root, 'visuals').map(n => ({ id: n.attrs.id, background: n.attrs.background ?? '', portraits: n.children.filter(p => p.tag === 'portrait').map(p => ({ image: p.attrs.image, character: p.attrs.character, slot: p.attrs.slot, ...(child(p, 'live2d') ? { live2d: child(p, 'live2d')!.attrs.asset } : {}) })), ...(n.attrs.cg ? { cg: n.attrs.cg } : {}) })));
     story.variables.push(...group(root, 'variables').map(n => { if (!['int', 'bool', 'string'].includes(n.tag)) throw new Error('未知变量类型'); return { id: n.attrs.id, type: n.tag as 'int' | 'bool' | 'string', initial: n.attrs.initial, min: n.attrs.min, max: n.attrs.max }; }));
     story.scripts.push(...group(root, 'scripts').map(n => n.attrs.src));
   }
   if (story.frames.some(f => !f.ref)) throw new Error('幕必须有 id 或 name');
+  const rawEntries = (first.attrs.entry ?? '').trim().split(/\s+/).filter(Boolean);
+  if (!rawEntries.length) throw new Error('story.entry 必须声明至少一个起始幕');
+  const aliases = new Map(story.frames.flatMap(f => [f.ref, f.id, f.name].filter((v): v is string => !!v).map(alias => [alias, f.ref])));
+  const entries = rawEntries.map(raw => { const ref = aliases.get(raw); if (!ref) throw new Error(`story.entry 起始幕不存在：${raw}`); return ref; });
+  if (new Set(entries).size !== entries.length) throw new Error('story.entry 起始幕重复或别名指向同一幕');
+  story.entries = entries; story.entry = entries[0];
   return story;
 }
+export { readGameTitle, patchGameTitle, editCharacter, addCharacterLooks, characterLooks, assignCharacterLook, setFrameVisual } from './project';
+export { reconcilePendingRoutes, insertConnectedFrame, deleteConnectedFrame, setStoryEntry, setStoryEntries, addStoryVariable, editStoryVariable, deleteStoryVariable, deleteCharacter, renameFrame } from './editing';
 function frameNode(source: string, ref: string): XmlNode {
   const node = group(parseXml(source), 'frames').find(n => (n.attrs.name || n.attrs.id) === ref);
   if (!node) throw new Error('幕已改变，请刷新');
@@ -88,7 +99,7 @@ export function reorderFrames(source: string, refs: string[]): string {
   return next;
 }
 export function addAsset(source: string, asset: Omit<Asset, 'file'>): string {
-  if (!['image', 'nine-patch', 'font', 'audio', 'video', 'live2d'].includes(asset.kind)) throw new Error('资源类型不支持');
+  if (!['image', 'cg', 'nine-patch', 'font', 'audio', 'video', 'live2d'].includes(asset.kind)) throw new Error('资源类型不支持');
   const root = parseXml(source), assets = child(root, 'assets');
   if (!assets || assets.openEnd === assets.closeStart) throw new Error('需要非自闭合 assets 分组');
   if (assets.children.some(n => n.attrs.id === asset.id)) throw new Error('资源 ID 已存在');

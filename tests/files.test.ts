@@ -12,9 +12,15 @@ test('冻结未保存缓冲，源替换不改变代次并使 assertCurrent 失�
   const root = await fs.mkdtemp(path.resolve('.test-work/files-')); const source = path.join(root, 'content'), work = path.join(root, 'work');
   await fs.mkdir(source); await fs.writeFile(path.join(source, 'story.xml'), '磁盘旧内容'); await fs.writeFile(path.join(source, 'unused.bin'), '资源');
   await fs.mkdir(path.join(source, '.git')); await fs.writeFile(path.join(source, '.git/config'), '秘密');
+  await fs.writeFile(path.join(source, 'ui-audio.json'), '私人音效偏好');
+  await fs.writeFile(path.join(source, 'flow-checkpoint.json'), '私人交接状态');
   const frozen = await freezeContent(source, work, new Map([['story.xml', '未保存内容']]));
   try {
     assert.equal(await fs.readFile(path.join(frozen.directory, 'story.xml'), 'utf8'), '未保存内容'); await assert.rejects(fs.access(path.join(frozen.directory, '.git/config')));
+    await assert.rejects(fs.access(path.join(frozen.directory, 'ui-audio.json')));
+    await assert.rejects(fs.access(path.join(frozen.directory, 'flow-checkpoint.json')));
+    await fs.writeFile(path.join(source, 'ui-audio.json'), '新偏好');
+    await fs.writeFile(path.join(source, 'flow-checkpoint.json'), '新交接状态');
     await frozen.assertCurrent(); await fs.writeFile(path.join(source, 'unused.bin'), '同名新资源');
     assert.equal(await fs.readFile(path.join(frozen.directory, 'unused.bin'), 'utf8'), '资源'); await assert.rejects(frozen.assertCurrent());
   } finally { await frozen.dispose(); await fs.rm(root, { recursive: true, force: true }); }

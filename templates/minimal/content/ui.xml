@@ -11,6 +11,7 @@
     <repeat id="choices" source="choices" x="740" y="180" width="480" height="280" item-width="460" item-height="54" gap="14" visible="game.complete">
       <button id="choice" width="460" height="54" bind="item.text" event="choose" />
     </repeat>
+    <button id="startStory" x="40" y="24" width="180" height="42" text="开始故事" event="restart" />
     <button id="restart" x="1080" y="24" width="150" height="42" text="重新开始" event="restart" />
   </screen>
 </ui>

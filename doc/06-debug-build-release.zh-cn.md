@@ -1,6 +1,6 @@
 # 06 调试与构建发布
 
-基线更新为 v0.8.3。播放器已有帧级调试/状态接口和发布依赖选择；VS Code 插件、DAP 适配、可视编译和构建 UI 仍待实现。
+基线更新为 v0.9.1（story 8 / UI 3 / save 9）。播放器已有帧级调试/状态接口、发布依赖选择、UI 生命周期、隐藏交接、末幕退出修复和 UI 显式起始幕；VS Code 插件已接入其中试玩/调试/构建路径。协议 v1 未变，`video_playing` 只描述 UI 演出视频。
 
 ## 1. 预览与真实调试
 
@@ -49,7 +49,6 @@ v0.8.3 的真实 kakera-pack 使用记录型 ContentSource 做依赖发现，包
 
 语法/资源/类型/入口错误、未解决占位、预算/块校验/许可证缺失都阻止完整交付；未覆盖动态分支单独报告。改变 ID、变量契约或重新生成缺省 UUID 必须显示旧档风险并决定 content-version。
 
-v0.8.3 不提供任意跳转/改变量/eval、正式槽位注入、通用 JSON 诊断、推送事件、网络公网调试监听或 JS 行级调试。AI HTTP API 客户端仍是编辑器待实现工作。
+播放器不提供任意跳转/改变量/eval、正式槽位注入、通用 JSON 诊断、推送事件、网络公网调试监听或 JS 行级调试。
 
-
-v0.8.3 附加清单也拒绝保留用户文件/目录及临时文件（如 settings.json、read.json、slot-/auto- JSON、saves/、target/、.git/、*.tmp）；不能用显式 include 绕过原有排除规则。
+附加清单也拒绝保留用户文件/目录及临时文件（如 settings.json、profile.json、read.json、ui-audio.json、flow-checkpoint.json、slot-/auto- JSON、saves/、target/、.git/、*.tmp）；不能用显式 include 绕过原有排除规则。隐藏交接槽与玩家偏好不进入发布候选，编辑器冻结快照采用同一排除集合。

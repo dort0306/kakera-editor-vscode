@@ -5,6 +5,7 @@
 !CHANGELOG.md
 !THIRD_PARTY_NOTICES.txt
 !dist/extension.cjs
+!dist/texture-worker.cjs
 !dist/webview.css
 !dist/webview.js
 !resources/**
