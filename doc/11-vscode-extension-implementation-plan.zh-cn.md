@@ -130,6 +130,24 @@ kakera-editor-vscode/
   doc/                    设计与验收记录
 ```
 
+上述为规划目录。0.11.2 交付后的实际仓库结构如下（构建与测试命令保留在根 README，未实现的下版本规划见 [PLAN.md](../PLAN.md)）：
+
+```text
+kakera-editor-vscode/
+  kakera.svg    工程标识原始图形；resources/ 下的图标由它派生
+  doc/          产品、引擎契约与插件落地方案
+  packages/     extension、webview、domain、source、protocol、AI、DAP
+  templates/    已经引擎校验的最小 story/UI 与授权字体
+  schemas/      工程清单与受限提案 schema
+  scripts/      构建、工具准备与集成测试
+  tests/        源码、文件、协议和宿主测试
+  resources/    Activity Bar/市场图标（kakera.svg、kakera.png）与依赖许可；本地准备的工具不提交 Git
+  AGENTS.md     开发协作规范
+  PLAN.md       未实现的下版本规划
+  LICENSE       MIT 许可证
+  README.md     项目简介、构建与测试方法、许可证
+```
+
 domain 不依赖宿主；source 依赖 domain/protocol；extension 协调 source、AI 和工具；webview 只依赖展示类型/消息。debug-adapter 的传输与状态机独立于 UI，并由单一会话控制器管理连接。
 
 Rust 工具通过受限 stdio 请求/响应工作；拟议协议含版本握手、requestId、jobId、generation、输入快照引用和 diagnostics，stdout 只输出协议，stderr 记录净化日志。初期可每任务单进程，优先保证可取消和清晰生命周期，不先建设 HTTP/MCP 服务。这个协议与播放器 JSON Lines v1 分开版本化。
@@ -364,6 +382,6 @@ CI 先执行可离线复现的静态、fixture 和 mock 检查；Windows 宿主/
 | AI 服务“兼容”程度不同 | 分能力探测、显式降级、mock 加两类真实服务验收 | E3 |
 | 大资源占用与取消困难 | 分层校验、流式摘要、有界解码、专属可终止进程 | E0/E2 |
 | Core/字体/模型分发条件未明确 | 用授权明确模板起步；完整模型能力与产品供应独立核验 | E0/E5 |
-| 将规划当成功能说明 | README 能力表、阶段出口和实际证据同时更新 | 每次交付 |
+| 将规划当成功能说明 | [能力状态表](20-capabilities-status.zh-cn.md)、阶段出口和实际证据同时更新 | 每次交付 |
 
 需要增加引擎能力时，先记录现有契约缺口、最小上游修改和兼容策略；新能力未落地前不伪造 CLI 参数或在插件侧绕过事务。首版的可交付标准是合法内容、源码保真、可恢复编辑与真实运行闭环，随后用同一核心扩展 AI、调试和发行。

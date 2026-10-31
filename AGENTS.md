@@ -5,15 +5,16 @@
 ## 1. 先确认事实与任务边界
 
 - 当前基线为 Kakera 播放器 v0.11.2：story 8、UI 3、save 9，调试协议 v1，demo content-version=11，JS 注册使用 `frame(id).advance/choice/end`、独立 `event.register(id, callback)` 定义，XML `event` / 单参数 `ui(id).bind(eventId)` 引用，UI 额外支持 `component.register` 组合标签与 repeat 通用分页。插件已有 0.11.2 开发预览实现；实际能力和未完成项见 [实现记录](doc/12-implementation-status.zh-cn.md)，不要把全部规划当成交付。
+- 未实现的下版本规划在 [PLAN.md](PLAN.md) 里。根 README 只保留项目简介、构建与测试方法和许可证；能力状态见 [20](doc/20-capabilities-status.zh-cn.md)，日常操作见 [21](doc/21-usage-guide.zh-cn.md)，引擎同步与版本增量见 [22](doc/22-engine-sync-notes.zh-cn.md)，逐版本变更见 [CHANGELOG](CHANGELOG.md)。新增内容按此分工放置，不往 README 堆功能说明或路线图。
 - 本文件初次编写时仓库只有文档与许可证，没有插件源码、引擎源码、构建系统或测试。开始任务时重新检查实际文件，不把规划目录和命令当作已经存在。
 - 当前实际检查命令为 `npm run check`、`npm run test:browser`、`npm run test:integration`、`npm run test:host` 和 `npm run package`。浏览器测试需本机 Edge/Chromium；引擎/宿主检查需要已准备的匹配工具/本机 VS Code，详见 README。独立 Rust wrapper 仍未实现，当前通过真实 CLI 复用引擎。
 - 本仓库负责 VS Code 插件及其内容工具适配，不默认承担上游引擎改造、Code-OSS 分叉或独立桌面壳。
-- 不虚构包脚本、可安装 VSIX、服务兼容性、测试通过或性能结果。实现完成后同步更新 README 中的能力状态和实际命令。
+- 不虚构包脚本、可安装 VSIX、服务兼容性、测试通过或性能结果。实现完成后同步更新 README 中的实际命令、[能力状态](doc/20-capabilities-status.zh-cn.md)和 [PLAN.md](PLAN.md)（已实现条目移出规划）。
 - 保留用户已有修改，不在未请求时搬迁工程、全库格式化、下载模型、发布插件或上传游戏。
 
 ## 2. 阅读与依据
 
-先阅读 [README](README.md) 和[插件落地方案](doc/11-vscode-extension-implementation-plan.zh-cn.md)，再按任务读取原始设计：
+先阅读 [README](README.md)、[能力与状态](doc/20-capabilities-status.zh-cn.md)、[PLAN.md](PLAN.md) 和[插件落地方案](doc/11-vscode-extension-implementation-plan.zh-cn.md)，再按任务读取原始设计：
 
 | 任务 | 必读依据 |
 | --- | --- |
