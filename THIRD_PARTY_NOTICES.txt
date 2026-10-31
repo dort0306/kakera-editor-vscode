@@ -249,7 +249,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ----------------------------------------
 
-Kakera AVG v0.11.1 i18n dependency license: i18n-fluent-bundle-0.16.0-LICENSE-APACHE.txt
+Kakera AVG v0.11.2 i18n dependency license: i18n-fluent-bundle-0.16.0-LICENSE-APACHE.txt
                                  Apache License
                            Version 2.0, January 2004
                         http://www.apache.org/licenses/
@@ -455,7 +455,7 @@ Kakera AVG v0.11.1 i18n dependency license: i18n-fluent-bundle-0.16.0-LICENSE-AP
 
 ----------------------------------------
 
-Kakera AVG v0.11.1 i18n dependency license: i18n-fluent-bundle-0.16.0-LICENSE-MIT.txt
+Kakera AVG v0.11.2 i18n dependency license: i18n-fluent-bundle-0.16.0-LICENSE-MIT.txt
 Copyright 2017 Mozilla
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of
@@ -479,7 +479,7 @@ SOFTWARE.
 
 ----------------------------------------
 
-Kakera AVG v0.11.1 i18n dependency license: i18n-fluent-langneg-0.13.1-LICENSE-APACHE.txt
+Kakera AVG v0.11.2 i18n dependency license: i18n-fluent-langneg-0.13.1-LICENSE-APACHE.txt
                                  Apache License
                            Version 2.0, January 2004
                         http://www.apache.org/licenses/
@@ -685,7 +685,7 @@ Kakera AVG v0.11.1 i18n dependency license: i18n-fluent-langneg-0.13.1-LICENSE-A
 
 ----------------------------------------
 
-Kakera AVG v0.11.1 i18n dependency license: i18n-fluent-syntax-0.12.0-LICENSE-APACHE.txt
+Kakera AVG v0.11.2 i18n dependency license: i18n-fluent-syntax-0.12.0-LICENSE-APACHE.txt
                                  Apache License
                            Version 2.0, January 2004
                         http://www.apache.org/licenses/
@@ -891,7 +891,7 @@ Kakera AVG v0.11.1 i18n dependency license: i18n-fluent-syntax-0.12.0-LICENSE-AP
 
 ----------------------------------------
 
-Kakera AVG v0.11.1 i18n dependency license: i18n-fluent-syntax-0.12.0-LICENSE-MIT.txt
+Kakera AVG v0.11.2 i18n dependency license: i18n-fluent-syntax-0.12.0-LICENSE-MIT.txt
 Copyright 2017 Mozilla
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of
@@ -915,7 +915,7 @@ SOFTWARE.
 
 ----------------------------------------
 
-Kakera AVG v0.11.1 i18n dependency license: i18n-intl-memoizer-0.5.3-LICENSE-APACHE.txt
+Kakera AVG v0.11.2 i18n dependency license: i18n-intl-memoizer-0.5.3-LICENSE-APACHE.txt
                                  Apache License
                            Version 2.0, January 2004
                         http://www.apache.org/licenses/
@@ -1121,7 +1121,7 @@ Kakera AVG v0.11.1 i18n dependency license: i18n-intl-memoizer-0.5.3-LICENSE-APA
 
 ----------------------------------------
 
-Kakera AVG v0.11.1 i18n dependency license: i18n-intl-memoizer-0.5.3-LICENSE-MIT.txt
+Kakera AVG v0.11.2 i18n dependency license: i18n-intl-memoizer-0.5.3-LICENSE-MIT.txt
 Copyright 2017 Mozilla
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of
@@ -1145,7 +1145,7 @@ SOFTWARE.
 
 ----------------------------------------
 
-Kakera AVG v0.11.1 i18n dependency license: i18n-intl_pluralrules-7.0.2-LICENSE-APACHE.txt
+Kakera AVG v0.11.2 i18n dependency license: i18n-intl_pluralrules-7.0.2-LICENSE-APACHE.txt
                                  Apache License
                            Version 2.0, January 2004
                         http://www.apache.org/licenses/
@@ -1351,7 +1351,7 @@ Kakera AVG v0.11.1 i18n dependency license: i18n-intl_pluralrules-7.0.2-LICENSE-
 
 ----------------------------------------
 
-Kakera AVG v0.11.1 i18n dependency license: i18n-self_cell-1.3.0-LICENSE-APACHE.txt
+Kakera AVG v0.11.2 i18n dependency license: i18n-self_cell-1.3.0-LICENSE-APACHE.txt
                                  Apache License
                            Version 2.0, January 2004
                         http://www.apache.org/licenses/
@@ -1557,7 +1557,7 @@ Kakera AVG v0.11.1 i18n dependency license: i18n-self_cell-1.3.0-LICENSE-APACHE.
 
 ----------------------------------------
 
-Kakera AVG v0.11.1 i18n dependency license: i18n-self_cell-1.3.0-LICENSE-GPLv2.txt
+Kakera AVG v0.11.2 i18n dependency license: i18n-self_cell-1.3.0-LICENSE-GPLv2.txt
                     GNU GENERAL PUBLIC LICENSE
                        Version 2, June 1991
 
@@ -1900,7 +1900,7 @@ Public License instead of this License.
 
 ----------------------------------------
 
-Kakera AVG v0.11.1 i18n dependency license: i18n-unic-langid-0.9.6-LICENSE-APACHE.txt
+Kakera AVG v0.11.2 i18n dependency license: i18n-unic-langid-0.9.6-LICENSE-APACHE.txt
                               Apache License
                         Version 2.0, January 2004
                      http://www.apache.org/licenses/
@@ -2106,7 +2106,7 @@ limitations under the License.
 
 ----------------------------------------
 
-Kakera AVG v0.11.1 i18n dependency license: i18n-unic-langid-0.9.6-LICENSE-MIT.txt
+Kakera AVG v0.11.2 i18n dependency license: i18n-unic-langid-0.9.6-LICENSE-MIT.txt
 Permission is hereby granted, free of charge, to any
 person obtaining a copy of this software and associated
 documentation files (the "Software"), to deal in the
@@ -2134,7 +2134,7 @@ DEALINGS IN THE SOFTWARE.
 
 ----------------------------------------
 
-Kakera AVG v0.11.1 i18n dependency license: i18n-unic-langid-impl-0.9.6-LICENSE-APACHE.txt
+Kakera AVG v0.11.2 i18n dependency license: i18n-unic-langid-impl-0.9.6-LICENSE-APACHE.txt
                               Apache License
                         Version 2.0, January 2004
                      http://www.apache.org/licenses/
@@ -2340,7 +2340,7 @@ limitations under the License.
 
 ----------------------------------------
 
-Kakera AVG v0.11.1 i18n dependency license: i18n-unic-langid-impl-0.9.6-LICENSE-MIT.txt
+Kakera AVG v0.11.2 i18n dependency license: i18n-unic-langid-impl-0.9.6-LICENSE-MIT.txt
 Permission is hereby granted, free of charge, to any
 person obtaining a copy of this software and associated
 documentation files (the "Software"), to deal in the
@@ -2368,7 +2368,7 @@ DEALINGS IN THE SOFTWARE.
 
 ----------------------------------------
 
-Kakera AVG v0.11.1 i18n notices
+Kakera AVG v0.11.2 i18n notices
 # v0.11.1 国际化依赖许可
 
 以下文件随播放器发布；源包声明的双许可均保留。

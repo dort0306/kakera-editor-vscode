@@ -2,7 +2,7 @@
   "name": "kakera-editor-vscode",
   "displayName": "Kakera 可视分镜编辑器",
   "description": "Kakera AVG XML/JS 分镜创作、校验、试玩与帧级调试。",
-  "version": "0.11.1",
+  "version": "0.11.2",
   "publisher": "dort0306",
   "license": "MIT",
   "icon": "resources/kakera.png",
@@ -229,6 +229,11 @@
       {
         "view": "kakera.project",
         "contents": "[新建游戏工程](command:kakera.project.create)\n[打开已有工程](command:kakera.project.open)\n[打开创作首页](command:kakera.home)"
+      },
+      {
+        "view": "explorer",
+        "when": "workspaceFolderCount == 0",
+        "contents": "Kakera 工程目录含 story.xml（内容根）或 project.kakera-editor.json（工程根）。\n[打开 Kakera 工程目录](command:kakera.project.open)\n它将成为此窗口的工作区文件夹并重新载入，资源管理器列出工程文件，Kakera 侧栏载入人物、剧本、变量与界面；已打开的编辑器会先关闭。"
       }
     ],
     "menus": {
@@ -411,7 +416,7 @@
     "test:integration": "node scripts/integration.mjs",
     "test:host": "node scripts/test-host.mjs",
     "check": "npm run typecheck && npm test && npm run build",
-    "package": "npm run build && node scripts/verify-release.mjs && vsce package --target win32-x64 --no-dependencies --out artifacts/kakera-editor-vscode-0.11.1.vsix",
+    "package": "npm run build && node scripts/verify-release.mjs && vsce package --target win32-x64 --no-dependencies --out artifacts/kakera-editor-vscode-0.11.2.vsix",
     "vscode:prepublish": "npm run build",
     "test:browser": "node scripts/test-graph-browser.mjs"
   },

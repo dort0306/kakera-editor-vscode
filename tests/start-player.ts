@@ -29,6 +29,9 @@ export function addStartOverlay(input: Sources, entry?: string): Sources {
   if (!uiFile) throw new Error('测试工程没有 UI 入口');
   const xml = next.get(uiFile)!, root = parseXml(xml), initial = root.children.find(n => n.tag === 'screen' && n.attrs.id === root.attrs.initial);
   if (!initial) throw new Error('测试初始 UI 页面不存在');
+  // Templates may start on a paused title/menu page: after starting the story, switch to the
+  // first non-paused screen (the HUD) so dialogue controls are reachable.
+  const hud = root.children.find(n => n.tag === 'screen' && n.attrs.modal === 'false' && n.attrs.pause === 'false') ?? initial;
   if (!xml.includes('id="kakera.test.start"')) {
     const button = '<button id="kakera.test.start" x="0" y="0" width="1280" height="720" text="开始" event="kakera.test.start" />';
     next.set(uiFile, xml.slice(0, initial.closeStart) + button + xml.slice(initial.closeStart));
@@ -36,7 +39,7 @@ export function addStartOverlay(input: Sources, entry?: string): Sources {
   const script = story.scripts.find(file => file.endsWith('ui.js')) ?? story.scripts[0];
   if (!script) throw new Error('测试工程没有声明脚本');
   const js = next.get(script) ?? '';
-  if (!js.includes('event.register("kakera.test.start"')) next.set(script, `${js}\nevent.register("kakera.test.start", ctx => { ctx.open(${JSON.stringify(initial.attrs.id)}); ctx.restart(${JSON.stringify(start)}); });\n`);
+  if (!js.includes('event.register("kakera.test.start"')) next.set(script, `${js}\nevent.register("kakera.test.start", ctx => { ctx.open(${JSON.stringify(hud.attrs.id)}); ctx.restart(${JSON.stringify(start)}); });\n`);
   return next;
 }
 

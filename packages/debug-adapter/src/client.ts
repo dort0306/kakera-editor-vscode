@@ -32,7 +32,7 @@ export class DebugClient {
         if (!this.waiter || value.version !== 1 || value.id !== this.waiter.id) throw new Error('调试响应 ID/版本不一致');
         if (!value.ok) throw new Error(`播放器拒绝控制请求：${String(value.error ?? '请刷新状态后检查操作条件')}`);
         const state = value.result as DebugState;
-        if (state.protocol !== 'KakeraEditorDebug' || state.version !== 1 || !['0.8.3', '0.8.4', '0.9.0', '0.9.1', '0.10.0', '0.10.1', '0.11.0', '0.11.1'].includes(state.engine_version) || !Number.isSafeInteger(state.state_revision) || (this.processId !== undefined && state.process_id !== this.processId)) throw new Error('调试协议、引擎、进程或修订不兼容');
+        if (state.protocol !== 'KakeraEditorDebug' || state.version !== 1 || !['0.8.3', '0.8.4', '0.9.0', '0.9.1', '0.10.0', '0.10.1', '0.11.0', '0.11.1', '0.11.2'].includes(state.engine_version) || !Number.isSafeInteger(state.state_revision) || (this.processId !== undefined && state.process_id !== this.processId)) throw new Error('调试协议、引擎、进程或修订不兼容');
         this.processId = state.process_id; this.state = state;
         const waiter = this.waiter; this.waiter = undefined; clearTimeout(waiter.timer); waiter.resolve(state);
       } catch (e) { this.fail(e as Error); socket.destroy(); }

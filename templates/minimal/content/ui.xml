@@ -1,5 +1,39 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<ui schema="3" width="1280" height="720" initial="hud" title="Kakera 故事">
+<!--
+  Kakera 最小模板的 UI 3 入口：标题页、hud、存档、读档、CG 画廊与两个确认弹窗。
+  模板没有任何图片资源，所有控件只用十六进制颜色与已声明的 dialogue 字体；因此这里也不声明
+  gallery 条目（引擎允许 0 条），加入图片素材后再登记 CG 即可。
+-->
+<ui schema="3" width="1280" height="720" initial="title" title="Kakera 故事">
+  <variables>
+    <!-- 手动存档槽共 200 个，每页 10 个，最多 20 页；page-bind 要求 min=1、max 不小于最大页数。 -->
+    <int id="savePage" initial="1" min="1" max="20" />
+    <int id="loadPage" initial="1" min="1" max="20" />
+    <!-- 画廊最多 256 个 CG，每页 6 项，最多 43 页；当前没有 CG 时实际只有第 1 页。 -->
+    <int id="galleryPage" initial="1" min="1" max="43" />
+    <!-- 等待覆盖确认的槽号，与 ctx.save 的 1–200 槽号范围一致。 -->
+    <int id="saveSlot" initial="1" min="1" max="200" />
+    <string id="saveNotice" initial="" />
+    <string id="confirmText" initial="确认覆盖此存档？" />
+    <!-- 读档页标签页：true 为自动存档，false 为手动存档。 -->
+    <bool id="loadAutoTab" initial="true" />
+  </variables>
+
+  <!-- 标题页：非模态根页面，也是 initial；没有自动进入剧情，必须由玩家显式选择。 -->
+  <screen id="title" modal="false" pause="true">
+    <panel id="titleBackground" width="1280" height="720" color="#0B1622" />
+    <panel id="titleCard" x="400" y="90" width="480" height="540" color="#182A3D" radius="16">
+      <label id="titleGame" x="40" y="40" width="400" height="60" text="Kakera 故事" font-size="40" color="#E8C58A" />
+      <label id="titleHint" x="40" y="104" width="400" height="30" text="开始新游戏，或继续已有进度" font-size="18" color="#9FC8E8" />
+      <button id="titleStart" x="50" y="170" width="380" height="56" text="开始新游戏" event="start-game" color="#3C5C7E" font-size="24" />
+      <button id="titleContinue" x="50" y="238" width="380" height="56" text="继续" event="continue-game" font-size="24" />
+      <button id="titleLoad" x="50" y="306" width="380" height="56" text="读档" event="open-load" font-size="24" />
+      <button id="titleGallery" x="50" y="374" width="380" height="56" text="CG 画廊" event="open-gallery" font-size="24" />
+      <button id="titleQuit" x="50" y="442" width="380" height="56" text="退出" event="request-quit" font-size="24" />
+    </panel>
+  </screen>
+
+  <!-- hud：非模态根页面，承载对话、选项与常用入口；背景左键继续剧情。 -->
   <screen id="hud" modal="false" pause="false" background-click="advance">
     <scene id="scene" width="1280" height="720" />
     <panel id="dialogue" x="40" y="500" width="1200" height="180" color="#182A3D">
@@ -11,7 +45,109 @@
     <repeat id="choices" source="choices" x="740" y="180" width="480" height="280" item-width="460" item-height="54" gap="14" visible="game.complete">
       <button id="choice" width="460" height="54" bind="item.text" event="choose" />
     </repeat>
-    <button id="startStory" x="40" y="24" width="180" height="42" text="开始故事" event="restart" />
-    <button id="restart" x="1080" y="24" width="150" height="42" text="重新开始" event="restart" />
+    <panel id="hudBar" x="40" y="20" width="1200" height="56" color="#182A3D" radius="10">
+      <button id="saveBtn" x="16" y="12" width="120" height="34" text="保存" event="open-save" font-size="18" />
+      <button id="loadBtn" x="148" y="12" width="120" height="34" text="读档" event="open-load" font-size="18" />
+      <button id="galleryBtn" x="280" y="12" width="120" height="34" text="画廊" event="open-gallery" font-size="18" />
+      <button id="startStory" x="412" y="12" width="150" height="34" text="开始故事" event="restart" font-size="18" />
+      <button id="backTitle" x="878" y="12" width="140" height="34" text="标题" event="back-title" font-size="18" />
+      <button id="restart" x="1034" y="12" width="150" height="34" text="重新开始" event="restart" font-size="18" />
+    </panel>
+  </screen>
+
+  <!-- 存档页：slots 数据源 + v0.11.2 显式分页（每页 10 个手动槽，共 20 页）。 -->
+  <screen id="save">
+    <panel id="saveShade" width="1280" height="720" color="#000000C0" />
+    <panel id="saveCard" x="110" y="50" width="1060" height="620" color="#182A3D" radius="12">
+      <label id="saveTitle" x="30" y="20" width="300" height="40" text="保存进度" font-size="30" color="#E8C58A" />
+      <button id="saveClose" x="930" y="20" width="100" height="40" text="返回" event="close-page" font-size="19" />
+      <repeat id="saveSlots" x="30" y="76" width="1000" height="470" source="slots" columns="2" item-width="480" item-height="82" gap="10" page-size="10" page-bind="ui.savePage">
+        <panel id="saveSlotCard" width="480" height="82" color="#203449" radius="8">
+          <label id="saveSlotTitle" x="16" y="8" width="240" height="26" bind="item.title" font-size="18" color="#E8C58A" />
+          <label id="saveSlotExcerpt" x="16" y="36" width="320" height="38" bind="item.excerpt" font-size="15" color="#9FC8E8" />
+          <button id="saveSlotButton" x="352" y="24" width="112" height="34" text="存入" event="save-slot" font-size="17" />
+        </panel>
+      </repeat>
+      <label id="savePageText" x="30" y="560" width="320" height="30" bind="repeat.saveSlots.pageText" font-size="17" color="#9FC8E8" />
+      <button id="savePrevPage" x="370" y="556" width="110" height="36" text="上一页" enabled="repeat.saveSlots.canPrev" event="save-prev" font-size="17" />
+      <button id="saveNextPage" x="490" y="556" width="110" height="36" text="下一页" enabled="repeat.saveSlots.canNext" event="save-next" font-size="17" />
+      <label id="saveNotice" x="620" y="560" width="410" height="30" bind="ui.saveNotice" font-size="17" color="#E8C58A" />
+    </panel>
+  </screen>
+
+  <!-- 读档页：自动存档（最近十个，最新在前）与手动存档两个标签页，各自独立数据源。 -->
+  <screen id="load">
+    <panel id="loadShade" width="1280" height="720" color="#000000C0" />
+    <panel id="loadCard" x="110" y="50" width="1060" height="620" color="#182A3D" radius="12">
+      <label id="loadTitle" x="30" y="20" width="300" height="40" text="读取进度" font-size="30" color="#E8C58A" />
+      <button id="loadTabAuto" x="520" y="20" width="160" height="40" text="自动存档" event="load-tab-auto" font-size="19" />
+      <button id="loadTabSlots" x="690" y="20" width="160" height="40" text="手动存档" event="load-tab-slots" font-size="19" />
+      <button id="loadClose" x="930" y="20" width="100" height="40" text="返回" event="close-page" font-size="19" />
+      <panel id="loadAutoPanel" x="30" y="76" width="1000" height="470" color="#101C2C" visible="ui.loadAutoTab">
+        <repeat id="loadAutosaves" x="10" y="10" width="980" height="450" source="autosaves" columns="2" item-width="480" item-height="82" gap="10">
+          <panel id="loadAutoCard" width="480" height="82" color="#203449" radius="8">
+            <label id="loadAutoTitle" x="16" y="8" width="240" height="26" bind="item.title" font-size="18" color="#E8C58A" />
+            <label id="loadAutoExcerpt" x="16" y="36" width="320" height="38" bind="item.excerpt" font-size="15" color="#9FC8E8" />
+            <button id="loadAutoButton" x="352" y="24" width="112" height="34" text="读取" enabled="item.loadable" event="load-auto-slot" font-size="17" />
+          </panel>
+        </repeat>
+      </panel>
+      <panel id="loadSlotPanel" x="30" y="76" width="1000" height="470" color="#101C2C" visible="not:ui.loadAutoTab">
+        <repeat id="loadSlots" x="10" y="10" width="980" height="400" source="slots" columns="2" item-width="480" item-height="72" gap="8" page-size="10" page-bind="ui.loadPage">
+          <panel id="loadSlotCard" width="480" height="72" color="#203449" radius="8">
+            <label id="loadSlotTitle" x="16" y="8" width="240" height="26" bind="item.title" font-size="18" color="#E8C58A" />
+            <label id="loadSlotExcerpt" x="16" y="34" width="320" height="32" bind="item.excerpt" font-size="15" color="#9FC8E8" />
+            <button id="loadSlotButton" x="352" y="19" width="112" height="34" text="读取" enabled="item.loadable" event="load-slot" font-size="17" />
+          </panel>
+        </repeat>
+        <label id="loadPageText" x="10" y="418" width="320" height="30" bind="repeat.loadSlots.pageText" font-size="17" color="#9FC8E8" />
+        <button id="loadPrevPage" x="350" y="414" width="110" height="36" text="上一页" enabled="repeat.loadSlots.canPrev" event="load-prev" font-size="17" />
+        <button id="loadNextPage" x="470" y="414" width="110" height="36" text="下一页" enabled="repeat.loadSlots.canNext" event="load-next" font-size="17" />
+      </panel>
+      <label id="loadHint" x="30" y="560" width="1000" height="30" text="自动存档按最新在前排列；手动存档每页 10 个。" font-size="17" color="#8195A3" />
+    </panel>
+  </screen>
+
+  <!-- CG 画廊：gallery 数据源 + v0.11.2 分页；进度读取 cg.progress。 -->
+  <screen id="gallery">
+    <panel id="galleryShade" width="1280" height="720" color="#000000C0" />
+    <panel id="galleryCard" x="110" y="50" width="1060" height="620" color="#182A3D" radius="12">
+      <label id="galleryTitle" x="30" y="20" width="300" height="40" text="CG 画廊" font-size="30" color="#E8C58A" />
+      <label id="galleryProgress" x="330" y="26" width="300" height="30" bind="cg.progress" font-size="20" color="#9FC8E8" />
+      <button id="galleryClose" x="930" y="20" width="100" height="40" text="返回" event="close-page" font-size="19" />
+      <label id="galleryHint" x="30" y="76" width="1000" height="30" text="在剧情中解锁的 CG 会出现在这里；解锁记录独立保存。" font-size="17" color="#8195A3" />
+      <repeat id="galleryCards" x="30" y="116" width="1000" height="400" source="gallery" columns="3" item-width="320" item-height="190" gap="16" page-size="6" page-bind="ui.galleryPage">
+        <panel id="galleryItem" width="320" height="190" color="#203449" radius="8">
+          <image id="galleryThumb" x="10" y="10" width="300" height="140" image-bind="item.image" fit="contain" visible="item.unlocked" />
+          <label id="galleryLocked" x="90" y="64" width="140" height="30" text="尚未解锁" visible="not:item.unlocked" font-size="20" color="#8195A3" />
+          <label id="galleryItemTitle" x="10" y="158" width="300" height="26" bind="item.title" font-size="17" />
+        </panel>
+      </repeat>
+      <label id="galleryPageText" x="30" y="532" width="320" height="30" bind="repeat.galleryCards.pageText" font-size="17" color="#9FC8E8" />
+      <button id="galleryPrevPage" x="370" y="528" width="110" height="36" text="上一页" enabled="repeat.galleryCards.canPrev" event="gallery-prev" font-size="17" />
+      <button id="galleryNextPage" x="490" y="528" width="110" height="36" text="下一页" enabled="repeat.galleryCards.canNext" event="gallery-next" font-size="17" />
+    </panel>
+  </screen>
+
+  <!-- 覆盖存档前的确认页：正文来自 ui.confirmText，覆盖走 confirm-save 事件。 -->
+  <screen id="confirm-save">
+    <panel id="confirmSaveShade" width="1280" height="720" color="#000000B0" />
+    <panel id="confirmSaveCard" x="390" y="250" width="500" height="220" color="#182A3D" radius="12">
+      <label id="confirmSaveTitle" x="30" y="24" width="440" height="36" text="覆盖存档" font-size="26" color="#E8C58A" />
+      <label id="confirmSaveText" x="30" y="76" width="440" height="60" bind="ui.confirmText" font-size="19" />
+      <button id="confirmSaveYes" x="30" y="152" width="200" height="44" text="覆盖" event="confirm-save" font-size="20" />
+      <button id="confirmSaveNo" x="270" y="152" width="200" height="44" text="取消" event="close-page" font-size="20" />
+    </panel>
+  </screen>
+
+  <!-- 退出前的确认页：ctx.quit() 只允许普通事件回调。 -->
+  <screen id="confirm-quit">
+    <panel id="confirmQuitShade" width="1280" height="720" color="#000000B0" />
+    <panel id="confirmQuitCard" x="390" y="250" width="500" height="220" color="#182A3D" radius="12">
+      <label id="confirmQuitTitle" x="30" y="24" width="440" height="36" text="退出游戏" font-size="26" color="#E8C58A" />
+      <label id="confirmQuitText" x="30" y="76" width="440" height="60" text="确定退出当前游戏？未保存的进度不会保留。" font-size="19" />
+      <button id="confirmQuitYes" x="30" y="152" width="200" height="44" text="退出" event="quit-game" font-size="20" />
+      <button id="confirmQuitNo" x="270" y="152" width="200" height="44" text="取消" event="close-page" font-size="20" />
+    </panel>
   </screen>
 </ui>

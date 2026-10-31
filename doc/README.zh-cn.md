@@ -19,7 +19,7 @@ AI 接口改为用户可配置的通用 Chat Completions 兼容 HTTP API，可�
 | [09 平台方案比较](09-editor-platform-comparison.zh-cn.md) | VS Code 插件、Code-OSS 分叉、独立编辑器优劣和结论 |
 | [10 播放器调试 API](10-player-debug-api.zh-cn.md) | 已实现的认证、请求、命令、状态和限制（协议 v1） |
 | [11 VS Code 插件落地方案](11-vscode-extension-implementation-plan.zh-cn.md) | 本仓库的模块、宿主接入、事务、调试、阶段任务与验收门禁 |
-| [12 实现与验证记录](12-implementation-status.zh-cn.md) | 插件 0.11.1 的实际能力、真实工具/宿主检查与未完成项 |
+| [12 实现与验证记录](12-implementation-status.zh-cn.md) | 插件 0.11.2 的实际能力、真实工具/宿主检查与未完成项 |
 | [18 可视化编辑器使用说明](18-visual-editor-guide.zh-cn.md) | 工作台、UI、事件、幕 ID、设置、试玩与常见问题 |
 | [19 游戏本地化](19-localization.zh-cn.md) | v0.10.1 清单/FTL、文本来源、参数、语言/语音编辑、预览与限制 |
 | [13 JS/XML 实时同步映射](13-live-logic-mapping.zh-cn.md) | 语法树关联、逐幕能力、源码局部补丁和自定义逻辑边界 |
@@ -29,7 +29,7 @@ AI 接口改为用户可配置的通用 Chat Completions 兼容 HTTP API，可�
 
 [16 UI 编辑器](16-ui-editor.zh-cn.md)：上游 UI 拆分扫描、可视布局、属性/绑定/事件和实际验收。
 
-本仓库已实现插件 0.11.1 开发预览版，当前能力与检查见 [12 实现与验证](12-implementation-status.zh-cn.md)，日常操作见 [18 使用说明](18-visual-editor-guide.zh-cn.md)，项目入口见 [根 README](../README.md)，协作约束见 [AGENTS](../AGENTS.md)。下文及原始 01–10 手册保留原始设计状态，部分源码、demo、版本验收与归档链接来自上游引擎工程，未随本仓库提供；不能视作已在本仓库验证的证据。
+本仓库已实现插件 0.11.2 开发预览版，当前能力与检查见 [12 实现与验证](12-implementation-status.zh-cn.md)，日常操作见 [18 使用说明](18-visual-editor-guide.zh-cn.md)，项目入口见 [根 README](../README.md)，协作约束见 [AGENTS](../AGENTS.md)。下文及原始 01–10 手册保留原始设计状态，部分源码、demo、版本验收与归档链接来自上游引擎工程，未随本仓库提供；不能视作已在本仓库验证的证据。
 
 ## 能力状态
 

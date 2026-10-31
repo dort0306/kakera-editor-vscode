@@ -3,6 +3,7 @@
   <interface src="ui.xml" />
   <scripts>
     <script src="scripts/routes.js" />
+    <script src="scripts/components.js" />
     <script src="scripts/ui.js" />
   </scripts>
   <assets>

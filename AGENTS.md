@@ -4,7 +4,7 @@
 
 ## 1. 先确认事实与任务边界
 
-- 当前基线为 Kakera 播放器 v0.11.1：story 8、UI 3、save 9，调试协议 v1，demo content-version=11，JS 注册使用 `frame(id).advance/choice/end`、独立 `event.register(id, callback)` 定义，以及 XML `event` / 单参数 `ui(id).bind(eventId)` 引用。插件已有 0.11.1 开发预览实现；实际能力和未完成项见 [实现记录](doc/12-implementation-status.zh-cn.md)，不要把全部规划当成交付。
+- 当前基线为 Kakera 播放器 v0.11.2：story 8、UI 3、save 9，调试协议 v1，demo content-version=11，JS 注册使用 `frame(id).advance/choice/end`、独立 `event.register(id, callback)` 定义，XML `event` / 单参数 `ui(id).bind(eventId)` 引用，UI 额外支持 `component.register` 组合标签与 repeat 通用分页。插件已有 0.11.2 开发预览实现；实际能力和未完成项见 [实现记录](doc/12-implementation-status.zh-cn.md)，不要把全部规划当成交付。
 - 本文件初次编写时仓库只有文档与许可证，没有插件源码、引擎源码、构建系统或测试。开始任务时重新检查实际文件，不把规划目录和命令当作已经存在。
 - 当前实际检查命令为 `npm run check`、`npm run test:browser`、`npm run test:integration`、`npm run test:host` 和 `npm run package`。浏览器测试需本机 Edge/Chromium；引擎/宿主检查需要已准备的匹配工具/本机 VS Code，详见 README。独立 Rust wrapper 仍未实现，当前通过真实 CLI 复用引擎。
 - 本仓库负责 VS Code 插件及其内容工具适配，不默认承担上游引擎改造、Code-OSS 分叉或独立桌面壳。
@@ -86,7 +86,7 @@
 - 断点停在候选提交前，区分当前幕与 `pending_frame`，包括自循环；`next` 不保证每次跨一幕。
 - 不提供引擎没有的任意 jump、setVariables、eval、条件断点、JS 行级步进或推送事件。变量面板只读。
 - 试玩从入口启动，使用独立 save-dir；只管理自己启动的播放器。既有会话不悄悄替换成新代次。
-- 使用匹配的 `kakera-pack` 及 v0.11.1 依赖选择，额外文件只走 `kakera.package.json` 显式文件清单，保留排除规则。
+- 使用匹配的 `kakera-pack` 及 v0.11.2 依赖选择，额外文件只走 `kakera.package.json` 显式文件清单，保留排除规则。
 - 包和发行候选位于内容根之外，失败保留旧产物；发布前全包检查、许可证/隐私清单检查及源码外运行验证。公开上传需另有任务授权。
 
 ## 8. 验证与交付
@@ -98,7 +98,9 @@
 - AI mock 覆盖协议异常与凭据净化，真实本地/远程服务另验；调试 mock 不替代匹配播放器的断点/回滚/重连验证。
 - 构建验证 VSIX 安装、实际文件白名单、KPAK 全量自检、无源码/AI 服务的独立游戏运行；无工具或授权素材时明确未执行项。
 - 避免给低影响文档改动添加无关测试。实现测试覆盖可观察行为与风险，不只复述实现。
+- 每次只测试与本次改动有关的必要部分，尽量精简单元测试：不新增加固未受影响代码的用例，一个针对性用例能证明的行为不重复堆测；未覆盖的风险在交付说明里明确列出，而不是靠扩测掩盖。
 - 交付说明包含改了什么、实际检查、未验证部分和剩余依赖；能力实现后同步相关文档，不把计划阈值标成实测值。
+- 每次实现新功能或可观察的行为变化（能力、交互、界面增量）都要在交付前打包，并把 `artifacts/kakera-editor-vscode-x.y.z.vsix` 一起交付，不只限于用户点名要打包时；纯文档、注释与测试整理不重新打包。打包放在版本号与 README/CHANGELOG 更新之后，若打包后又改动会进包的文件（README、CHANGELOG、`dist` 资源等）就重新打包一次。版本号与制品规则见下两条。
 - 打包 VSIX 时若用户未指定版本号，默认把当前 `package.json` 的 patch 位 +1（x.y.z → x.y.(z+1)），并同步 `package-lock.json`、`package` 脚本的制品名、README 当前版本与 CHANGELOG；匹配播放器/引擎版本（vX.Y.Z）不随插件 patch 自动变化。制品输出到 `artifacts/kakera-editor-vscode-x.y.z.vsix`，交付时记录实际文件数和 SHA-256。
 - 插件版本号 `x.y.z` 的 `x.y` 部分必须与匹配的上游引擎保持一致：上游引擎升级到 `vX.Y.*` 时，插件同步到 `X.Y`；`z` 只表示同一引擎兼容范围内的插件自身修复或增量。准备工具、工程清单/调试/构建版本检查和文档当前版本都要匹配该 `x.y`。
 
@@ -216,3 +218,13 @@
 - 旧 `on.*`（以及 v0.11.0 的两参数普通 bind）启动、`--check` 与打包都会被拒绝。静态分析遇到旧注册只给迁移诊断并暂停相关可视化改写，不把旧注册猜成新事件，也不自动整文件迁移；作者按上游 API 第 37.2–37.4 节迁移后重新加载。
 - 剧情 `frame()` 注册的静态字符串目标需要加入更新或条件时，只把该参数替换为内联回调，其他语句和注释保持字节；`color-picker` 自动生成的 `ctx.setUi` 事件是新的独立定义，只在该控件 XML 上引用。普通事件列表不包含 `screen.open`/`screen.close`，它们由生命周期编辑负责；`game.enter` 使用固定 `$game` 目标。
 - 工具升级同步 `tools.json` 哈希、工程清单/调试/构建版本检查（0.11.1）、模板/测试新语法与真实 `--check`/KPAK 回归；静态源码测试不能替代匹配播放器的注册装配验证。玩家偏好（`keybindings.json`、`ui-colors.json`、`language.json` 等）仍由匹配播放器维护，编辑器不读写。
+
+## 组合标签与 repeat 分页（引擎 v0.11.2）
+
+- UI 3 新增加载期组合标签：脚本装配阶段只能写 `component.register("x-名字", { props, expand })`；标签名必须 `x-` 前缀的小写 ASCII/数字/单连字符、≤64 字节、最多 128 个且不能覆盖宿主标签。prop 名同样是小写 ASCII/数字/连字符且不能占用 `id/x/y/width/height/visible/enabled`；每个 prop 恰好声明 `required: true` 或类型匹配的 `default`，`min/max` 只用于 int/number，`maxLength` 只用于 string，`binding` 必须声明 `valueType`。
+- `expand` 是同步纯函数：只能返回一个 `{ tag, attrs?, children? }`，根必须是 `panel`/`nine-patch` 且 `attrs.id="$root"`，只能输出宿主标签或已注册组合标签，不能生成 `ui/screen/include/variables/gallery/palette/ui-media`，也不能访问 ctx、会话、玩家偏好、时间、随机、网络或文件。实例 `id` 映射 `$root`，局部 ID 展开为 `实例ID.局部ID`，作者子节点必须按原顺序各插入一次。
+- 编辑器只静态认识可证明的**顶层字面量**注册：动态名、别名、函数内注册、重复注册或打包进对象都只给 `componentUncertain` 诊断并暂停相关改写；未注册的 `x-*` 实例必须报错，不能当宽松解析。设计画布把实例画成虚线占位、不执行 expand；引擎 `--check` 仍是最终语义校验。
+- 内置组件 `x-tabs`/`x-pagination` 的唯一来源是 `packages/source/src/ui-components.ts`（`BUILTIN_COMPONENTS_SOURCE`），新工程模板 `scripts/components.js` 必须与它字节一致（有测试断言）。插入时把注册写入**已声明**脚本（不新建文件）、变量写入入口 `<variables>`、事件用 `event.register` 追加；分页器只接受带 `page-size`/`page-bind` 的 repeat。
+- repeat 通用分页：`page-size`（1–200）与 `page-bind` 必须成对；`page-bind` 引用已声明 UI int、必须 `min="1"`、`max` 不小于实际最大页数，一个页变量只能绑定一个 repeat。只读元数据绑定仅为 `repeat.<完整节点ID>.<字段>`（`page/pages/pageSize/total/start/end/canPrev/canNext/pageText`）；未分页或不存在的 repeat 引用报错。页码、页缓存、滚动与焦点都不入剧情槽或隐藏交接文件。
+- story 8 / UI 3 / save 9 / profile 1 / read 1 / 隐藏槽 1 / KPAK 1、2 与 demo content-version=11 不变；旧播放器拒绝新语法，编辑器不做迁移。`--check` 只校验 XML 引用、分页声明与元数据绑定，不执行普通事件回调，命令名错误要另在源头审查或真实窗口验证。
+- 新工程模板内置 `title/hud/save/load/gallery/confirm-save/confirm-quit` 七个页面、存档/读档/画廊分页与确认弹窗，并通过真实引擎 `--check`。模板“开始新游戏”使用无参 `ctx.restart()`：`kakera.project.create` 会重命名 frame ID 但不改写 `scripts/ui.js`，写死幕名会让新工程开箱即坏；测试起始覆盖也必须在重启后打开非暂停 HUD，而不是停留在暂停的标题页。

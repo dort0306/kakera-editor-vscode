@@ -232,3 +232,12 @@ Windows 播放器为 GUI 子系统。自动化必须等待进程退出并捕获�
 - 装配校验：每个非空 XML/JS 引用必须指向真实页面/按钮/滑条/开关/选色器与已定义事件；只读节点、`route` 按钮、重复绑定、同控件 XML 与 JS 指向不同事件、`$host` 绑定、未知目标都会拒绝。未绑定的 slider/toggle/picker 只更新自身显示，不自动提交业务值。
 - 注册隔离：`frame`/`ui`/`event` 是不可写、不可配置的全局入口，选择器与 `event` 对象冻结；回调执行期间再注册或替换入口失败。选择器可以保存到变量或解构方法而不丢目标，单独的 `frame(id)` 不注册任何内容。静态字符串目标在完整装配后加载期校验存在，函数目标在执行边界校验；所有目标都走同一 Controller 条件/更新/历史事务。错误位置同时给出 JS 调用行与相关 XML 位置。
 - 编辑器规则：只读写上述规范形式；旧 `on.*` 与 v0.11.0 两参数普通 `ui(id).bind(事件, 回调)` 只给迁移诊断（见上游 API 第 37.2–37.4 节），不自动整文件迁移；动态/别名/非顶层/共享回调保持 Opaque。受管路线文件使用 `// Kakera Managed Routes v2` 和 `frame(...)` 生成；UI 事件按独立事件 ID 管理，定义与引用分开，改名只同步可证明的 XML 属性与脚本 bind。工具哈希、工程清单、调试与构建版本检查按 0.11.1 同步，最终装配由真实 `--check`/KPAK 验证。
+
+## 16. v0.11.2 组合标签与 repeat 分页
+
+- 应用版本 0.11.2；story 8 / UI 3 / save 9 / profile 1 / read 1 / 隐藏槽 1 / KPAK 1、2 与 demo content-version=11 不变。`image` 与 `panel` 仅内部归一，作者契约未放宽。
+- 组合标签：脚本装配阶段 `component.register("x-名字", { props, expand })`，标签名 `x-` 前缀小写 ASCII/数字/单连字符、≤64 字节、最多 128 个；prop 名同样小写且不能占用 `id/x/y/width/height/visible/enabled`，每个 prop 恰好 `required: true` 或类型匹配的 `default`，`min/max` 仅 int/number、`maxLength` 仅 string、`binding` 必须带 `valueType`。`expand` 同步返回一个 `{ tag, attrs?, children? }`，根必须是 `panel`/`nine-patch` 且 `attrs.id="$root"`，只能输出宿主标签或已注册组合标签，不能生成根级声明，也不能访问 ctx、会话、时钟、随机、网络或文件。实例 `id` 映射 `$root`，局部 ID 展开为 `实例ID.局部ID`，作者子节点按原顺序各插入一次；注册、事件与绑定允许前向引用。
+- 预算：组件嵌套 8 层、整个 UI 最多 1024 个展开实例、单实例描述 256KiB、累计 1MiB；源/合并 UI 各 1MiB、include 128 文件/16 层、最终节点 1024/深度 8 不变。
+- repeat 分页：`page-size`（1–200）与 `page-bind`（已声明 UI int，`min="1"`，一变量一 repeat）成对出现；只读元数据 `repeat.<完整节点ID>.<字段>` 支持 `page/pages/pageSize/total/start/end/canPrev/canNext/pageText`，JS 侧同名快照为 `ctx.repeats[完整ID]`。换页只重置该 repeat 滚动；页数 `max(1, ceil(total/pageSize))`，空集固定第 1 页且禁用翻页；缩短源时夹取到最后一页并写回候选 UI int。页码/缓存/滚动/焦点不入剧情槽或隐藏交接文件。
+- 工程热更、`--check` 与两种 KPAK 都走同一条展开流水线；包内保留原始组合标签 XML 与脚本，独立重载时重新展开。`--check` 校验声明、变量独占、容量、前向引用与空源，但不执行普通事件回调，也不读玩家存档。
+- 编辑器规则：只静态认识可证明的顶层字面量注册与实例属性，画布不执行 expand、组件实例只允许布局属性补丁；`x-tabs`/`x-pagination` 由编辑器内置并插入到已声明脚本、入口变量与事件中。旧播放器拒绝新语法，编辑器不做迁移。

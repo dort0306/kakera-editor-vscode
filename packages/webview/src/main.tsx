@@ -376,7 +376,7 @@ export function App() {
       {copied.length > 0 && <span className="status-item" title="Ctrl+V 在当前幕之后粘贴副本">已复制 {copied.length} 幕</span>}
       <span className="status-spacer" />
       <span className="status-item">{routeKind === 'end' ? '结束幕' : routeKind === 'choice' ? '选择幕' : routeKind ? '推进幕' : '脚本路线'}</span>
-      <span className="status-item"><Icon name="check" size={13} />Kakera v0.11.1</span>
+      <span className="status-item"><Icon name="check" size={13} />Kakera v0.11.2</span>
     </footer>
 
     <div className={`drawer-scrim ${drawer ? 'open' : ''}`} onClick={() => setDrawer(null)} aria-hidden="true" />

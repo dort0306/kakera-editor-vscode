@@ -1,5 +1,18 @@
 # 更新记录
 
+## 0.11.2 引擎 v0.11.2 同步、内置组合组件、常用页面与工程图标 · 2026-10-31
+
+- 同步 Kakera v0.11.2（story 8 / UI 3 / save 9 不变）：新增脚本装配期的组合标签 `component.register("x-名字", { props, expand })`，以及 repeat 通用分页 `page-size`/`page-bind` 与只读元数据 `repeat.<节点ID>.<字段>`、`ctx.repeats`。编辑器静态读取可证明的顶层字面量注册（标签名与 prop 名都必须小写 ASCII/数字/连字符，prop 恰好 `required: true` 或类型匹配的 `default`），校验实例的必需属性、类型、布局覆盖、实例内 ID（展开为 `实例ID.局部ID`）与分页元数据绑定；动态/别名/函数内注册只给不确定诊断，未注册的 `x-*` 实例报错。设计画布把组合标签画成虚线占位、不执行 expand，引擎 `--check` 仍是最终校验。
+- UI 编辑器新增“插入组件”：内置 `x-tabs`（按同工程其他非模态页面生成按钮、UI bool 高亮变量与切换事件）与 `x-pagination`（绑定带 `page-size`/`page-bind` 的 repeat，用 `ctx.repeats` 更新页码），注册写入已声明脚本、变量写入入口 `<variables>`、事件用 `event.register` 追加，不新建脚本文件；生成的 tabs/分页事件含条件与 `ctx.repeats` 读取，事件列表按源码维护处理（`editable=false`，原文保留）。
+- 新工程模板补齐常用页面：`title`（初始标题页）、`hud`、`save`（200 槽每页 10）、`load`（自动档/手动槽标签页）、`gallery`（CG 画廊与进度）、`confirm-save`/`confirm-quit`，存档/读档/画廊均用 v0.11.2 分页；模板新增 `scripts/components.js` 承载两个内置组合标签注册（与 `BUILTIN_COMPONENTS_SOURCE` 字节一致，有测试断言）。模板“开始新游戏”用无参 `ctx.restart()`，因为创建工程只重命名 frame ID、不改写 `scripts/ui.js`。
+- 工具与版本检查：从相邻 v0.11.2 工作区重新准备 `resources/tools/win32-x64`（播放器 SHA-256 `91a35daa1a08bc920fcfb34194dcea189dea9d399e9d179c8cf366d22a4dbf66`、打包器 `5c1d8551a7227e354ad755bce90ca9fbdf2606e412295a27e7eece30bd300c71`），`tools.json` 为 0.11.2；工程清单默认生成并接受 0.11.2，调试/构建/发行版本检查与 `prepare-tools`/`verify-release` 同步。测试起始覆盖改为在重启后打开非暂停 HUD，避免停留在暂停的标题页。
+- 跟随新的仓库根目录 `kakera.svg`（四块碎块被白色“K”形缝隙分开，仍为圆角方框）重绘工程图标：`resources/kakera.svg` 保持 24×24 单色 alpha 标记（只画四块碎块，圆角外框与缝隙由图形 alpha 给出），继续作为 Activity Bar 图标；`resources/kakera.png` 由同一图形重新渲染（256×256、透明背景，保留原图白色底面与投影），继续作为清单 `icon`。四个品牌色 `#0058E0`/`#008AFF`/`#0060A8`/`#FF6FE3` 与界面主题令牌未改。
+- Webview 内联 `KakeraMark` 换成同一几何，并先绘制原图白色底面再叠四块碎块，使工作台、UI 编辑器与创作首页品牌位的“K”形缝隙与 PNG 一致，不再透出背后界面。分镜/UI 自定义编辑器的标签图标仍由宿主文件图标主题决定（`contributes.customEditors` 没有图标字段）。
+- 没有打开文件夹时，资源管理器的空状态新增 Kakera 说明和“打开 Kakera 工程目录”按钮（`contributes.viewsWelcome` 的 `explorer` 视图条目、`when: workspaceFolderCount == 0`，与 rust-analyzer/Java 的同类条目写法一致）。
+- **Kakera：打开游戏工程** 改为只把所选目录本身当作工程根：需要含 `project.kakera-editor.json`（工程根）或 `story.xml`（内容根），并按 `findRoot` 校验清单契约或内容根；窗口没有工作区文件夹时把该目录作为工作区重新载入，使资源管理器、工作区信任和 Kakera 侧栏都属于该工程，已有工作区时仍只打开该工程的分镜、不替换当前工作区。目录选择对话框的标题与按钮同时改为“打开 Kakera 工程目录”。`tests/package.test.ts` 增加欢迎区条目的视图、条件、链接文字与命令存在的检查。
+- 版本沿用 0.11.2（用户指定，不递增 patch；`x.y` 与上游引擎 v0.11.2 一致），同步 `package-lock.json`、`package` 制品名、README 当前版本、状态栏与 12 说明；删除上一次打包的同版本 VSIX 后重新打包。
+- 验证：`npm run check`（typecheck、138 项测试、构建）、`npm run test:browser`（Edge 156）与 `npm run test:integration`（真实 v0.11.2 工具：模板 `--check` 7 个 UI 页面、UI 编辑器含组合标签/分页的编辑链、生命周期、本地化、条件/i64、KPAK 1/2 与真实播放器 DAP）通过；另用 `--check` 单独验证了“插入 x-tabs + x-pagination 后”的工程可被引擎接受。真实本机 VS Code 1.144.0 开发宿主（隔离 `--user-data-dir`/`--extensions-dir`、无工作区）确认真实本机 VS Code 1.144.0 开发宿主（隔离 `--user-data-dir`/`--extensions-dir`、无工作区）确认空状态显示该说明与按钮、Activity Bar 按主题着色渲染新标记，并在选择工程根后重新载入为工作区、Kakera 侧栏列出人物/美术/音频/剧本/变量/JS/界面。`npm run package` 生成 `artifacts/kakera-editor-vscode-0.11.2.vsix`（42 个文件、21,870,387 字节、SHA-256 `DBE1F8886042F3E63321814607ED1C717183A8E15E258872F880F100688BFA34`）。未执行项与限制见[实现记录](doc/12-implementation-status.zh-cn.md)。
+
 ## 0.11.1 独立事件与可选控件绑定（适配播放器 v0.11.1） · 2026-10-31
 
 - 同步上游 v0.11.1：普通界面回调改为独立定义 `event.register("事件ID", 回调)`，同一 ID 只能定义一次；控件 XML `event`、页面 `background-click`/`background-right-click` 和单参数 `ui("控件或页面").bind("事件ID")` 只做引用。控件事件可省略或为空，未被引用的事件定义合法，多个控件可共享同一事件；两参数普通 `ui(id).bind(事件, 回调)` 与 `$host` 绑定已被播放器删除，`captureShortcut` 结果事件改为普通事件定义。`frame()` 剧情/生命周期、story 8 / UI 3 / save 9 / KPAK 1/2 与 demo content-version=11 不变。

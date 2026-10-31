@@ -3,7 +3,8 @@ import type { Sources } from './index';
 import { appendGroup, newShortId, readStory } from './index';
 import { child, escapeXmlAttribute as escapeXml, parseXml, setAttribute, type XmlNode } from './xml';
 import { uiFragments, type UiFragment } from './ui-files';
-import { UI_ATTRIBUTES, UI_CONTAINERS, UI_KINDS, uiNodes, type UiBinding, type UiDesign, type UiEdit, type UiEvent, type UiEventCommand, type UiGalleryEntry, type UiKind, type UiNode, type UiPaletteSlot, type UiScreen } from '../../domain/src/ui';
+import { UI_ATTRIBUTES, UI_COMPONENT_ATTRIBUTES, UI_CONTAINERS, UI_KINDS, UI_BUILTIN_COMPONENTS, UI_REPEAT_METADATA, uiNodes, type UiBinding, type UiDesign, type UiEdit, type UiEvent, type UiEventCommand, type UiGalleryEntry, type UiKind, type UiNode, type UiNodeKind, type UiPaletteSlot, type UiScreen, type UiComponentProp, type UiBuiltinComponent } from '../../domain/src/ui';
+import { COMPONENT_LAYOUT_ATTRIBUTES, BUILTIN_COMPONENTS_SOURCE, componentList, readComponents } from './ui-components';
 import { readUiMedia, editUiMedia } from './ui-media';
 import { canonicalLocaleId, formatFtlValue } from '../../domain/src/localization';
 import { i64 } from '../../domain/src/index';
@@ -230,6 +231,12 @@ export function readUiDesign(sources: Sources): UiDesign {
   const result: UiDesign = { entry: entry.file, files: fragments.map(f => f.file), width: Number(entry.root.attrs.width ?? 1280), height: Number(entry.root.attrs.height ?? 720), initial: entry.root.attrs.initial, attrs: entry.root.attrs, screens: [], variables: [], palette: [], gallery: [], events: [], bindings: [], warnings: [], localizationUsages: [] };
   if (![result.width, result.height].every(Number.isFinite) || result.width < 640 || result.height < 360 || Math.abs(result.width * 9 - result.height * 16) > .1) throw new Error('UI 画布需要至少 640×360 的 16:9 尺寸');
   const ids = new Set<string>(), screens = new Set<string>(), vars = new Map<string, { type: 'int' | 'bool' | 'string'; initial: string }>(), palette = new Set<string>(), gallery = new Set<string>(); let count = 0, pickers = 0;
+  // v0.11.2 composition tags: registrations come from `component.register` in the declared scripts.
+  const componentInfo = readComponents(sources), componentByName = new Map(componentInfo.components.map(component => [component.name, component]));
+  result.components = componentInfo.components;
+  if (componentInfo.uncertain) result.componentUncertain = true;
+  result.warnings.push(...componentInfo.warnings);
+  const engineIds = new Set<string>(), pageRepeats = new Map<string, string>(), componentEvents: UiBinding[] = [];
   const line = (fragment: UiFragment, node: XmlNode) => fragment.source.slice(0, node.start).split('\n').length;
   const localized = (key: string): string => { if (!catalog?.enabled) return key; try { return formatFtlValue(catalog, undefined, key, {}); } catch { return key; } };
   const validArgumentBind = (path: string): boolean => {
@@ -314,14 +321,60 @@ export function readUiDesign(sources: Sources): UiDesign {
   }
   groups(entry);
   if (result.variables.length > 128 || result.palette.length > 32 || result.gallery.length > 256) throw new Error('UI 变量/配色槽位/CG 超过引擎预算');
-  function nodes(items: XmlNode[], fragment: UiFragment, depth: number, repeat = false): UiNode[] {
+  /** Validates one declared composition-tag property value (engine §38.2 conversion rules). */
+  function componentPropValue(fragment: UiFragment, n: XmlNode, tag: string, key: string, prop: UiComponentProp, value: string): void {
+    function fail(message: string): never { return error(fragment.file, n, `组合标签 ${tag} 的属性 ${key} ${message}`); }
+    if (prop.type === 'bool') { if (!['true', 'false'].includes(value)) fail('必须是 true/false'); return; }
+    if (prop.type === 'int') {
+      let parsed: bigint;
+      try { parsed = BigInt(i64(value)); } catch { fail('必须是 64 位整数'); }
+      if (prop.min !== undefined && parsed < BigInt(i64(prop.min)) || prop.max !== undefined && parsed > BigInt(i64(prop.max))) fail('超出声明范围');
+      return;
+    }
+    if (prop.type === 'number') { if (!Number.isFinite(Number(value)) || !value.trim()) fail('必须是数字'); return; }
+    if (prop.type === 'string') { if (value.length > (prop.maxLength ?? 32768)) fail(`超过长度上限 ${prop.maxLength ?? 32768}`); return; }
+    if (prop.type === 'event') { if (!/^[A-Za-z][A-Za-z0-9_-]*$/.test(value)) fail('必须是事件 ID'); return; }
+    const path = value.startsWith('not:') ? value.slice(4) : value;
+    if (!path) fail('需要绑定路径');
+    if (prop.valueType && path.startsWith('ui.')) {
+      const variable = vars.get(path.slice(3));
+      if (!variable) fail(`引用了未声明的 UI 变量 ${path}`);
+      const ok = variable.type === prop.valueType || prop.valueType === 'number' && variable.type === 'int';
+      if (!ok) fail(`需要 UI ${prop.valueType} 变量`);
+    }
+  }
+  function nodes(items: XmlNode[], fragment: UiFragment, depth: number, repeat = false, scope?: { prefix: string; local: Set<string> }): UiNode[] {
     return items.map(n => {
       if (depth > 8 || ++count > 1024) error(fragment.file, n, '超过 UI 深度 8 / 节点 1024 预算');
-      if (!(UI_KINDS as readonly string[]).includes(n.tag)) error(fragment.file, n, '不是支持的 UI 控件');
-      checkAttrs(fragment.file, n, ['id', ...UI_ATTRIBUTES[n.tag as UiKind]]);
-      if (!n.attrs.id || ids.has(n.attrs.id)) error(fragment.file, n, '控件 ID 为空或全局重复'); ids.add(n.attrs.id);
+      const rawId = n.attrs.id;
+      if (!rawId) error(fragment.file, n, '控件 ID 为空或全局重复');
+      // v0.11.2 composition-tag children keep local IDs (`实例ID.局部ID` after expansion).
+      const fullId = scope ? `${scope.prefix}.${rawId}` : rawId;
+      if (scope) { if (scope.local.has(rawId)) error(fragment.file, n, `组合标签实例内控件 ID 重复：${rawId}`); scope.local.add(rawId); }
+      else { if (ids.has(rawId)) error(fragment.file, n, '控件 ID 为空或全局重复'); ids.add(rawId); }
+      if (engineIds.has(fullId)) error(fragment.file, n, `控件 ID 与组合标签展开后的其他控件冲突：${fullId}`);
+      engineIds.add(fullId);
       if (numeric(fragment.file, n, 'width') <= 0 || numeric(fragment.file, n, 'height') <= 0) error(fragment.file, n, '宽高必须大于零');
       numeric(fragment.file, n, 'x', 0); numeric(fragment.file, n, 'y', 0);
+      if (n.tag.startsWith('x-')) {
+        const component = componentByName.get(n.tag);
+        if (!component) {
+          if (componentInfo.uncertain) result.warnings.push(`${fragment.file}:${line(fragment, n)}：组合标签 ${n.tag} 未在静态分析中注册；播放器会拒绝未知标签`);
+          else error(fragment.file, n, `未注册的组合标签 ${n.tag}；需要 component.register("${n.tag}", …)`);
+        }
+        if (n.text.trim()) error(fragment.file, n, '组合标签不能包含正文');
+        for (const key of Object.keys(n.attrs)) if (key !== 'id' && !COMPONENT_LAYOUT_ATTRIBUTES.includes(key) && !component?.props[key]) error(fragment.file, n, `组合标签 ${n.tag} 不支持属性 ${key}`);
+        if (component) for (const [key, prop] of Object.entries(component.props)) {
+          const value = n.attrs[key];
+          if (value === undefined) { if (prop.required) error(fragment.file, n, `组合标签 ${n.tag} 缺少必需属性 ${key}`); continue; }
+          componentPropValue(fragment, n, n.tag, key, prop, value);
+          if (prop.type === 'event') componentEvents.push({ target: fullId, name: value, kind: 'xml', file: fragment.file, line: line(fragment, n) });
+        }
+        if (n.children.some(childNode => childNode.tag === 'text-arg')) error(fragment.file, n, '组合标签不能包含 text-arg');
+        return { id: rawId, kind: 'component' as UiNodeKind, component: n.tag, attrs: n.attrs, file: fragment.file, line: line(fragment, n), children: nodes(n.children, fragment, depth + 1, repeat, { prefix: fullId, local: new Set() }), ...(scope ? { engineId: fullId } : {}) };
+      }
+      if (!(UI_KINDS as readonly string[]).includes(n.tag)) error(fragment.file, n, '不是支持的 UI 控件');
+      checkAttrs(fragment.file, n, ['id', ...UI_ATTRIBUTES[n.tag as UiKind]]);
       if (n.attrs.color !== undefined) { try { parseColor(n.attrs.color); } catch (e) { error(fragment.file, n, `颜色非法：${e instanceof Error ? e.message : '格式错误'}`); } }
       const textKind = ['label', 'button', 'toggle'].includes(n.tag);
       const argChildren = n.children.filter(childNode => childNode.tag === 'text-arg');
@@ -330,6 +383,21 @@ export function readUiDesign(sources: Sources): UiDesign {
       if (textKind && n.children.length && argChildren.length !== n.children.length) error(fragment.file, n, '文字控件只能包含 text-arg 子节点');
       const localized = textKind ? readLocalizedText(fragment, n) : undefined;
       if (n.tag === 'repeat' && repeat) error(fragment.file, n, '不支持嵌套 repeat');
+      if (n.tag === 'repeat') {
+        // v0.11.2 explicit pagination: page-size and page-bind come together; one variable per repeat.
+        const pageSize = n.attrs['page-size'], pageBind = n.attrs['page-bind'];
+        if ((pageSize === undefined) !== (pageBind === undefined)) error(fragment.file, n, 'page-size 与 page-bind 必须同时出现');
+        if (pageSize !== undefined) {
+          if (!/^[1-9][0-9]*$/.test(pageSize) || Number(pageSize) < 1 || Number(pageSize) > 200) error(fragment.file, n, 'page-size 必须是 1–200 的整数');
+          if (!pageBind!.startsWith('ui.')) error(fragment.file, n, 'page-bind 必须引用已声明的 UI int 变量');
+          const variable = result.variables.find(item => item.id === pageBind!.slice(3));
+          if (!variable || variable.type !== 'int') error(fragment.file, n, 'page-bind 必须引用已声明的 UI int 变量');
+          if (variable.min !== '1') error(fragment.file, n, 'page-bind 变量必须声明 min="1"');
+          const bound = pageRepeats.get(pageBind!);
+          if (bound) error(fragment.file, n, `UI 变量 ${pageBind} 已绑定到分页 repeat ${bound}；一个页变量只能绑定一个 repeat`);
+          pageRepeats.set(pageBind!, rawId);
+        }
+      }
       if (n.tag === 'color-picker') {
         if (repeat) error(fragment.file, n, 'color-picker 不能放在 repeat 中');
         if (++pickers > 8) error(fragment.file, n, 'color-picker 最多 8 个');
@@ -346,7 +414,7 @@ export function readUiDesign(sources: Sources): UiDesign {
         const path = n.attrs['color-bind'], valid = path.startsWith('ui.') ? vars.get(path.slice(3))?.type === 'string' : path.startsWith('colors.') ? palette.has(path.slice(7)) : false;
         if (!valid) error(fragment.file, n, 'color-bind 需要 ui 字符串或已声明的 colors 槽位');
       }
-      return { id: n.attrs.id, kind: n.tag as UiKind, attrs: n.attrs, file: fragment.file, line: line(fragment, n), children: textKind ? [] : nodes(n.children, fragment, depth + 1, repeat || n.tag === 'repeat'), ...(localized ? { localized } : {}) };
+      return { id: rawId, kind: n.tag as UiNodeKind, attrs: n.attrs, file: fragment.file, line: line(fragment, n), children: textKind ? [] : nodes(n.children, fragment, depth + 1, repeat || n.tag === 'repeat', scope), ...(localized ? { localized } : {}), ...(scope ? { engineId: fullId } : {}) };
     });
   }
   function expand(fragment: UiFragment): void {
@@ -375,7 +443,7 @@ export function readUiDesign(sources: Sources): UiDesign {
   result.media = readUiMedia(sources);
   const parsedEvents = uiEvents(sources, result.warnings);
   result.events = parsedEvents.events;
-  result.bindings = [...xmlEventBindings(result), ...parsedEvents.bindings];
+  result.bindings = [...xmlEventBindings(result), ...componentEvents, ...parsedEvents.bindings];
   if (parsedEvents.uncertain) result.eventUncertain = true;
   for (const event of result.events) {
     const targets = [...new Set(result.bindings.filter(binding => binding.kind !== 'legacy' && binding.name === event.name).map(binding => binding.target))];
@@ -404,7 +472,20 @@ export function readUiDesign(sources: Sources): UiDesign {
   if (result.gallery.length > 256) throw new Error('CG 画廊超过 256 项');
   const fail = (event: UiEvent, reason: string) => { event.editable = false; event.reason = reason; };
   const entryRefs = new Set(story.entries ?? [story.entry]);
-  const nodeById = new Map(result.screens.flatMap(screen => uiNodes(screen.children)).map(node => [node.id, node]));
+  const nodeById = new Map(result.screens.flatMap(screen => uiNodes(screen.children)).map(node => [node.engineId ?? node.id, node]));
+  // v0.11.2 read-only `repeat.<节点ID>.<字段>` metadata bindings: only declared paginated repeats,
+  // and only the documented fields (engine §38.3).
+  const paginatedIds = new Set([...nodeById.values()].filter(node => node.kind === 'repeat' && node.attrs['page-size'] !== undefined).map(node => node.engineId ?? node.id));
+  for (const node of nodeById.values()) for (const key of ['bind', 'visible', 'enabled', 'value', 'image-bind', 'region-bind', 'color-bind']) {
+    const raw = node.attrs[key]; if (!raw) continue;
+    const path = raw.startsWith('not:') ? raw.slice(4) : raw;
+    if (!path.startsWith('repeat.')) continue;
+    const rest = path.slice(7), at = rest.lastIndexOf('.');
+    if (at <= 0) throw new Error(`${node.file}:${node.line}：repeat 元数据绑定需要 repeat.<节点ID>.<字段>：${raw}`);
+    const id = rest.slice(0, at), field = rest.slice(at + 1);
+    if (!(UI_REPEAT_METADATA as readonly string[]).includes(field)) throw new Error(`${node.file}:${node.line}：未知的 repeat 元数据字段：${field}`);
+    if (!paginatedIds.has(id)) throw new Error(`${node.file}:${node.line}：repeat 元数据引用了未分页或不存在的 repeat：${id}`);
+  }
   /** v0.11.1: definitions are independent; XML references and single-argument
    * `ui(id).bind(eventId)` attach them, and unused definitions are valid. */
   const definitions = new Map<string, UiEvent>();
@@ -519,9 +600,9 @@ export function readUiDesign(sources: Sources): UiDesign {
 }
 export function locateUi(sources: Sources, id: string, screen = false): { file: string; node: XmlNode } {
   const found: { file: string; node: XmlNode }[] = [];
-  function walk(file: string, n: XmlNode): void { if ((screen ? n.tag === 'screen' : (UI_KINDS as readonly string[]).includes(n.tag)) && n.attrs.id === id) found.push({ file, node: n }); for (const c of n.children) walk(file, c); }
+  function walk(file: string, n: XmlNode): void { if ((screen ? n.tag === 'screen' : (UI_KINDS as readonly string[]).includes(n.tag) || n.tag.startsWith('x-')) && n.attrs.id === id) found.push({ file, node: n }); for (const c of n.children) walk(file, c); }
   for (const f of uiFragments(sources)) walk(f.file, f.root);
-  if (found.length !== 1) throw new Error('UI 目标不存在或 ID 不唯一'); return found[0];
+  if (found.length !== 1) throw new Error(found.length > 1 ? '控件 ID 在组合标签实例内重复；请直接编辑源码' : 'UI 目标不存在或 ID 不唯一'); return found[0];
 }
 function append(source: string, n: XmlNode, markup: string, index?: number): string {
   if (source.slice(n.start, n.openEnd).endsWith('/>')) return source.slice(0, n.openEnd - 2) + `>\n${markup}\n</${n.tag}>` + source.slice(n.end);
@@ -634,13 +715,13 @@ function commandBody(event: CommandShape): string {
 }
 /** Appends a fixed independent event definition to the last declared script. */
 function appendEvent(sources: Sources, design: UiDesign, name: string, body: string, command?: UiEventCommand): void {
-  const file = readStory(sources).scripts.at(-1); if (!file || !sources.has(file)) throw new Error('缺少可追加的已声明脚本');
+  const file = readStory(sources).scripts.filter(script => sources.has(script)).at(-1); if (!file) throw new Error('缺少可追加的已声明脚本');
   sources.set(file, sources.get(file)! + `\nevent.register(${JSON.stringify(name)}, (ctx) => { ${body} });\n`);
   design.events.push({ name, kind: 'event', file, line: sources.get(file)!.split('\n').length, start: 0, end: 0, editable: true, ...(command ? { command } : {}) });
 }
 /** The `game.enter` hook keeps its preserved virtual target form. */
 function appendGameEvent(sources: Sources, design: UiDesign, body: string): void {
-  const file = readStory(sources).scripts.at(-1); if (!file || !sources.has(file)) throw new Error('缺少可追加的已声明脚本');
+  const file = readStory(sources).scripts.filter(script => sources.has(script)).at(-1); if (!file) throw new Error('缺少可追加的已声明脚本');
   sources.set(file, sources.get(file)! + `\nui("$game").bind("game.enter", (ctx) => { ${body} });\n`);
   design.events.push({ name: 'game.enter', kind: 'game', file, line: sources.get(file)!.split('\n').length, start: 0, end: 0, editable: true });
 }
@@ -690,6 +771,77 @@ function attachEventBinding(sources: Sources, design: UiDesign, name: string, ta
   patchAttrs(sources, target, { event: name }, ['event']);
 }
 
+/** Adds an instance of a built-in composition tag (tabs/pagination) with the UI variables and
+ * event definitions it needs. v0.11.2 composition tags cannot create scripts or root groups, so
+ * the registration goes into an already declared script and variables into the entry `<variables>`. */
+function insertComponentEdit(sources: Sources, design: UiDesign, op: Extract<UiEdit, { action: 'insertComponent' }>): { changes: Sources; selected: string; screen: string } {
+  const kind = str(op.component, 32) as UiBuiltinComponent;
+  if (!(UI_BUILTIN_COMPONENTS as readonly string[]).includes(kind)) throw new Error('未知的内置组件');
+  const tag = `x-${kind}`;
+  const screenId = str(op.screen, 128), page = design.screens.find(screen => screen.id === screenId);
+  if (!page) throw new Error('目标页面不存在，请刷新');
+  // 1. Ensure the registration exists; append to a declared script instead of creating a file.
+  let next = design;
+  if (!design.components?.some(component => component.name === tag)) {
+    const scripts = readStory(sources).scripts.filter(file => sources.has(file));
+    const file = scripts.includes('scripts/components.js') ? 'scripts/components.js' : scripts.at(-1);
+    if (!file) throw new Error('工程没有可追加的已声明脚本，无法注册组合标签');
+    const current = sources.get(file)!;
+    sources.set(file, `${current}${current.endsWith('\n') ? '' : '\n'}${BUILTIN_COMPONENTS_SOURCE}`);
+    next = readUiDesign(sources);
+    if (!next.components?.some(component => component.name === tag)) throw new Error(`无法在 ${file} 中确认 ${tag} 的注册，请检查该脚本`);
+    design = next;
+  }
+  const used = new Set<string>([...uiIds(design), ...design.variables.map(variable => variable.id)]), hex = newShortId(used);
+  const uniqueId = (prefix: string) => { const id = `${prefix}${hex}`; if (used.has(id)) throw new Error('组件实例 ID 冲突，请重试'); used.add(id); return id; };
+  const instanceX = 40, instanceY = op.parent ? 24 : 40;
+  const appendInstance = (target: { file: string; node: XmlNode }, markup: string) => { sources.set(target.file, append(sources.get(target.file)!, target.node, markup)); };
+  const markup: string[] = [];
+  let selected = '';
+  if (kind === 'tabs') {
+    const instance = uniqueId('tabs');
+    const pages = design.screens.filter(screen => screen.id !== screenId && screen.attrs.modal !== 'true').slice(0, 3);
+    if (!pages.length) throw new Error('标签页需要至少另一个非模态页面作为目标');
+    const labels: string[] = [], events: string[] = [], states: string[] = [], stateIds: string[] = [], variables: string[] = [];
+    pages.forEach((item, index) => {
+      const state = uniqueId('tab');
+      stateIds.push(state);
+      variables.push(`<bool id="${state}" initial="${index === 0 ? 'true' : 'false'}" />`);
+      labels.push(item.id); events.push(`${instance}-${index + 1}`); states.push(`ui.${state}`);
+    });
+    const xml = sources.get(design.entry)!;
+    const variablesGroup = child(parseXml(xml), 'variables');
+    const variableMarkup = variables.join('');
+    sources.set(design.entry, variablesGroup ? append(xml, variablesGroup, variableMarkup) : append(xml, parseXml(xml), `<variables>${variableMarkup}</variables>`));
+    pages.forEach((item, index) => {
+      const body = [`ctx.open(${JSON.stringify(item.id)});`, ...stateIds.map((state, position) => `ctx.setUi(${JSON.stringify(state)}, ${position === index});`)].join(' ');
+      appendEvent(sources, design, events[index], body);
+    });
+    markup.push(`<${tag} id="${instance}" x="${instanceX}" y="${instanceY}" width="${Math.min(720, pages.length * 148)}" height="50" labels="${escapeXml(labels.join(';'))}" events="${escapeXml(events.join(';'))}" states="${escapeXml(states.join(';'))}" />`);
+    selected = instance;
+  } else {
+    const instance = uniqueId('pager');
+    const repeats = uiNodes(design.screens.flatMap(item => item.children)).filter(node => node.kind === 'repeat' && node.attrs['page-size'] !== undefined && node.attrs['page-bind'] !== undefined);
+    const requested = op.target ? str(op.target, 128) : undefined;
+    const repeat = requested ? repeats.find(node => node.id === requested || node.engineId === requested) : repeats.length === 1 ? repeats[0] : undefined;
+    if (!repeat) throw new Error(requested ? '所选 repeat 不是带 page-size/page-bind 的分页列表' : '请先在目标 repeat 上声明 page-size 与 page-bind，或明确选择要分页的列表');
+    const repeatId = repeat.engineId ?? repeat.id, pageVariable = repeat.attrs['page-bind']!.slice(3);
+    const access = /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(repeatId) ? `ctx.repeats.${repeatId}` : `ctx.repeats[${JSON.stringify(repeatId)}]`;
+    const prevEvent = `${instance}Prev`, nextEvent = `${instance}Next`;
+    appendEvent(sources, design, prevEvent, `const page = ${access}; if (page.canPrev) ctx.setUi(${JSON.stringify(pageVariable)}, page.page - 1);`);
+    appendEvent(sources, design, nextEvent, `const page = ${access}; if (page.canNext) ctx.setUi(${JSON.stringify(pageVariable)}, page.page + 1);`);
+    markup.push(`<${tag} id="${instance}" x="${instanceX}" y="${instanceY}" width="424" height="44" target="${escapeXml(repeatId)}" prev-event="${prevEvent}" next-event="${nextEvent}" />`);
+    selected = instance;
+  }
+  // Resolve the insertion parent after every other edit: node offsets from an earlier parse
+  // would point into shifted source text.
+  const target = op.parent ? locateUi(sources, str(op.parent)) : locateUi(sources, screenId, true);
+  appendInstance(target, markup.join('\n'));
+  const check = readUiDesign(sources);
+  if (!check.components?.some(component => component.name === tag)) throw new Error(`插入后未找到组合标签 ${tag}`);
+  return { changes: sources, selected, screen: screenId };
+}
+
 /** Source range edits only. The matching engine remains the final semantic validator. */
 export function editUi(input: Sources, value: unknown): { changes: Sources; selected?: string; screen?: string } {
   const op = value as UiEdit; if (!op || typeof op !== 'object' || typeof op.action !== 'string') throw new Error('UI 操作无效');
@@ -715,7 +867,12 @@ export function editUi(input: Sources, value: unknown): { changes: Sources; sele
         if (keyBind && (!keyBind.startsWith('ui.') || !design.variables.some(variable => variable.id === keyBind.slice(3) && variable.type === 'string'))) throw new Error('text-key-bind 必须引用已声明的 UI string');
       }
     }
-    patchAttrs(sources, op.id, patch, UI_ATTRIBUTES[at.node.tag as UiKind]); selected = op.id;
+    patchAttrs(sources, op.id, patch, UI_ATTRIBUTES[at.node.tag as UiKind] ?? [...UI_COMPONENT_ATTRIBUTES]); selected = op.id;
+  }
+  else if (op.action === 'insertComponent') {
+    const result = insertComponentEdit(sources, design, op);
+    for (const [file, text] of result.changes) sources.set(file, text);
+    selected = result.selected; screen = result.screen;
   }
   else if (op.action === 'textArgs') {
     const at = locateUi(sources, str(op.id));
@@ -860,7 +1017,7 @@ export function editUi(input: Sources, value: unknown): { changes: Sources; sele
     if (!Number.isInteger(op.index) || op.index < 0 || op.index > 1024) throw new Error('控件顺序无效');
     const markup = sources.get(at.file)!.slice(at.node.start, at.node.end); sources.set(at.file, sources.get(at.file)!.slice(0, at.node.start) + sources.get(at.file)!.slice(at.node.end));
     const target = op.parent ? locateUi(sources, str(op.parent)) : locateUi(sources, page.id, true);
-    if (op.parent && !UI_CONTAINERS.includes(target.node.tag)) throw new Error('目标不是容器');
+    if (op.parent && !UI_CONTAINERS.includes(target.node.tag) && !target.node.tag.startsWith('x-')) throw new Error('目标不是容器');
     sources.set(target.file, append(sources.get(target.file)!, target.node, markup, op.index)); selected = op.id; screen = page.id;
   } else if (op.action === 'palette') {
     const id = str(op.id, 64), initial = normalizeColor(str(op.initial, 64));
@@ -932,7 +1089,7 @@ export function editUi(input: Sources, value: unknown): { changes: Sources; sele
     const id = str(op.id, 128), variable = design.variables.find(v => v.id === id);
     if (!variable) throw new Error('UI 变量不存在，请刷新');
     const references: string[] = [];
-    const bindingKeys = ['bind', 'value', 'visible', 'enabled', 'image-bind', 'region-bind', 'color-bind', 'text-key-bind'];
+    const bindingKeys = ['bind', 'value', 'visible', 'enabled', 'image-bind', 'region-bind', 'color-bind', 'text-key-bind', 'page-bind'];
     for (const page of design.screens) for (const node of uiNodes(page.children)) {
       for (const key of bindingKeys) if (bindingVariable(node.attrs[key]) === id) references.push(`${node.file}:${node.line} 控件 ${node.id} ${key}`);
       for (const arg of node.localized?.args ?? []) if (bindingVariable(arg.bind) === id) references.push(`${node.file}:${node.line} 控件 ${node.id} text-arg ${arg.name}`);

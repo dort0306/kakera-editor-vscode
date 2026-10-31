@@ -2,6 +2,8 @@ import type { Variable } from './index';
 import type { NinePatchSpec } from './textures';
 export const UI_KINDS = ['scene', 'panel', 'image', 'nine-patch', 'label', 'button', 'slider', 'toggle', 'repeat', 'color-picker'] as const;
 export type UiKind = typeof UI_KINDS[number];
+/** Host control kinds plus instances of a JS composition tag (`component.register("x-…")`). */
+export type UiNodeKind = UiKind | 'component';
 export const UI_CONTAINERS: readonly string[] = ['panel', 'nine-patch', 'repeat'];
 const common = ['x', 'y', 'width', 'height', 'color', 'visible', 'enabled'];
 export const UI_ATTRIBUTES: Record<UiKind, string[]> = {
@@ -13,13 +15,36 @@ export const UI_ATTRIBUTES: Record<UiKind, string[]> = {
   button: [...common, 'text', 'bind', 'text-key', 'text-key-bind', 'font-size', 'event', 'route', 'sound', 'image', 'hover-image', 'disabled-image', 'region', 'region-bind', 'radius', 'color-bind'],
   slider: [...common, 'value', 'min', 'max', 'event'],
   toggle: [...common, 'text', 'text-key', 'text-key-bind', 'value', 'event', 'font-size', 'color-bind'],
-  repeat: [...common, 'source', 'columns', 'item-width', 'item-height', 'gap'],
+  repeat: [...common, 'source', 'columns', 'item-width', 'item-height', 'gap', 'page-size', 'page-bind'],
   'color-picker': ['x', 'y', 'width', 'height', 'visible', 'enabled', 'value', 'event', 'alpha']
 };
+/** v0.11.2 composition tags keep their instance layout attributes reserved (engine §38.2). */
+export const UI_COMPONENT_ATTRIBUTES: readonly string[] = ['x', 'y', 'width', 'height', 'visible', 'enabled'];
+/** Read-only `repeat.<节点ID>.<字段>` metadata bindings added in v0.11.2. */
+export const UI_REPEAT_METADATA = ['page', 'pages', 'pageSize', 'total', 'start', 'end', 'canPrev', 'canNext', 'pageText'] as const;
+export type UiComponentPropType = 'string' | 'bool' | 'int' | 'number' | 'binding' | 'event';
+export interface UiComponentProp {
+  type: UiComponentPropType;
+  required: boolean;
+  default?: string;
+  valueType?: 'bool' | 'int' | 'number' | 'string';
+  min?: string;
+  max?: string;
+  maxLength?: number;
+}
+/** One `component.register("x-…", { props, expand })` definition found in the declared scripts. */
+export interface UiComponent { name: string; props: Record<string, UiComponentProp>; file: string; line: number }
+/** Components the editor can insert without the author writing the registration first. */
+export const UI_BUILTIN_COMPONENTS = ['tabs', 'pagination'] as const;
+export type UiBuiltinComponent = typeof UI_BUILTIN_COMPONENTS[number];
 export interface UiLocation { file: string; line: number }
 export interface UiTextArg { name: string; value?: string; bind?: string }
 export interface UiLocalizedText { /** Static message key (text-key / title-key). */ key?: string; /** Dynamic key held by a UI string variable (text-key-bind). */ keyBound?: boolean; args: UiTextArg[] }
-export interface UiNode extends UiLocation { id: string; kind: UiKind; attrs: Record<string, string>; children: UiNode[]; localized?: UiLocalizedText }
+export interface UiNode extends UiLocation { id: string; kind: UiNodeKind; attrs: Record<string, string>; children: UiNode[]; localized?: UiLocalizedText;
+  /** Composition tag name for `kind === 'component'` instances (`x-tabs`, `x-pagination`, …). */
+  component?: string;
+  /** v0.11.2 expanded id. Only different from `id` for nodes inside a composition tag instance. */
+  engineId?: string }
 export interface UiScreen extends UiLocation { id: string; attrs: Record<string, string>; children: UiNode[] }
 export interface UiVariable extends Variable, UiLocation {}
 export interface UiPaletteSlot extends UiLocation { id: string; initial: string }
@@ -83,6 +108,10 @@ export interface UiDesign {
   media?: UiMediaItem[];
   entry: string; files: string[]; width: number; height: number; initial: string; attrs: Record<string, string>;
   screens: UiScreen[]; variables: UiVariable[]; palette: UiPaletteSlot[]; gallery: UiGalleryEntry[]; events: UiEvent[]; bindings: UiBinding[]; warnings: string[];
+  /** v0.11.2 composition tags registered through `component.register` in the declared scripts. */
+  components?: UiComponent[];
+  /** Some `component.register` call was dynamic or malformed; component instances cannot be verified. */
+  componentUncertain?: boolean;
   /** Some event registration/binding was dynamic or removed syntax; event coverage cannot be proven. */
   eventUncertain?: boolean;
   /** Static text-key/title-key targets for the matching-engine coverage checks. */
@@ -98,6 +127,7 @@ export type UiEdit =
   | { action: 'patchNode'; id: string; patch: Record<string, string> }
   | { action: 'textArgs'; id: string; args: UiTextArg[] }
   | { action: 'addNode'; screen: string; parent?: string; kind: UiKind; image?: string; /** existing event.register ID referenced by the new control's XML event. */ event?: string; value?: string; alpha?: string; colorBind?: string }
+  | { action: 'insertComponent'; screen: string; parent?: string; component: UiBuiltinComponent; /** pagination only: the repeat (raw or expanded ID) whose page metadata drives the pager. */ target?: string }
   | { action: 'duplicateNode' | 'deleteNode'; id: string }
   | { action: 'moveNode'; id: string; parent?: string; screen: string; index: number }
   | { action: 'patchScreen'; id: string; patch: Record<string, string> }

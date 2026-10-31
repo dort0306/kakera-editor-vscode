@@ -544,10 +544,19 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     panel.webview.onDidReceiveMessage(m => { if (m?.type === 'command' && allowed.includes(m.command)) void vscode.commands.executeCommand(m.command); });
   });
   command('kakera.project.open', async () => {
-    const selected = await vscode.window.showOpenDialog({ canSelectFolders: true, canSelectFiles: false, openLabel: '打开游戏工程' }); if (!selected?.[0]) return;
+    const selected = await vscode.window.showOpenDialog({ canSelectFolders: true, canSelectFiles: false, openLabel: '打开 Kakera 工程目录', title: '选择含 project.kakera-editor.json 或 story.xml 的 Kakera 工程目录' });
+    if (!selected?.[0]) return;
+    // Only the chosen directory itself counts as the project root: never adopt a parent project by
+    // ascending, because that directory becomes the workspace folder in an empty window.
     const dir = selected[0].fsPath;
-    let file = path.join(dir, 'story.xml');
-    try { await fs.access(path.join(dir, 'project.kakera-editor.json')); file = path.join(dir, 'project.kakera-editor.json'); } catch { /* plain root */ }
+    const exists = (name: string) => fs.access(path.join(dir, name)).then(() => true, () => false);
+    const manifest = await exists('project.kakera-editor.json'), story = await exists('story.xml');
+    if (!manifest && !story) throw new Error('所选目录不是 Kakera 工程根：需要 project.kakera-editor.json 或 story.xml');
+    const file = path.join(dir, manifest ? 'project.kakera-editor.json' : 'story.xml');
+    await findRoot(vscode.Uri.file(file)); // Validates the manifest contract or the content root before any reload.
+    // Without a workspace folder the Explorer stays empty and the project files/trust are not part
+    // of the window, so the Explorer welcome entry opens the directory as this window's folder.
+    if (!vscode.workspace.workspaceFolders?.length) { await vscode.commands.executeCommand('vscode.openFolder', vscode.Uri.file(dir)); return; }
     const session = await sessionFor(vscode.Uri.file(file)); await vscode.commands.executeCommand('vscode.openWith', vscode.Uri.file(path.join(session.root, 'story.xml')), 'kakera.storyboard');
   });
   command('kakera.storyboard.open', async (arg?: unknown) => {
@@ -610,7 +619,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         { frame: ids.get('ending')!, kind: 'end', updates: [] }
       ];
       await fs.writeFile(path.join(target, 'content/scripts/routes.js'), emitRoutes(routes));
-      await fs.writeFile(path.join(target, 'project.kakera-editor.json'), JSON.stringify({ editorSchema: 1, engineContract: '0.11.1', contentRoot: 'content' }, null, 2) + '\n');
+      await fs.writeFile(path.join(target, 'project.kakera-editor.json'), JSON.stringify({ editorSchema: 1, engineContract: '0.11.2', contentRoot: 'content' }, null, 2) + '\n');
       await fs.writeFile(path.join(target, '.gitignore'), '.editor/\n.cache/\n.work/\nbuilds/\n');
       await fs.mkdir(path.join(target, 'authoring'));
       const session = await sessionFor(vscode.Uri.file(path.join(target, 'project.kakera-editor.json')));
@@ -756,7 +765,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       await fs.mkdir(candidate);
       try {
         await session.check(frozen, signal); await frozen.assertCurrent();
-        if (await vscode.window.showInformationMessage(`将以 v0.11.1 依赖选择构建 ${loaded.story.id}。全部声明资源及 licenses、assets/licenses 中的许可证会入包；额外文件仅按 kakera.package.json。请确认授权与附加清单，动态路线需自行试玩覆盖。`, { modal: true }, '生成本地发行目录') !== '生成本地发行目录') return;
+        if (await vscode.window.showInformationMessage(`将以 v0.11.2 依赖选择构建 ${loaded.story.id}。全部声明资源及 licenses、assets/licenses 中的许可证会入包；额外文件仅按 kakera.package.json。请确认授权与附加清单，动态路线需自行试玩覆盖。`, { modal: true }, '生成本地发行目录') !== '生成本地发行目录') return;
         const pack = path.join(candidate, 'game.kpak');
         const hasModels = loaded.story.assets.some(a => a.kind === 'live2d');
         if (hasModels && await waitReview(vscode.window.showWarningMessage('当前构建会生成 Live2D 静态回退版，不复制 Cubism Core；请通过“开始游戏.cmd”运行。', '构建静态回退版', '取消'), signal) !== '构建静态回退版') return;

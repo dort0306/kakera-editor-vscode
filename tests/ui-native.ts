@@ -17,7 +17,12 @@ async function pathsV1(file: string): Promise<{ path: string }[]> {
 }
 export async function verifyUiEditor(tools: { player: string; packer: string }, root: string, original: string): Promise<void> {
   const content = path.join(root, 'ui-editor-content'); await fs.cp(original, content, { recursive: true });
-  const sources: Sources = new Map(); for (const file of ['story.xml', 'ui.xml', 'scripts/ui.js', 'scripts/routes.js']) sources.set(file, await fs.readFile(path.join(content, file), 'utf8'));
+  const sources: Sources = new Map();
+  // Read every declared script (the template ships scripts/components.js with the v0.11.2
+  // composition tags) so appended events land in a loaded file.
+  const declaredStory = await fs.readFile(path.join(content, 'story.xml'), 'utf8');
+  sources.set('story.xml', declaredStory);
+  for (const file of ['ui.xml', 'scripts/routes.js', ...readStory(new Map([['story.xml', declaredStory]])).scripts]) sources.set(file, await fs.readFile(path.join(content, file), 'utf8'));
   let next = splitUiFixture(sources);
   next = new Map([...next, ...patchGameTitle(next, 'UI 编辑器真实校验')]);
   const apply = (operation: unknown) => { const result = editUi(next, operation); next = new Map([...next, ...result.changes]); return result; };

@@ -22,3 +22,16 @@ test('原生工程侧栏按人物/美术/剧本/变量/JS 分类，并贡献新�
   assert.equal(pkg.scripts.package.includes(`-${pkg.version}.vsix`), true);
   assert.ok(pkg.contributes.menus['view/title'].some((menu: { command: string }) => menu.command === 'kakera.tree.refresh'));
 });
+test('没有打开文件夹时，资源管理器欢迎区提供“打开 Kakera 工程目录”按钮', () => {
+  const welcome = pkg.contributes.viewsWelcome as { view: string; when?: string; contents: string }[];
+  const explorer = welcome.find(item => item.view === 'explorer');
+  assert.ok(explorer, '缺少资源管理器欢迎内容');
+  assert.equal(explorer.when, 'workspaceFolderCount == 0');
+  const links = [...explorer.contents.matchAll(/\[([^\]]+)\]\(command:([^)]+)\)/g)].map(match => ({ label: match[1], command: match[2] }));
+  assert.deepEqual(links.map(link => link.label), ['打开 Kakera 工程目录']);
+  const commands = new Set<string>(pkg.contributes.commands.map((command: { command: string }) => command.command));
+  for (const link of links) assert.ok(commands.has(link.command), link.command);
+  // A welcome entry without explanatory text would not tell authors which directory to pick.
+  assert.match(explorer.contents, /story\.xml/);
+  assert.match(explorer.contents, /工作区/);
+});

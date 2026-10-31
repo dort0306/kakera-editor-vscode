@@ -56,18 +56,21 @@ export function Icon({ name, size = 16, className = '' }: { name: IconName; size
 
 /**
  * Project mark, taken from the repository artwork `kakera.svg` (four shards inside a rounded
- * square). Rendered inline so it stays crisp at every size and needs no extra webview request.
- * Brand colors are fixed: they identify the project in both light and dark themes.
+ * square, separated by the white "K" cracks). Rendered inline so it stays crisp at every size
+ * and needs no extra webview request. Brand colors are fixed: they identify the project in both
+ * light and dark themes. The white base keeps the crack shape of the artwork instead of letting
+ * the surrounding surface show through, so the mark matches `resources/kakera.png`.
  */
 export function KakeraMark({ size = 30, className = '', label = 'Kakera' }: { size?: number; className?: string; label?: string }) {
   const clip = `kakera-mark-${React.useId().replace(/[^a-zA-Z0-9_-]/g, '')}`;
   return <svg className={`kakera-mark ${className}`} width={size} height={size} viewBox="0 0 135.46664 135.46664" role="img" aria-label={label} focusable="false">
     <defs><clipPath id={clip}><rect width="135.46664" height="135.46664" rx="16.933331" ry="16.933331" /></clipPath></defs>
     <g clipPath={`url(#${clip})`}>
-      <path fill="var(--k-mark-deep, #0058e0)" d="M -10.5654,143.4671 L -9.2679,-6.6729 L 18.155,-6.1682 L 60.5112,144.2955 Z" />
-      <path fill="var(--k-mark-azure, #008aff)" d="M 28.8681,-7.1023 L 106.2102,-10.5654 L 98.8474,0.4547 L 49.9675,67.8499 Z" />
-      <path fill="var(--k-mark-pink, #ff6fe3)" d="M 142.7257,-10.1947 L 152.7148,108.5643 L 66.6697,62.8167 L 121.485,-12.7623 Z M 102.8692,-5.0905 L 108.9905,-14.2726 L 109.4853,-14.2128 Z" />
-      <path fill="var(--k-mark-steel, #0060a8)" d="M 148.8813,118.492 L 147.9157,154.2179 L 76.4258,161.8387 L 53.6169,80.8138 L 60.4064,71.4525 Z M 76.4258,161.8387 L 74.8847,162.0029 L 71.3159,150.6387 L 73.1292,150.1282 Z" />
+      <rect width="135.46664" height="135.46664" fill="#ffffff" />
+      <path fill="var(--k-mark-deep, #0058e0)" d="M -9.2676502,-6.6729769 L -10.565245,143.46719 L 56.729347,144.25113 L 10.816909,-6.3034904 Z" />
+      <path fill="var(--k-mark-azure, #008aff)" d="M 95.444292,-10.083104 L 30.577975,-7.1788891 L 48.613564,51.962713 Z" />
+      <path fill="var(--k-mark-pink, #ff6fe3)" d="M 121.46957,-12.764077 L 72.49014,52.127561 L 152.1664,102.04699 L 142.72564,-10.194725 Z" />
+      <path fill="var(--k-mark-steel, #0060a8)" d="M 60.905319,67.476493 L 55.520118,74.610941 L 77.572516,146.92331 L 70.800321,148.99657 L 74.884826,162.00301 L 147.9155,154.21796 L 148.7723,122.52739 Z" />
     </g>
   </svg>;
 }

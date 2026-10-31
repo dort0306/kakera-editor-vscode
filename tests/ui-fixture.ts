@@ -4,7 +4,9 @@ import { parseXml, setAttribute } from '../packages/source/src/xml';
 export function splitUiFixture(input: Sources): Sources {
   const sources = new Map(input), file = 'ui.xml', source = sources.get(file)!;
   const root = parseXml(source), screens = root.children.filter(n => n.tag === 'screen').map(n => source.slice(n.start, n.end)).join('\n');
-  let entry = source.slice(0, root.openEnd) + '\n  <include src="ui/state.xml"/>\n  <include src="ui/pages.xml"/>\n' + source.slice(root.closeStart);
+  // Root-level declarations (variables/palette/gallery) stay in the entry file; only screens move.
+  const groups = root.children.filter(n => n.tag !== 'screen' && n.tag !== 'include').map(n => source.slice(n.start, n.end)).join('\n');
+  let entry = source.slice(0, root.openEnd) + '\n  <include src="ui/state.xml"/>\n  <include src="ui/pages.xml"/>\n' + (groups ? groups + '\n' : '') + source.slice(root.closeStart);
   entry = setAttribute(entry, parseXml(entry), 'title', ''); entry = setAttribute(entry, parseXml(entry), 'title-bind', 'ui.windowTitle');
   sources.set(file, entry);
   sources.set('ui/state.xml', '<ui schema="3"><variables><string id="windowTitle" initial="拆分界面"/><bool id="show" initial="true"/></variables></ui>');
