@@ -36,7 +36,7 @@ export function addStartOverlay(input: Sources, entry?: string): Sources {
   const script = story.scripts.find(file => file.endsWith('ui.js')) ?? story.scripts[0];
   if (!script) throw new Error('测试工程没有声明脚本');
   const js = next.get(script) ?? '';
-  if (!js.includes('ui("kakera.test.start").bind')) next.set(script, `${js}\nui("kakera.test.start").bind("kakera.test.start", ctx => { ctx.open(${JSON.stringify(initial.attrs.id)}); ctx.restart(${JSON.stringify(start)}); });\n`);
+  if (!js.includes('event.register("kakera.test.start"')) next.set(script, `${js}\nevent.register("kakera.test.start", ctx => { ctx.open(${JSON.stringify(initial.attrs.id)}); ctx.restart(${JSON.stringify(start)}); });\n`);
   return next;
 }
 

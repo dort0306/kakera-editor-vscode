@@ -172,7 +172,7 @@ try {
   await setValue('[aria-label="UI 表单 target"]', 'a', 'change');
   await setValue('[aria-label="UI 表单 page"]', 'help', 'change');
   await evaluate("[...document.querySelectorAll('button')].find(b => b.textContent === '保存设置')?.click()"); await flush();
-  assert.deepEqual(await evaluate('uiTest.operations.at(-1)'), { action: 'event', name: 'browser.start', command: 'resume', target: 'hud', targetValue: 'a', page: 'help' });
+  assert.deepEqual(await evaluate('uiTest.operations.at(-1)'), { action: 'event', name: 'browser.start', command: 'resume', targetValue: 'a', page: 'help' });
   console.log('BROWSER LIFECYCLE PASS: native page-close action/target selection and save request; explicit start frame plus pre-open page form save.');
   console.log('BROWSER UI PASS: native control selection, zoomed parent-relative drag, resize, Escape, stale/readonly drag cancellation, click jitter and read-only selection. Screenshot:', path.join(directory, 'ui-editor.png'));
 

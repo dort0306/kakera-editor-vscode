@@ -6,16 +6,16 @@ import { previewUi } from '../packages/domain/src/ui-preview';
 import { uiNodes } from '../packages/domain/src/ui';
 
 const script = [
-  'ui("advance").bind("advance", (ctx) => { ctx.advance(); });',
-  'ui("backgroundPicker").bind("color-bg", (ctx) => { ctx.setUi("bgDraft", ctx.value); });',
-  'ui("textPicker").bind("color-bg", (ctx) => { ctx.setUi("textDraft", ctx.value); });',
-  'ui("$host").bind("shortcut-captured", (ctx) => { ctx.setUi("shortcutDraft", ctx.value); });'
+  'event.register("advance", (ctx) => { ctx.advance(); });',
+  'event.register("color-bg", (ctx) => { ctx.setUi("bgDraft", ctx.value); });',
+  'event.register("color-text", (ctx) => { ctx.setUi("textDraft", ctx.value); });',
+  'event.register("shortcut-captured", (ctx) => { ctx.setUi("shortcutDraft", ctx.value); });'
 ].join('\n');
 
 function fixture(): Sources {
   return new Map([
     ['story.xml', '<story schema="8" id="s" content-version="1" entry="a"><interface src="ui.xml"/><scripts><script src="ui.js"/></scripts><frames><frame id="a"><text>台词</text></frame></frames><next end="true"/></story>'],
-    ['ui.xml', `<ui schema="3" width="1280" height="720" initial="hud"><variables><string id="bgDraft" initial="#10253BFF"/><string id="textDraft" initial="#F4EAD8FF"/><string id="shortcutDraft" initial=""/></variables><palette><color id="dialogue_background" initial="#10253BFF"/><color id="dialogue_text" initial="#F4EAD8FF"/></palette><screen id="hud" modal="false" pause="false"><panel id="panel" x="20" y="20" width="300" height="120" color-bind="colors.dialogue_background"/><color-picker id="backgroundPicker" x="40" y="160" width="256" height="320" value="ui.bgDraft" event="color-bg" alpha="true"/><color-picker id="textPicker" x="330" y="160" width="256" height="320" value="ui.textDraft" event="color-bg" alpha="false"/><button id="capture" x="40" y="500" width="200" height="40" text="更改" event="advance"/></screen></ui>`],
+    ['ui.xml', `<ui schema="3" width="1280" height="720" initial="hud"><variables><string id="bgDraft" initial="#10253BFF"/><string id="textDraft" initial="#F4EAD8FF"/><string id="shortcutDraft" initial=""/></variables><palette><color id="dialogue_background" initial="#10253BFF"/><color id="dialogue_text" initial="#F4EAD8FF"/></palette><screen id="hud" modal="false" pause="false"><panel id="panel" x="20" y="20" width="300" height="120" color-bind="colors.dialogue_background"/><color-picker id="backgroundPicker" x="40" y="160" width="256" height="320" value="ui.bgDraft" event="color-bg" alpha="true"/><color-picker id="textPicker" x="330" y="160" width="256" height="320" value="ui.textDraft" event="color-text" alpha="false"/><button id="capture" x="40" y="500" width="200" height="40" text="更改" event="advance"/></screen></ui>`],
     ['ui.js', script]
   ]);
 }
@@ -43,7 +43,7 @@ test('palette、color-picker、color-bind 的源码事务和严格校验', () =>
   assert.throws(() => editUi(sources, { action: 'palette', original: 'accent', file: 'ui.xml', id: 'renamed', initial: '#00FF00FF' }), /创建后固定/);
   assert.throws(() => editUi(sources, { action: 'palette', file: 'ui.xml', id: 'bad-id', initial: '#00FF00FF' }), /\[a-z\]/);
   assert.throws(() => editUi(sources, { action: 'palette', file: 'ui.xml', id: 'accent', initial: '#GG0000' }), /颜色/);
-  const node = editUi(sources, { action: 'addNode', screen: 'hud', kind: 'color-picker', value: 'ui.bgDraft', event: 'color-bg', eventTarget: 'backgroundPicker', alpha: 'false' }); sources = new Map([...sources, ...node.changes]);
+  const node = editUi(sources, { action: 'addNode', screen: 'hud', kind: 'color-picker', value: 'ui.bgDraft', event: 'color-bg', alpha: 'false' }); sources = new Map([...sources, ...node.changes]);
   const picker = readUiDesign(sources).screens[0].children.find(item => item.id === node.selected)!;
   assert.equal(picker.kind, 'color-picker'); assert.equal(picker.attrs.alpha, 'false');
   assert.deepEqual([picker.attrs.width, picker.attrs.height], ['256', '256']);
@@ -70,7 +70,7 @@ test('palette、color-picker、color-bind 的源码事务和严格校验', () =>
 
 test('快捷键、颜色覆盖与退出事件生成固定回调；非法动作/保留组合拒绝', () => {
   let sources = fixture();
-  const add = (name: string, command: string, extra: Record<string, string>) => { const result = editUi(sources, { action: 'event', name, command: command as any, target: 'backgroundPicker', ...extra }); sources = new Map([...sources, ...result.changes]); };
+  const add = (name: string, command: string, extra: Record<string, string>) => { const result = editUi(sources, { action: 'event', name, command: command as any, ...extra }); sources = new Map([...sources, ...result.changes]); };
   add('shortcut-capture-advance', 'captureShortcut', { actionValue: 'advance', resultEvent: 'shortcut-captured' });
   assert.ok(sources.get('ui.js')!.includes('ctx.captureShortcut("advance", "shortcut-captured");'));
   add('shortcut-set', 'keybinding', { actionValue: 'advance', binding: 'enter' });
@@ -96,23 +96,23 @@ test('快捷键、颜色覆盖与退出事件生成固定回调；非法动作/�
   assert.equal(design.events.find(event => event.name === 'color-draft')!.color, undefined);
   assert.equal(design.events.find(event => event.name === 'quit-game')!.command, 'quit');
   let cjk = new Map([...sources, ...editUi(sources, { action: 'variable', file: 'ui.xml', name: '草稿', type: 'string', initial: '#00FF00FF' }).changes]);
-  cjk = new Map([...cjk, ...editUi(cjk, { action: 'event', name: 'color-cjk', command: 'colorPreference', target: 'backgroundPicker', slot: 'dialogue_text', colorVariable: '草稿' }).changes]);
+  cjk = new Map([...cjk, ...editUi(cjk, { action: 'event', name: 'color-cjk', command: 'colorPreference', slot: 'dialogue_text', colorVariable: '草稿' }).changes]);
   assert.ok(cjk.get('ui.js')!.includes('ctx.colorPreference("dialogue_text", ctx.ui["草稿"]);'));
   assert.equal(readUiDesign(cjk).events.find(event => event.name === 'color-cjk')!.colorVariable, '草稿');
   let colorRef = new Map([...sources, ...editUi(sources, { action: 'variable', file: 'ui.xml', name: 'applyDraft', type: 'string', initial: '#00FF00FF' }).changes]);
-  colorRef = new Map([...colorRef, ...editUi(colorRef, { action: 'event', name: 'color-apply-draft', command: 'colorPreference', target: 'backgroundPicker', slot: 'dialogue_text', colorVariable: 'applyDraft' }).changes]);
+  colorRef = new Map([...colorRef, ...editUi(colorRef, { action: 'event', name: 'color-apply-draft', command: 'colorPreference', slot: 'dialogue_text', colorVariable: 'applyDraft' }).changes]);
   assert.throws(() => editUi(colorRef, { action: 'deleteVariable', id: 'applyDraft' }), /事件 color-apply-draft/);
   const empty = new Map([...sources, ...editUi(sources, { action: 'variable', file: 'ui.xml', name: 'emptyColor', type: 'string', initial: '' }).changes]);
-  const warned = new Map([...empty, ...editUi(empty, { action: 'event', name: 'color-empty', command: 'colorPreference', target: 'backgroundPicker', slot: 'dialogue_text', colorVariable: 'emptyColor' }).changes]);
+  const warned = new Map([...empty, ...editUi(empty, { action: 'event', name: 'color-empty', command: 'colorPreference', slot: 'dialogue_text', colorVariable: 'emptyColor' }).changes]);
   assert.ok(readUiDesign(warned).warnings.some(warning => warning.includes('emptyColor') && warning.includes('颜色')));
-  assert.throws(() => editUi(sources, { action: 'event', name: 'bad', command: 'keybinding', target: 'backgroundPicker', actionValue: 'advance', binding: 'Escape' }), /Escape/);
-  assert.throws(() => editUi(sources, { action: 'event', name: 'bad', command: 'keybinding', target: 'backgroundPicker', actionValue: 'advance', binding: 'Ctrl+Alt+KeyK' }), /Ctrl\+Alt/);
-  assert.throws(() => editUi(sources, { action: 'event', name: 'bad', command: 'captureShortcut', target: 'backgroundPicker', actionValue: 'missing', resultEvent: 'shortcut-captured' }), /动作/);
-  assert.throws(() => editUi(sources, { action: 'event', name: 'bad', command: 'captureShortcut', target: 'backgroundPicker', actionValue: 'advance', resultEvent: 'missing' }), /结果事件/);
-  assert.throws(() => editUi(sources, { action: 'event', name: 'bad', command: 'colorPreference', target: 'backgroundPicker', slot: 'missing', color: '#FFFFFFFF' }), /槽位/);
-  assert.throws(() => editUi(sources, { action: 'event', name: 'bad', command: 'colorPreference', target: 'backgroundPicker', slot: 'dialogue_background', color: 'red' }), /颜色/);
-  assert.throws(() => editUi(sources, { action: 'event', name: 'bad', command: 'colorPreference', target: 'backgroundPicker', slot: 'dialogue_text', colorVariable: 'missing' }), /UI string/);
-  assert.throws(() => editUi(sources, { action: 'event', name: 'bad', command: 'colorPreference', target: 'backgroundPicker', slot: 'dialogue_text', colorVariable: 'bgDraft', color: '#FFFFFFFF' }), /之一/);
+  assert.throws(() => editUi(sources, { action: 'event', name: 'bad', command: 'keybinding', actionValue: 'advance', binding: 'Escape' }), /Escape/);
+  assert.throws(() => editUi(sources, { action: 'event', name: 'bad', command: 'keybinding', actionValue: 'advance', binding: 'Ctrl+Alt+KeyK' }), /Ctrl\+Alt/);
+  assert.throws(() => editUi(sources, { action: 'event', name: 'bad', command: 'captureShortcut', actionValue: 'missing', resultEvent: 'shortcut-captured' }), /动作/);
+  assert.throws(() => editUi(sources, { action: 'event', name: 'bad', command: 'captureShortcut', actionValue: 'advance', resultEvent: 'missing' }), /结果事件/);
+  assert.throws(() => editUi(sources, { action: 'event', name: 'bad', command: 'colorPreference', slot: 'missing', color: '#FFFFFFFF' }), /槽位/);
+  assert.throws(() => editUi(sources, { action: 'event', name: 'bad', command: 'colorPreference', slot: 'dialogue_background', color: 'red' }), /颜色/);
+  assert.throws(() => editUi(sources, { action: 'event', name: 'bad', command: 'colorPreference', slot: 'dialogue_text', colorVariable: 'missing' }), /UI string/);
+  assert.throws(() => editUi(sources, { action: 'event', name: 'bad', command: 'colorPreference', slot: 'dialogue_text', colorVariable: 'bgDraft', color: '#FFFFFFFF' }), /之一/);
   assert.throws(() => editUi(sources, { action: 'deleteVariable', id: 'bgDraft' }), /value|事件/);
   assert.throws(() => editUi(sources, { action: 'deletePalette', id: 'dialogue_text' }), /颜色事件/);
 });
@@ -137,7 +137,8 @@ test('快捷弹窗生成模态页面、唯一短 ID，可选 ctx.quit 事件', (
 test('v0.10.0 新节点/绑定/事件的严格限制与不可编辑诊断', () => {
   const broken = (xml: string, js = script) => new Map([...fixture()].map(([file, text]) => [file, file === 'ui.xml' ? xml : file === 'ui.js' ? js : text]));
   const base = fixture().get('ui.xml')!;
-  assert.throws(() => readUiDesign(broken(base.replace(' event="color-bg"', ''), script)), /color-picker 需要 event/);
+  const unbound = readUiDesign(broken(base.replace(' event="color-bg"', ''), script));
+  assert.ok(unbound.warnings.some(warning => warning.includes('未绑定事件')));
   const picker = (width: string, height: string, alpha?: string) => base.replace('<color-picker id="backgroundPicker" x="40" y="160" width="256" height="320" value="ui.bgDraft" event="color-bg" alpha="true"/>', `<color-picker id="backgroundPicker" x="40" y="160" width="${width}" height="${height}" value="ui.bgDraft" event="color-bg"${alpha ? ` alpha="${alpha}"` : ''}/>`);
   for (const [width, height, alpha] of [['127', '282'], ['128', '153', 'true'], ['128', '128']] as const) assert.throws(() => readUiDesign(broken(picker(width, height, alpha), script)), /至少 128×128/);
   for (const [width, height, alpha] of [['128', '128', 'false'], ['128', '153', 'false'], ['128', '154', 'true'], ['256', '320', 'true']] as const) assert.ok(readUiDesign(broken(picker(width, height, alpha), script)), `${width}x${height} alpha=${alpha ?? 'default'} 应接受`);
@@ -147,15 +148,15 @@ test('v0.10.0 新节点/绑定/事件的严格限制与不可编辑诊断', () =
   assert.throws(() => readUiDesign(broken(base.replace('color-bind="colors.dialogue_background"', 'color="#FFFFFFFF" color-bind="colors.dialogue_background"'), script)), /不能同时/);
   assert.throws(() => readUiDesign(broken(base.replace('color-bind="colors.dialogue_background"', 'color-bind="colors.missing"'), script)), /color-bind/);
   assert.throws(() => readUiDesign(broken(base.replace('value="ui.bgDraft"', 'value="ui.missing"'), script)), /UI string/);
-  const invalidCapture = readUiDesign(broken(base, script + '\nui("backgroundPicker").bind("captured", (ctx) => { ctx.keybinding("advance", "Escape"); });'));
-  assert.equal(invalidCapture.events.at(-1)!.editable, false); assert.match(invalidCapture.events.at(-1)!.reason!, /Escape/);
-  const invalidSlot = readUiDesign(broken(base, script + '\nui("backgroundPicker").bind("captured", (ctx) => { ctx.colorPreference("missing", "#FFFFFFFF"); });'));
-  assert.equal(invalidSlot.events.at(-1)!.editable, false); assert.match(invalidSlot.events.at(-1)!.reason!, /槽位/);
-  const mismatch = readUiDesign(broken(base.replace('event="color-bg"', 'event="update-bg"'), script + '\nui("backgroundPicker").bind("update-bg", (ctx) => { ctx.setUi("textDraft", ctx.value); });'));
+  const invalidCapture = readUiDesign(broken(base, script + '\nevent.register("captured", (ctx) => { ctx.keybinding("advance", "Escape"); });'));
+  assert.equal(invalidCapture.events.find(event => event.name === 'captured')!.editable, false); assert.match(invalidCapture.events.find(event => event.name === 'captured')!.reason!, /Escape/);
+  const invalidSlot = readUiDesign(broken(base, script + '\nevent.register("captured", (ctx) => { ctx.colorPreference("missing", "#FFFFFFFF"); });'));
+  assert.equal(invalidSlot.events.find(event => event.name === 'captured')!.editable, false); assert.match(invalidSlot.events.find(event => event.name === 'captured')!.reason!, /槽位/);
+  const mismatch = readUiDesign(broken(base.replace('event="color-bg"', 'event="update-bg"'), script + '\nevent.register("update-bg", (ctx) => { ctx.setUi("textDraft", ctx.value); });'));
   assert.ok(mismatch.warnings.some(warning => /绑定变量|会回退|事件 update-bg/.test(warning)));
-  const invalidSet = readUiDesign(broken(base, script + '\nui("backgroundPicker").bind("update-missing", (ctx) => { ctx.setUi("missing", ctx.value); });'));
+  const invalidSet = readUiDesign(broken(base, script + '\nevent.register("update-missing", (ctx) => { ctx.setUi("missing", ctx.value); });'));
   assert.equal(invalidSet.events.find(event => event.name === 'update-missing')!.editable, false); assert.match(invalidSet.events.find(event => event.name === 'update-missing')!.reason!, /变量/);
-  const notSetUi = readUiDesign(broken(base.replace('event="color-bg"', 'event="advance"'), script + '\nui("backgroundPicker").bind("advance", (ctx) => { ctx.advance(); });'));
+  const notSetUi = readUiDesign(broken(base.replace('event="color-bg"', 'event="advance"'), script));
   assert.ok(notSetUi.warnings.some(warning => /不会调用 ctx.setUi/.test(warning)));
   assert.throws(() => editUi(fixture(), { action: 'deletePalette', id: 'dialogue_background' }), /color-bind/);
 });

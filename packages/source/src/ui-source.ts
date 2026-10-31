@@ -3,7 +3,7 @@ import type { Sources } from './index';
 import { appendGroup, newShortId, readStory } from './index';
 import { child, escapeXmlAttribute as escapeXml, parseXml, setAttribute, type XmlNode } from './xml';
 import { uiFragments, type UiFragment } from './ui-files';
-import { UI_ATTRIBUTES, UI_CONTAINERS, UI_KINDS, uiNodes, type UiDesign, type UiEdit, type UiEvent, type UiEventCommand, type UiGalleryEntry, type UiKind, type UiNode, type UiPaletteSlot, type UiScreen } from '../../domain/src/ui';
+import { UI_ATTRIBUTES, UI_CONTAINERS, UI_KINDS, uiNodes, type UiBinding, type UiDesign, type UiEdit, type UiEvent, type UiEventCommand, type UiGalleryEntry, type UiKind, type UiNode, type UiPaletteSlot, type UiScreen } from '../../domain/src/ui';
 import { readUiMedia, editUiMedia } from './ui-media';
 import { canonicalLocaleId, formatFtlValue } from '../../domain/src/localization';
 import { i64 } from '../../domain/src/index';
@@ -84,68 +84,135 @@ function readEventCallback(c: Ast): EventShape | undefined {
   return { ...calls[1], page: calls[0].target };
 }
 const lifecycleEvent = (name: string) => name === 'screen.open' || name === 'screen.close';
-/** v0.11.0 registration: ui(target).bind("event", callback). Targets are control
- * template IDs or page IDs; $game and $host are fixed virtual targets. */
-function uiEvents(sources: Sources, warnings: string[]): { events: UiEvent[]; uncertain: boolean } {
-  const events: UiEvent[] = [];
+/** Controls whose XML `event`/`ui(id).bind(id)` may attach an ordinary event. */
+const interactiveKinds = new Set(['button', 'slider', 'toggle', 'color-picker']);
+function jsParents(ast: Ast): Map<Ast, Ast> {
+  const parents = new Map<Ast, Ast>();
+  walkJs(ast, n => {
+    for (const [key, value] of Object.entries(n)) {
+      if (['loc', 'start', 'end'].includes(key)) continue;
+      if (Array.isArray(value)) { for (const child of value) if (child?.type) parents.set(child, n); }
+      else if (value?.type) parents.set(value, n);
+    }
+  });
+  return parents;
+}
+/** v0.11.1 registration: `event.register(id, callback)` defines an independent
+ * event; XML `event`/background attributes and single-argument
+ * `ui(id).bind(eventId)` attach it. Two-argument ordinary bind is the removed
+ * v0.11.0 form: diagnose it and never guess or rewrite it. */
+function uiEvents(sources: Sources, warnings: string[]): { events: UiEvent[]; bindings: UiBinding[]; uncertain: boolean } {
+  const events: UiEvent[] = [], bindings: UiBinding[] = [];
   let uncertain = false;
+  const warn = (message: string) => warnings.push(message);
   try { for (const { file, ast } of scriptAst(sources)) {
     walkJs(ast, n => {
       if (n.type === 'CallExpression' && n.callee?.type === 'MemberExpression' && !n.callee.optional) {
         const method = n.callee.computed ? n.callee.property.value : n.callee.property.name;
         if (method === 'skipVideo') warnings.push(`${file}：v0.9.0 已移除 ctx.skipVideo；视频改用 UI 演出 sequence`);
-        // v0.11.0 removed on.* without aliases; point authors at the migration table.
+        // v0.11.0 removed on.* without aliases; point authors at the migration section.
         if (n.callee.object?.type === 'Identifier' && n.callee.object.name === 'on' && ['advance', 'choice', 'end', 'ui', 'frameEnter', 'frameExit', 'screenOpen', 'screenClose'].includes(method)) {
-          warnings.push(`${file}:${n.loc.start.line}：旧 on.${method} 注册已被 v0.11.0 移除；请改用 frame()/ui() 注册（上游 API 第 37.5 节）`);
+          warnings.push(`${file}:${n.loc.start.line}：旧 on.${method} 注册已被 v0.11.0 移除；请改用 frame() 与 event.register 注册（上游 API 第 37.4 节）`);
           uncertain = true;
         }
       }
     });
+    // `event` is a non-writable global entry. Saving, aliasing or replacing it
+    // makes the definition list unprovable; report it instead of guessing.
+    const parents = jsParents(ast);
+    const topCall = new Set(ast.body.filter((s: Ast) => s.type === 'ExpressionStatement').map((s: Ast) => s.expression));
+    for (const statement of ast.body) if ((statement.type === 'VariableDeclaration' && statement.declarations.some((declaration: Ast) => declaration.id?.type === 'Identifier' && declaration.id.name === 'event')) || (['FunctionDeclaration', 'ClassDeclaration'].includes(statement.type) && statement.id?.name === 'event')) { warn(`${file}：event 是保留全局入口，不能声明或重定义`); uncertain = true; }
+    walkJs(ast, n => {
+      if (n.type !== 'Identifier' || n.name !== 'event') return;
+      const parent = parents.get(n);
+      if (parent?.type === 'MemberExpression' && parent.object === n) {
+        const call = parents.get(parent), method = parent.computed ? parent.property?.value : parent.property?.name;
+        if (method === 'register' && call?.type === 'CallExpression' && call.callee === parent) {
+          if (!topCall.has(call)) { warn(`${file}:${n.loc.start.line}：event.register 不在顶层，事件列表可能不完整`); uncertain = true; }
+          return;
+        }
+        warn(`${file}:${n.loc.start.line}：event 只有 register 方法，其他访问无法静态解析`); uncertain = true; return;
+      }
+      if (parent?.type === 'MemberExpression' && parent.property === n && !parent.computed) return;
+      if (parent?.type === 'Property' && parent.key === n && !parent.computed) return;
+      if (parent?.type === 'VariableDeclarator' && parent.id === n) return;
+      if (['FunctionDeclaration', 'FunctionExpression', 'ArrowFunctionExpression', 'ClassDeclaration', 'ClassExpression', 'AssignmentPattern', 'RestElement'].includes(parent?.type ?? '')) return;
+      warn(`${file}:${n.loc.start.line}：event 被保存、传递或以动态方式使用，事件列表可能不完整`); uncertain = true;
+    });
     for (const n of ast.body) {
       const c = n.expression; if (n.type !== 'ExpressionStatement' || c?.type !== 'CallExpression' || c.optional) continue;
-      if (c.callee?.type !== 'MemberExpression' || c.callee.optional || (c.callee.computed ? c.callee.property.value : c.callee.property.name) !== 'bind') continue;
-      const selector = c.callee.object;
+      if (c.callee?.type !== 'MemberExpression' || c.callee.optional) continue;
+      const method = c.callee.computed ? c.callee.property?.value : c.callee.property?.name;
+      const object = c.callee.object;
+      if (method === 'register' && object?.type === 'Identifier' && object.name === 'event') {
+        const name = c.arguments[0]?.type === 'Literal' && typeof c.arguments[0].value === 'string' ? c.arguments[0].value : undefined;
+        if (name === undefined) { warn(`${file}:${n.loc.start.line}：event.register 的事件 ID 是动态表达式，事件列表可能不完整`); uncertain = true; continue; }
+        if (c.arguments.length !== 2) { warn(`${file}:${n.loc.start.line}：event.register(${name}) 需要恰好一个回调`); uncertain = true; continue; }
+        if (prefixLifecycle(name)) {
+          warn(`${file}:${n.loc.start.line}：${name} 是保留生命周期或全局事件名，不能用 event.register 注册；播放器会拒绝`);
+          events.push({ name, kind: 'event', file, line: n.loc.start.line, start: n.start, end: n.end, editable: false, reason: '保留生命周期或全局事件名，不能用 event.register 注册' });
+          continue;
+        }
+        const shaped = readEventCallback(c);
+        const event: UiEvent = { name, kind: 'event', file, line: n.loc.start.line, start: n.start, end: n.end, editable: !!shaped, ...(shaped ?? {}) };
+        if (!shaped) event.reason = '回调包含自定义逻辑或多条动作，保留源码';
+        else if (/\/\/|\/\*/.test(sources.get(file)!.slice(n.start, n.end))) { event.editable = false; event.reason = '回调内包含注释，保留源码'; }
+        events.push(event);
+        continue;
+      }
+      if (method !== 'bind') continue;
+      const selector = object;
       if (selector?.type !== 'CallExpression' || selector.optional || selector.callee?.type !== 'Identifier' || selector.callee.name !== 'ui' || selector.arguments.length !== 1) {
         // A saved selector or an unsupported call shape: report it instead of guessing.
-        if (selector?.type === 'Identifier' || selector?.type === 'CallExpression' && selector.callee?.name === 'ui') warnings.push(`${file}：存在无法静态解析的 ui(...).bind 注册，事件列表可能不完整`);
+        if (selector?.type === 'Identifier' || selector?.type === 'CallExpression' && selector.callee?.name === 'ui') warn(`${file}:${n.loc.start.line}：存在无法静态解析的 ui(...).bind 注册，事件列表可能不完整`);
         uncertain = true; continue;
       }
-      const targetArg = selector.arguments[0];
-      const target = targetArg?.type === 'Literal' && typeof targetArg.value === 'string' ? targetArg.value : undefined;
-      const eventArg = c.arguments[0];
-      const name = eventArg?.type === 'Literal' && typeof eventArg.value === 'string' ? eventArg.value : undefined;
+      const target = selector.arguments[0]?.type === 'Literal' && typeof selector.arguments[0].value === 'string' ? selector.arguments[0].value : undefined;
+      const name = c.arguments[0]?.type === 'Literal' && typeof c.arguments[0].value === 'string' ? c.arguments[0].value : undefined;
       if (target === undefined || name === undefined) {
-        warnings.push(`${file}：ui(target).bind 的目标或事件名是动态表达式，事件列表可能不完整`);
+        warn(`${file}:${n.loc.start.line}：ui(target).bind 的目标或事件名是动态表达式，事件列表可能不完整`);
         uncertain = true; continue;
       }
       if (lifecycleEvent(name)) continue;
       if (target === '$game') {
-        if (name !== 'game.enter') { warnings.push(`${file}：$game 只接受 game.enter，已忽略 ${name}`); continue; }
-      } else if (name === 'game.enter' || prefixLifecycle(name)) {
-        warnings.push(`${file}：${name} 是保留生命周期或全局事件名，不能绑定到 ${target}`); continue;
+        if (name !== 'game.enter') { warn(`${file}:${n.loc.start.line}：$game 只接受 game.enter，已忽略 ${name}`); continue; }
+        if (c.arguments.length !== 2) { warn(`${file}:${n.loc.start.line}：game.enter 需要恰好一个回调`); uncertain = true; continue; }
+        const shaped = readEventCallback(c);
+        const event: UiEvent = { name, kind: 'game', file, line: n.loc.start.line, start: n.start, end: n.end, editable: !!shaped, ...(shaped ?? {}) };
+        if (!shaped) event.reason = '回调包含自定义逻辑或多条动作，保留源码';
+        events.push(event);
+        continue;
       }
-      if (c.arguments.length !== 2) { warnings.push(`${file}：${name} 的 bind 需要恰好一个回调`); uncertain = true; continue; }
-      const shaped = readEventCallback(c);
-      const event: UiEvent = { name, target, file, line: n.loc.start.line, start: n.start, end: n.end, editable: !!shaped, ...(shaped ?? {}) };
-      if (!shaped) event.reason = '回调包含自定义逻辑或多条动作，保留源码';
-      else if (/\/\/|\/\*/.test(sources.get(file)!.slice(n.start, n.end))) { event.editable = false; event.reason = '回调内包含注释，保留源码'; }
-      events.push(event);
+      if (prefixLifecycle(name)) { warn(`${file}:${n.loc.start.line}：${name} 是保留名称，不能绑定到控件或页面`); uncertain = true; continue; }
+      if (target === '$host') {
+        warn(`${file}:${n.loc.start.line}：v0.11.1 已删除 $host 绑定；请改用 event.register("${name}", 回调)，结果事件不需要控件`);
+        bindings.push({ target, name, kind: 'legacy', file, line: n.loc.start.line, start: n.start, end: n.end, editable: false, reason: '$host 绑定已在 v0.11.1 删除' });
+        uncertain = true; continue;
+      }
+      if (c.arguments.length === 1) {
+        bindings.push({ target, name, kind: 'script', file, line: n.loc.start.line, start: n.start, end: n.end, editable: true });
+      } else if (c.arguments.length === 2) {
+        warn(`${file}:${n.loc.start.line}：普通 ui("${target}").bind("${name}", 回调) 已在 v0.11.1 移除；请改为 event.register("${name}", 回调) 后再 ui("${target}").bind("${name}")（上游 API 第 37.2–37.4 节）`);
+        bindings.push({ target, name, kind: 'legacy', file, line: n.loc.start.line, start: n.start, end: n.end, editable: false, reason: 'v0.11.0 两参数回调已移除，保留源码' });
+        uncertain = true;
+      } else { warn(`${file}:${n.loc.start.line}：${name} 的 bind 参数无效`); uncertain = true; }
     }
-    // Registration outside the top-level statement list is not part of the
-    // assembly contract; keep it Opaque instead of silently dropping the event.
-    const top = new Set(ast.body.filter((n: Ast) => n.type === 'ExpressionStatement').map((n: Ast) => n.expression));
-    walkJs(ast, n => {
-      if (n.type !== 'CallExpression' || n.callee?.type !== 'MemberExpression' || n.callee.optional || top.has(n)) return;
-      if ((n.callee.computed ? n.callee.property.value : n.callee.property.name) !== 'bind') return;
-      const selector = n.callee.object;
-      if (selector?.type === 'CallExpression' && selector.callee?.type === 'Identifier' && selector.callee.name === 'ui') {
-        warnings.push(`${file}:${n.loc.start.line}：ui(...).bind 注册不在顶层，事件列表可能不完整`); uncertain = true;
-      }
-    });
   } } catch (e) { warnings.push(`UI 事件解析失败：${e instanceof Error ? e.message : '语法错误'}`); uncertain = true; }
-  const counts = new Map<string, number>(); for (const e of events) { const key = `${e.target}\0${e.name}`; counts.set(key, (counts.get(key) ?? 0) + 1); }
-  for (const e of events) if ((counts.get(`${e.target}\0${e.name}`) ?? 0) > 1) { e.editable = false; e.reason = '同一目标存在重复注册，保留源码'; }
-  return { events, uncertain };
+  const counts = new Map<string, number>(); for (const e of events) counts.set(e.name, (counts.get(e.name) ?? 0) + 1);
+  for (const e of events) if ((counts.get(e.name) ?? 0) > 1) { e.editable = false; e.reason = '同名事件存在重复定义，保留源码'; }
+  return { events, bindings, uncertain };
+}
+/** XML `event`/background references are bindings too, including empty-free values. */
+function xmlEventBindings(design: Pick<UiDesign, 'screens'>): UiBinding[] {
+  const bindings: UiBinding[] = [];
+  for (const screen of design.screens) {
+    for (const key of ['background-click', 'background-right-click'] as const) {
+      const name = screen.attrs[key];
+      if (name) bindings.push({ target: screen.id, name, kind: 'xml', file: screen.file, line: screen.line });
+    }
+    for (const node of uiNodes(screen.children)) if (node.attrs.event) bindings.push({ target: node.id, name: node.attrs.event, kind: 'xml', file: node.file, line: node.line });
+  }
+  return bindings;
 }
 const virtualTargets = new Set(['$game', '$host']);
 function prefixLifecycle(name: string): boolean { return reservedLifecycle(name) || ['game.enter', 'screen.open', 'screen.close'].includes(name); }
@@ -160,7 +227,7 @@ function numeric(file: string, n: XmlNode, key: string, fallback?: number): numb
 export function readUiDesign(sources: Sources): UiDesign {
   const fragments = uiFragments(sources), byFile = new Map(fragments.map(f => [f.file, f])), entry = fragments[0];
   const story = readStory(sources), catalog = story.localization;
-  const result: UiDesign = { entry: entry.file, files: fragments.map(f => f.file), width: Number(entry.root.attrs.width ?? 1280), height: Number(entry.root.attrs.height ?? 720), initial: entry.root.attrs.initial, attrs: entry.root.attrs, screens: [], variables: [], palette: [], gallery: [], events: [], warnings: [], localizationUsages: [] };
+  const result: UiDesign = { entry: entry.file, files: fragments.map(f => f.file), width: Number(entry.root.attrs.width ?? 1280), height: Number(entry.root.attrs.height ?? 720), initial: entry.root.attrs.initial, attrs: entry.root.attrs, screens: [], variables: [], palette: [], gallery: [], events: [], bindings: [], warnings: [], localizationUsages: [] };
   if (![result.width, result.height].every(Number.isFinite) || result.width < 640 || result.height < 360 || Math.abs(result.width * 9 - result.height * 16) > .1) throw new Error('UI 画布需要至少 640×360 的 16:9 尺寸');
   const ids = new Set<string>(), screens = new Set<string>(), vars = new Map<string, { type: 'int' | 'bool' | 'string'; initial: string }>(), palette = new Set<string>(), gallery = new Set<string>(); let count = 0, pickers = 0;
   const line = (fragment: UiFragment, node: XmlNode) => fragment.source.slice(0, node.start).split('\n').length;
@@ -273,7 +340,6 @@ export function readUiDesign(sources: Sources): UiDesign {
         const variable = vars.get(n.attrs.value.slice(3));
         if (!variable || variable.type !== 'string') error(fragment.file, n, 'color-picker 的 value 必须是已声明的 UI string');
         try { parseColor(variable.initial); } catch (e) { error(fragment.file, n, `color-picker 初值非法：${e instanceof Error ? e.message : '格式错误'}`); }
-        if (!n.attrs.event) error(fragment.file, n, 'color-picker 需要 event');
       }
       if (n.attrs['color-bind'] !== undefined) {
         if (n.attrs.color !== undefined) error(fragment.file, n, 'color 与 color-bind 不能同时设置');
@@ -309,9 +375,13 @@ export function readUiDesign(sources: Sources): UiDesign {
   result.media = readUiMedia(sources);
   const parsedEvents = uiEvents(sources, result.warnings);
   result.events = parsedEvents.events;
+  result.bindings = [...xmlEventBindings(result), ...parsedEvents.bindings];
   if (parsedEvents.uncertain) result.eventUncertain = true;
-  const registrations = new Set(result.events.map(event => `${event.target}\0${event.name}`));
-  for (const screen of result.screens) for (const node of uiNodes(screen.children)) if (node.kind === 'color-picker' && !registrations.has(`${node.id}\0${node.attrs.event}`)) throw new Error(`${node.file}:${node.line} 的 color-picker 事件没有绑定到该控件的注册：${node.attrs.event}`);
+  for (const event of result.events) {
+    const targets = [...new Set(result.bindings.filter(binding => binding.kind !== 'legacy' && binding.name === event.name).map(binding => binding.target))];
+    if (targets.length) event.targets = targets;
+  }
+  for (const screen of result.screens) for (const node of uiNodes(screen.children)) if (node.kind === 'color-picker' && !result.bindings.some(binding => binding.target === node.id && binding.kind !== 'legacy')) result.warnings.push(`${node.file}:${node.line}：color-picker 未绑定事件；松开后不会提交候选颜色，引擎只显示 value 初值`);
   const titleKey = entry.root.attrs['title-key'], titleKeyBind = entry.root.attrs['title-key-bind'];
   if (titleKey !== undefined) {
     if (!/^[A-Za-z][A-Za-z0-9_-]{0,127}$/.test(titleKey)) throw new Error('UI 根 title-key 格式无效');
@@ -335,22 +405,38 @@ export function readUiDesign(sources: Sources): UiDesign {
   const fail = (event: UiEvent, reason: string) => { event.editable = false; event.reason = reason; };
   const entryRefs = new Set(story.entries ?? [story.entry]);
   const nodeById = new Map(result.screens.flatMap(screen => uiNodes(screen.children)).map(node => [node.id, node]));
-  /** v0.11.0 matches one registration per (target, event); the XML side declares the event. */
-  const declaredEvents = new Map<string, Set<string>>();
-  for (const screen of result.screens) {
-    declaredEvents.set(screen.id, new Set([screen.attrs['background-click'], screen.attrs['background-right-click']].filter((name): name is string => !!name)));
-    for (const node of uiNodes(screen.children)) declaredEvents.set(node.id, new Set(node.attrs.event ? [node.attrs.event] : []));
+  /** v0.11.1: definitions are independent; XML references and single-argument
+   * `ui(id).bind(eventId)` attach them, and unused definitions are valid. */
+  const definitions = new Map<string, UiEvent>();
+  for (const event of result.events) {
+    const previous = definitions.get(event.name);
+    if (previous) { for (const duplicate of [previous, event]) { duplicate.editable = false; duplicate.reason = '同名事件存在重复定义，保留源码'; } continue; }
+    definitions.set(event.name, event);
   }
-  const registered = new Set(result.events.map(event => `${event.target}\0${event.name}`));
   for (const screen of result.screens) if (virtualTargets.has(screen.id)) throw new Error(`${screen.file}:${screen.line} 页面 ID 不能是保留虚拟目标：${screen.id}`);
   for (const node of nodeById.values()) if (virtualTargets.has(node.id)) throw new Error(`${node.file}:${node.line} 控件 ID 不能是保留虚拟目标：${node.id}`);
-  for (const event of result.events) {
-    if (event.target === '$game') { if (event.name !== 'game.enter') fail(event, '$game 只接受 game.enter'); }
-    else if (event.target === '$host') { if (prefixLifecycle(event.name) || event.name === 'game.enter') fail(event, '$host 只接受非保留的捕获结果事件名'); }
-    else if (!declaredEvents.has(event.target)) fail(event, '注册目标不存在');
-    else if (!declaredEvents.get(event.target)!.has(event.name)) result.warnings.push(`${event.file}:${event.line}：${event.name} 尚未在 ${event.target} 的 XML 中声明；播放器会拒绝未对应的注册`);
+  const scriptBinds = new Set<string>();
+  for (const binding of result.bindings) {
+    const page = result.screens.find(screen => screen.id === binding.target), node = nodeById.get(binding.target);
+    if (binding.kind === 'xml') {
+      if (prefixLifecycle(binding.name)) result.warnings.push(`XML 事件 ${binding.target}.${binding.name} 使用了保留生命周期或全局名称；播放器会拒绝`);
+      else if (!definitions.has(binding.name)) result.warnings.push(`XML 事件 ${binding.target}.${binding.name} 没有 event.register("${binding.name}", …) 定义；播放器会拒绝`);
+      continue;
+    }
+    if (binding.kind === 'legacy') continue;
+    if (!page && !node) result.warnings.push(`${binding.file}:${binding.line}：ui(${JSON.stringify(binding.target)}).bind 目标不存在；播放器会拒绝`);
+    else if (node && !interactiveKinds.has(node.kind)) result.warnings.push(`${binding.file}:${binding.line}：ui(${JSON.stringify(binding.target)}).bind 只能绑定页面或按钮/滑条/开关/选色器；播放器会拒绝`);
+    else if (node && node.attrs.route) result.warnings.push(`${binding.file}:${binding.line}：${binding.target} 是 route 按钮，不能再通过 bind 附加事件；播放器会拒绝`);
+    else if (node && node.attrs.event && node.attrs.event !== binding.name) result.warnings.push(`${binding.file}:${binding.line}：${binding.target} 的 XML 已声明事件 ${node.attrs.event}，bind(${JSON.stringify(binding.name)}) 会被播放器拒绝`);
+    else if (page) {
+      const declared = [page.attrs['background-click'], page.attrs['background-right-click']].filter((name): name is string => !!name);
+      if (declared.length && !declared.includes(binding.name)) result.warnings.push(`${binding.file}:${binding.line}：页面 ${page.id} 已声明背景事件 ${declared.join('/')}，bind(${JSON.stringify(binding.name)}) 会被播放器拒绝；请直接修改 XML 背景事件`);
+    }
+    if (!definitions.has(binding.name)) result.warnings.push(`${binding.file}:${binding.line}：ui(${JSON.stringify(binding.target)}).bind(${JSON.stringify(binding.name)}) 没有对应的 event.register 定义；播放器会拒绝`);
+    const identity = `${binding.target}\0${binding.name}`;
+    if (scriptBinds.has(identity)) result.warnings.push(`${binding.file}:${binding.line}：${binding.target} 重复 bind 了事件 ${binding.name}；播放器会拒绝`);
+    scriptBinds.add(identity);
   }
-  if (!result.eventUncertain) for (const [target, names] of declaredEvents) for (const name of names) if (!registered.has(`${target}\0${name}`)) result.warnings.push(`XML 事件 ${target}.${name} 没有对应的 ui("${target}").bind("${name}", …) 注册；播放器会拒绝`);
   for (const event of result.events) {
     if (!event.editable || !event.command) continue;
     const command = event.command, commandTarget = event.commandTarget;
@@ -384,8 +470,8 @@ export function readUiDesign(sources: Sources): UiDesign {
       const variable = commandTarget ? vars.get(commandTarget) : undefined;
       if (!commandTarget || !variable) fail(event, '目标 UI 变量不存在');
       else {
-        // Only the registered target determines the control kind that submits this value.
-        const users = result.screens.flatMap(screen => uiNodes(screen.children)).filter(node => node.id === event.target && node.attrs.event === event.name);
+        // Binding targets determine which control kinds submit this value.
+        const users = result.bindings.filter(binding => binding.kind !== 'legacy' && binding.name === event.name).map(binding => nodeById.get(binding.target)).filter((node): node is UiNode => !!node);
         if (users.length && users.every(node => node.kind === 'color-picker') && variable.type !== 'string') fail(event, 'color-picker 的更新事件必须写入 UI string');
         if (users.length && users.every(node => node.kind === 'slider') && variable.type !== 'int') fail(event, 'slider 的更新事件必须写入 UI int');
         if (users.length && users.every(node => node.kind === 'toggle') && variable.type !== 'bool') fail(event, 'toggle 的更新事件必须写入 UI bool');
@@ -398,7 +484,8 @@ export function readUiDesign(sources: Sources): UiDesign {
       if (commandTarget && !story.assets.some(a => a.id === commandTarget && a.kind === 'cg')) fail(event, 'CG 专用资源不存在');
     } else if (command === 'captureShortcut') {
       if (!isShortcutAction(event.action)) fail(event, '未知快捷键动作');
-      if (!event.resultEvent || !result.events.some(item => item.target === '$host' && item.name === event.resultEvent)) fail(event, '快捷键捕获结果事件必须注册在 $host');
+      else if (!event.resultEvent || !definitions.has(event.resultEvent)) fail(event, '快捷键捕获结果事件必须是已定义的 event.register 事件');
+      else if (event.resultEvent === event.name) fail(event, '快捷键捕获结果事件不能指向自身');
     } else if (command === 'keybinding') {
       if (!isShortcutAction(event.action)) fail(event, '未知快捷键动作');
       else if (event.binding !== null) try { event.binding = normalizeShortcutBinding(event.binding!, event.action!); } catch (e) { fail(event, e instanceof Error ? e.message : '快捷键无效'); }
@@ -421,10 +508,10 @@ export function readUiDesign(sources: Sources): UiDesign {
   }
   const logic = analyzeLogic(sources, story);
   result.warnings.push(...logic.screenIssues);
-  const eventByTarget = new Map(result.events.map(event => [`${event.target}\0${event.name}`, event]));
+  const eventByName = new Map(result.events.map(event => [event.name, event]));
   for (const screen of result.screens) for (const node of uiNodes(screen.children)) {
-    if (node.kind !== 'color-picker') continue;
-    const handler = eventByTarget.get(`${node.id}\0${node.attrs.event}`);
+    if (node.kind !== 'color-picker' || !node.attrs.event) continue;
+    const handler = eventByName.get(node.attrs.event);
     if (handler?.editable && handler.command && handler.command !== 'setUi') result.warnings.push(`${node.file}:${node.line}：color-picker 的事件 ${node.attrs.event} 是 ${handler.command} 动作，不会调用 ctx.setUi；播放器松开后会回到绑定值`);
   }
   result.lifecycle = readLifecycle(sources, logic);
@@ -545,27 +632,62 @@ function commandBody(event: CommandShape): string {
     case 'locale': return `ctx.locale(${JSON.stringify(event.channel)}, ${event.locale === null || event.locale === undefined ? 'null' : JSON.stringify(event.locale)});`;
   }
 }
-function appendEvent(sources: Sources, design: UiDesign, target: string, name: string, body: string): void {
+/** Appends a fixed independent event definition to the last declared script. */
+function appendEvent(sources: Sources, design: UiDesign, name: string, body: string, command?: UiEventCommand): void {
   const file = readStory(sources).scripts.at(-1); if (!file || !sources.has(file)) throw new Error('缺少可追加的已声明脚本');
-  sources.set(file, sources.get(file)! + `\nui(${JSON.stringify(target)}).bind(${JSON.stringify(name)}, (ctx) => { ${body} });\n`);
-  design.events.push({ name, target, file, line: sources.get(file)!.split('\n').length, start: 0, end: 0, editable: true, command: body.includes('ctx.quit()') ? 'quit' : undefined });
+  sources.set(file, sources.get(file)! + `\nevent.register(${JSON.stringify(name)}, (ctx) => { ${body} });\n`);
+  design.events.push({ name, kind: 'event', file, line: sources.get(file)!.split('\n').length, start: 0, end: 0, editable: true, ...(command ? { command } : {}) });
 }
-/** Removes one recognized registration statement together with its line ending. */
-function removeEventStatement(sources: Sources, event: UiEvent): void {
-  const source = sources.get(event.file); if (source === undefined || !event.start || !event.end) return;
-  let start = event.start, end = event.end;
+/** The `game.enter` hook keeps its preserved virtual target form. */
+function appendGameEvent(sources: Sources, design: UiDesign, body: string): void {
+  const file = readStory(sources).scripts.at(-1); if (!file || !sources.has(file)) throw new Error('缺少可追加的已声明脚本');
+  sources.set(file, sources.get(file)! + `\nui("$game").bind("game.enter", (ctx) => { ${body} });\n`);
+  design.events.push({ name: 'game.enter', kind: 'game', file, line: sources.get(file)!.split('\n').length, start: 0, end: 0, editable: true });
+}
+/** Removes one recognized script statement (definition or binding) with its line ending. */
+function removeStatement(sources: Sources, range: { file: string; start?: number; end?: number }): void {
+  const source = sources.get(range.file); if (source === undefined || !range.start || !range.end) return;
+  let start = range.start, end = range.end;
   if (source.slice(end, end + 2) === '\r\n') end += 2; else if (source[end] === '\n') end += 1;
   else if (start >= 2 && source.slice(start - 2, start) === '\r\n') start -= 2;
   else if (start >= 1 && source[start - 1] === '\n') start -= 1;
-  sources.set(event.file, source.slice(0, start) + source.slice(end));
+  sources.set(range.file, source.slice(0, start) + source.slice(end));
 }
-/** Deleting a page/control also removes its own recognized callbacks; opaque
- * callbacks or lifecycle registrations still block the delete. */
-function removeTargetEvents(sources: Sources, design: UiDesign, targets: Set<string>): void {
-  const list = design.events.filter(item => targets.has(item.target));
-  for (const event of list) if (!event.editable) throw new Error(`事件 ${event.target} · ${event.name} 由自定义逻辑维护，不能随控件删除`);
-  // Remove from the end so earlier source ranges stay valid.
-  for (const event of [...list].sort((a, b) => b.start - a.start)) removeEventStatement(sources, event);
+/** Deleting a page/control removes its own recognized script bindings. Event
+ * definitions stay: v0.11.1 permits unused definitions. Legacy callbacks or
+ * other opaque references still block the delete. */
+function removeTargetBindings(sources: Sources, design: UiDesign, targets: Set<string>): void {
+  const list = design.bindings.filter(binding => binding.kind !== 'xml' && targets.has(binding.target));
+  for (const binding of list) if (!binding.editable) throw new Error(`ui(${JSON.stringify(binding.target)}).bind("${binding.name}") 由旧式或自定义逻辑维护，不能随控件删除；请先迁移或删除该注册`);
+  for (const binding of [...list].sort((a, b) => (b.start ?? 0) - (a.start ?? 0))) removeStatement(sources, binding);
+}
+/** Applies non-overlapping source replacements; every script edit goes through here. */
+function patchScriptRanges(sources: Sources, patches: Map<string, { start: number; end: number; text: string }[]>): void {
+  for (const [file, list] of patches) {
+    let source = sources.get(file); if (source === undefined) continue;
+    let boundary = source.length;
+    for (const patch of list.sort((a, b) => b.start - a.start || b.end - a.end)) {
+      if (patch.end > boundary) throw new Error('事件源码范围发生冲突，请刷新');
+      source = source.slice(0, patch.start) + patch.text + source.slice(patch.end); boundary = patch.start;
+    }
+    if (source !== sources.get(file)) sources.set(file, source);
+  }
+}
+/** Attaches a newly created definition through the declarative XML reference. */
+function attachEventBinding(sources: Sources, design: UiDesign, name: string, target: string): void {
+  const page = design.screens.find(screen => screen.id === target);
+  if (page) {
+    if (page.attrs['background-click'] && page.attrs['background-right-click']) throw new Error('页面背景已声明左右键事件，请直接在 XML 中引用该事件');
+    const key = page.attrs['background-click'] ? 'background-right-click' : 'background-click';
+    patchAttrs(sources, target, { [key]: name }, [key], true);
+    return;
+  }
+  const node = design.screens.flatMap(item => uiNodes(item.children)).find(item => item.id === target);
+  if (!node) throw new Error('绑定目标控件或页面不存在');
+  if (!interactiveKinds.has(node.kind)) throw new Error('只能把事件绑定到按钮、滑条、开关、选色器或页面背景');
+  if (node.attrs.route) throw new Error('route 按钮不能同时绑定事件');
+  if (node.attrs.event && node.attrs.event !== name) throw new Error('控件已声明其他事件，请先清除');
+  patchAttrs(sources, target, { event: name }, ['event']);
 }
 
 /** Source range edits only. The matching engine remains the final semantic validator. */
@@ -651,8 +773,8 @@ export function editUi(input: Sources, value: unknown): { changes: Sources; sele
       if (callee === 'bind' && selector?.type === 'Identifier') throw new Error('脚本可能通过保存的页面选择器注册此页面，请先在源码中处理');
       if (['open', 'present'].includes(callee) && (arg?.type !== 'Literal' || arg.value === id)) throw new Error('脚本可能打开或交接此页面，请先在源码中处理相关事件');
     });
-    // The page and every control it owns lose their recognized callbacks with it.
-    removeTargetEvents(sources, design, new Set([id, ...uiNodes(page.children).map(node => node.id)]));
+    // The page and every control it owns lose their recognized script bindings with it.
+    removeTargetBindings(sources, design, new Set([id, ...uiNodes(page.children).map(node => node.id)]));
     const at = locateUi(sources, id, true); sources.set(at.file, sources.get(at.file)!.slice(0, at.node.start) + sources.get(at.file)!.slice(at.node.end)); screen = design.initial;
   } else if (op.action === 'addNode') {
     const kind = str(op.kind) as UiKind; if (!(UI_KINDS as readonly string[]).includes(kind)) throw new Error('未知 UI 控件类型');
@@ -666,12 +788,10 @@ export function editUi(input: Sources, value: unknown): { changes: Sources; sele
     if (kind === 'panel') attrs.color = '#263B4B';
     if (['image', 'nine-patch'].includes(kind)) { const asset = readStory(sources).assets.find(a => a.id === op.image && a.kind === (kind === 'nine-patch' ? 'nine-patch' : 'image')); if (!asset) throw new Error('请先选择已导入的对应图片资源'); attrs.image = asset.id; }
     if (['button', 'toggle', 'slider'].includes(kind) && op.event) {
-      // v0.11.0 binds callbacks to one target. Reuse a proven fixed callback by
-      // duplicating it onto the new control instead of leaving an unbound XML event.
-      const source = typeof op.eventTarget === 'string' ? design.events.find(event => event.target === op.eventTarget && event.name === op.event) : undefined;
-      if (!source || !source.editable || !source.command) throw new Error('请选择一个可复制的已注册事件（目标 + 事件名）；引擎要求每个控件事件各自绑定');
+      // v0.11.1 definitions are independent; the new control only references one.
+      const source = design.events.find(event => event.kind === 'event' && event.name === op.event);
+      if (!source) throw new Error('请选择一个已注册的 event.register 事件');
       attrs.event = op.event;
-      appendEvent(sources, design, attrs.id, op.event, commandBody(source as CommandShape));
     }
     if (kind === 'slider') Object.assign(attrs, { value: 'settings.bgm_volume', min: '0', max: '1' });
     if (kind === 'toggle') attrs.value = 'settings.muted';
@@ -691,17 +811,16 @@ export function editUi(input: Sources, value: unknown): { changes: Sources; sele
       }
       attrs.value = value;
       if (typeof op.event === 'string' && op.event) {
-        const source = typeof op.eventTarget === 'string' ? design.events.find(event => event.target === op.eventTarget && event.name === op.event) : undefined;
-        if (!source || !source.editable || !source.command) throw new Error('color-picker 需要可复制的已注册更新事件');
+        const source = design.events.find(event => event.kind === 'event' && event.name === op.event);
+        if (!source) throw new Error('color-picker 需要选择一个已注册的更新事件');
         attrs.event = op.event;
-        appendEvent(sources, design, attrs.id, op.event, commandBody(source as CommandShape));
       } else {
         // Engine pickers only propose a color; the bound UI string changes only when an
         // event calls ctx.setUi. Create that minimal handler so a new picker works.
         const base = `color-${attrs.id}`;
         let eventName = base;
-        for (let index = 2; design.events.some(event => event.target === attrs.id && event.name === eventName); index++) eventName = `${base}-${index}`;
-        appendEvent(sources, design, attrs.id, eventName, `ctx.setUi(${JSON.stringify(value.slice(3))}, ctx.value);`);
+        for (let index = 2; design.events.some(event => event.name === eventName); index++) eventName = `${base}-${index}`;
+        appendEvent(sources, design, eventName, `ctx.setUi(${JSON.stringify(value.slice(3))}, ctx.value);`, 'setUi');
         attrs.event = eventName;
       }
       if (!pickerAlpha) attrs.alpha = 'false';
@@ -722,23 +841,17 @@ export function editUi(input: Sources, value: unknown): { changes: Sources; sele
     if (!moving) throw new Error('控件不存在，请刷新');
     const at = locateUi(sources, str(op.id)), source = sources.get(at.file)!;
     if (op.action === 'deleteNode') {
-      // A v0.11.0 callback belongs to this target; remove its recognized events with the control.
-      removeTargetEvents(sources, design, new Set(uiNodes([moving]).map(node => node.id)));
+      // Script bindings that name this subtree are removed with it; the now-unused
+      // event definitions stay because v0.11.1 permits unreferenced definitions.
+      removeTargetBindings(sources, design, new Set(uiNodes([moving]).map(node => node.id)));
       sources.set(at.file, source.slice(0, at.node.start) + source.slice(at.node.end));
     }
     else {
       let markup = source.slice(at.node.start, at.node.end); const ids = uiNodes([moving]).map(n => n.id);
-      const used = uiIds(design), mapping = new Map<string, string>();
-      for (const id of ids) { const local: XmlNode[] = []; const find = (n: XmlNode) => { if (n.attrs.id === id) local.push(n); n.children.forEach(find); }; find(parseXml(markup)); const fresh = newShortId(used); used.add(fresh); mapping.set(id, fresh); markup = setAttribute(markup, local[0], 'id', fresh); if (id === op.id) selected = fresh; }
+      const used = uiIds(design);
+      for (const id of ids) { const local: XmlNode[] = []; const find = (n: XmlNode) => { if (n.attrs.id === id) local.push(n); n.children.forEach(find); }; find(parseXml(markup)); const fresh = newShortId(used); used.add(fresh); markup = setAttribute(markup, local[0], 'id', fresh); if (id === op.id) selected = fresh; }
+      // XML event attributes are references, so a copy shares the same definitions.
       sources.set(at.file, source.slice(0, at.node.end) + '\n' + markup + source.slice(at.node.end));
-      // Duplicated interactive controls need their own target-scoped registrations.
-      for (const [oldId, newId] of mapping) {
-        const original = design.screens.flatMap(s => uiNodes(s.children)).find(n => n.id === oldId);
-        const eventName = original?.attrs.event; if (!eventName) continue;
-        const registration = design.events.find(item => item.target === oldId && item.name === eventName);
-        if (!registration || !registration.editable || !registration.command) throw new Error(`控件 ${oldId} 的事件 ${eventName} 由自定义逻辑维护，复制后无法自动绑定；请先处理该事件`);
-        appendEvent(sources, design, newId, eventName, commandBody(registration as CommandShape));
-      }
     }
   } else if (op.action === 'moveNode') {
     const at = locateUi(sources, str(op.id)), page = design.screens.find(s => s.id === str(op.screen)); if (!page) throw new Error('目标页面不存在');
@@ -789,16 +902,13 @@ export function editUi(input: Sources, value: unknown): { changes: Sources; sele
     const buttonWidth = Math.floor((width - 104) / 2), buttonY = height - 90;
     const shade = fresh(), panel = fresh(), titleId = title ? fresh() : '', messageId = fresh(), confirmId = fresh(), cancelId = fresh();
     if (accept === 'event') {
-      // The generated confirm button is a new target, so copy a proven fixed callback
-      // from the chosen source registration onto it.
-      const source = typeof op.eventTarget === 'string' ? design.events.find(item => item.target === op.eventTarget && item.name === event) : undefined;
-      if (!source || !source.editable || !source.command) throw new Error('弹窗确认事件必须是可复制的固定回调，请选择目标与事件名');
-      appendEvent(sources, design, confirmId, event, commandBody(source as CommandShape));
+      // The generated confirm button references one existing independent definition.
+      if (!design.events.some(item => item.kind === 'event' && item.name === event)) throw new Error('弹窗确认事件必须是已定义的 event.register 事件');
     }
     if (accept === 'quit') {
       event = 'quit-confirm';
-      for (let index = 2; design.events.some(item => item.target === confirmId && item.name === event); index++) event = `quit-confirm-${index}`;
-      appendEvent(sources, design, confirmId, event, 'ctx.quit();');
+      for (let index = 2; design.events.some(item => item.name === event); index++) event = `quit-confirm-${index}`;
+      appendEvent(sources, design, event, 'ctx.quit();', 'quit');
     }
     const action = accept === 'close' ? 'route="close"' : `event="${escapeXml(event)}"`;
     const markup = `<screen id="${escapeXml(pageId)}" modal="true" pause="true">\n      <panel id="${shade}" width="${design.width}" height="${design.height}" color="#000000B8" />\n      <panel id="${panel}" x="${x}" y="${y}" width="${width}" height="${height}" color="#18232AF2" radius="16">\n        ${title ? `<label id="${titleId}" x="36" y="26" width="${width - 72}" height="42" text="${escapeXml(title)}" font-size="28" color="#F0CA89" />\n        ` : ''}<label id="${messageId}" x="36" y="${title ? 92 : 64}" width="${width - 72}" height="${title ? 84 : 96}" text="${escapeXml(message)}" font-size="23" color="#F5F1E8FF" />\n        <button id="${confirmId}" x="36" y="${buttonY}" width="${buttonWidth}" height="52" text="${escapeXml(confirmText)}" ${action} color="#315F73" font-size="22" radius="8" />\n        <button id="${cancelId}" x="${36 + buttonWidth + 32}" y="${buttonY}" width="${buttonWidth}" height="52" text="${escapeXml(cancelText)}" route="close" color="#43576FCC" font-size="22" radius="8" />\n      </panel>\n    </screen>`;
@@ -838,22 +948,31 @@ export function editUi(input: Sources, value: unknown): { changes: Sources; sele
     if (!group || !node) throw new Error('UI 变量源码已改变，请刷新');
     sources.set(variable.file, xml.slice(0, node.start) + xml.slice(node.end));
   } else if (op.action === 'event') {
-    const name = str(op.name, 128), target = str(op.target, 128);
+    const name = str(op.name, 128);
     if (!/^[A-Za-z_][A-Za-z0-9_.-]*$/.test(name)) throw new Error('事件名须由英文、数字、点、下划线或连字符组成');
-    const virtual = virtualTargets.has(target);
-    if (!virtual) {
-      const exists = design.screens.some(s => s.id === target) || design.screens.some(s => uiNodes(s.children).some(n => n.id === target));
-      if (!exists) throw new Error('注册目标控件或页面不存在');
-      if (name === 'game.enter' || prefixLifecycle(name)) throw new Error('screen.open / screen.close 请用生命周期编辑；普通事件不能使用保留名称');
-    } else if (target === '$game') {
-      if (name !== 'game.enter') throw new Error('$game 只接受 game.enter');
-    } else if (name === 'game.enter' || prefixLifecycle(name)) throw new Error('$host 只接受非保留的捕获结果事件名');
     const original = typeof op.original === 'string' && op.original ? str(op.original, 128) : undefined;
-    const identity = original === undefined ? undefined : `${target}\0${original}`;
-    if (design.events.some(e => `${e.target}\0${e.name}` === `${target}\0${name}` && `${e.target}\0${e.name}` !== identity)) throw new Error('同一目标已存在此事件名');
-    const matches = original !== undefined ? design.events.filter(e => e.target === target && e.name === original) : [];
-    if (original !== undefined && matches.length !== 1) throw new Error(matches.length ? '存在重复注册，请先处理源码' : '要修改的事件已不存在，请刷新');
+    const target = typeof op.target === 'string' && op.target ? str(op.target, 128) : undefined;
+    const matches = original !== undefined ? design.events.filter(event => event.name === original) : [];
+    if (original !== undefined && matches.length !== 1) throw new Error(matches.length ? '存在重复定义，请先处理源码' : '要修改的事件已不存在，请刷新');
     if (original !== undefined && !matches[0].editable) throw new Error(matches[0].reason ?? '该事件由自定义逻辑维护，不能可视化修改');
+    const game = matches[0]?.kind === 'game' || target === '$game';
+    if (game) {
+      if (name !== 'game.enter' || original !== undefined && original !== 'game.enter') throw new Error('game.enter 只能绑定 $game 且不能改名');
+      if (original !== undefined && matches[0].kind !== 'game') throw new Error('game.enter 是全局钩子，与普通事件不同');
+      if (original === undefined && design.events.some(event => event.kind === 'game')) throw new Error('game.enter 已经注册');
+      if (target !== undefined && target !== '$game') throw new Error('$game 只接受 game.enter');
+    } else {
+      if (name === 'game.enter' || prefixLifecycle(name)) throw new Error('screen.open / screen.close 与 game.enter 是保留名称；请用生命周期编辑或 $game 目标');
+      if (original === undefined && design.events.some(event => event.name === name)) throw new Error('已存在同名事件定义');
+      if (target !== undefined) {
+        const page = design.screens.find(screen => screen.id === target), node = design.screens.flatMap(screen => uiNodes(screen.children)).find(item => item.id === target);
+        if (!page && !node) throw new Error('绑定目标控件或页面不存在');
+        if (node && !interactiveKinds.has(node.kind)) throw new Error('只能把事件绑定到按钮、滑条、开关、选色器或页面背景');
+        if (node?.attrs.route) throw new Error('route 按钮不能同时绑定事件');
+        if (node?.attrs.event && node.attrs.event !== name) throw new Error('控件已声明其他事件，请先清除');
+        if (page && page.attrs['background-click'] && page.attrs['background-right-click']) throw new Error('页面背景已声明左右键事件，请直接在 XML 中引用');
+      }
+    }
     const beforePage = typeof op.page === 'string' && op.page ? str(op.page) : undefined;
     if (beforePage !== undefined && !['resume', 'restart'].includes(op.command)) throw new Error('只有开始/恢复剧情或重新开始可以指定先打开页面');
     const commandTarget = typeof op.targetValue === 'string' && op.targetValue ? str(op.targetValue) : undefined;
@@ -894,8 +1013,8 @@ export function editUi(input: Sources, value: unknown): { changes: Sources; sele
       const action = typeof op.actionValue === 'string' ? str(op.actionValue, 32) : '';
       if (!isShortcutAction(action)) throw new Error('请选择快捷键动作');
       const resultEvent = typeof op.resultEvent === 'string' ? str(op.resultEvent, 128) : '';
-      if (!resultEvent || !design.events.some(item => item.target === '$host' && item.name === resultEvent)) throw new Error('快捷键捕获结果事件必须注册在 $host');
-      if (target === '$host' && resultEvent === name) throw new Error('快捷键捕获结果事件不能指向自身');
+      if (!resultEvent || !design.events.some(item => item.kind === 'event' && item.name === resultEvent)) throw new Error('快捷键捕获结果事件必须是已定义的 event.register 事件');
+      if (resultEvent === name) throw new Error('快捷键捕获结果事件不能指向自身');
       shape.action = action; shape.resultEvent = resultEvent;
     }
     else if (op.command === 'keybinding') {
@@ -931,32 +1050,39 @@ export function editUi(input: Sources, value: unknown): { changes: Sources; sele
     }
     else if (!['close', 'advance', 'choose', 'soundEnabled', 'cancelShortcutCapture', 'resetKeybindings', 'resetColors', 'quit'].includes(op.command)) throw new Error('不支持的事件动作');
     const body = commandBody(shape);
-    if (original !== undefined) {
-      const event = matches[0], source = sources.get(event.file)!;
-      sources.set(event.file, source.slice(0, event.start) + `ui(${JSON.stringify(target)}).bind(${JSON.stringify(name)}, (ctx) => { ${body} });` + source.slice(event.end));
-      if (name !== original) {
-        // Only this target's XML event changes; other targets may keep the same event name.
-        if (design.screens.some(s => s.id === target)) {
-          const page = design.screens.find(s => s.id === target)!;
-          for (const key of ['background-click', 'background-right-click'] as const) if (page.attrs[key] === original) patchAttrs(sources, page.id, { [key]: name }, [key], true);
-        } else if (design.screens.some(s => uiNodes(s.children).some(n => n.id === target))) patchAttrs(sources, target, { event: name }, ['event']);
+    if (game) {
+      if (matches[0]?.kind === 'game') {
+        const event = matches[0], source = sources.get(event.file)!;
+        sources.set(event.file, source.slice(0, event.start) + `ui("$game").bind("game.enter", (ctx) => { ${body} });` + source.slice(event.end));
+      } else appendGameEvent(sources, design, body);
+    } else if (original !== undefined) {
+      const event = matches[0];
+      if (name !== original && design.eventUncertain) throw new Error('存在无法静态解析的注册，不能自动重命名事件');
+      const patches = new Map<string, { start: number; end: number; text: string }[]>();
+      const add = (file: string, start: number, end: number, text: string) => { const list = patches.get(file) ?? []; list.push({ start, end, text }); patches.set(file, list); };
+      add(event.file, event.start, event.end, `event.register(${JSON.stringify(name)}, (ctx) => { ${body} });`);
+      if (name !== original && !game) {
+        // Rename updates every proven reference: script binds and XML attributes.
+        for (const binding of design.bindings) if (binding.kind === 'script' && binding.name === original && binding.start !== undefined && binding.end !== undefined) add(binding.file, binding.start, binding.end, `ui(${JSON.stringify(binding.target)}).bind(${JSON.stringify(name)});`);
       }
-    } else appendEvent(sources, design, target, name, body);
+      patchScriptRanges(sources, patches);
+      if (name !== original) for (const page of design.screens) {
+        for (const key of ['background-click', 'background-right-click'] as const) if (page.attrs[key] === original) patchAttrs(sources, page.id, { [key]: name }, [key], true);
+        for (const node of uiNodes(page.children)) if (node.attrs.event === original) patchAttrs(sources, node.id, { event: name }, ['event']);
+      }
+    } else {
+      appendEvent(sources, design, name, body, shape.command);
+      if (target !== undefined) attachEventBinding(sources, design, name, target);
+    }
   } else if (op.action === 'deleteEvent') {
-    const name = str(op.name, 128), target = str(op.target, 128), matches = design.events.filter(e => e.target === target && e.name === name);
-    if (matches.length !== 1) throw new Error(matches.length ? '存在重复注册，请先处理源码' : '要删除的事件已不存在，请刷新');
+    const name = str(op.name, 128), matches = design.events.filter(event => event.name === name);
+    if (matches.length !== 1) throw new Error(matches.length ? '存在重复定义，请先处理源码' : '要删除的事件已不存在，请刷新');
     const event = matches[0];
     if (!event.editable) throw new Error(event.reason ?? '该事件由自定义逻辑维护，不能删除');
-    const page = design.screens.find(s => s.id === target);
-    const control = design.screens.flatMap(s => uiNodes(s.children)).find(n => n.id === target);
-    if (page && ['background-click', 'background-right-click'].some(key => page.attrs[key] === name) || control?.attrs.event === name) throw new Error('仍有控件或页面背景引用此事件，请先把相关事件改为其他动作');
-    if (target === '$host' && design.events.some(item => item.command === 'captureShortcut' && item.resultEvent === name)) throw new Error('仍有快捷键捕获指向此结果事件，请先修改或删除捕获事件');
-    const source = sources.get(event.file)!;
-    let start = event.start, end = event.end;
-    if (source.slice(end, end + 2) === '\r\n') end += 2; else if (source[end] === '\n') end += 1;
-    else if (start >= 2 && source.slice(start - 2, start) === '\r\n') start -= 2;
-    else if (start >= 1 && source[start - 1] === '\n') start -= 1;
-    sources.set(event.file, source.slice(0, start) + source.slice(end));
+    const references = design.bindings.filter(binding => binding.name === name).map(binding => `${binding.file}:${binding.line} ${binding.kind === 'xml' ? 'XML 引用' : binding.kind === 'legacy' ? '旧式回调' : 'ui(...).bind'} ${binding.target}`);
+    if (references.length) throw new Error(`仍有控件、页面或脚本引用事件 ${name}：${references.join('、')}；请先删除或改用其他事件`);
+    if (design.events.some(item => item.command === 'captureShortcut' && item.resultEvent === name)) throw new Error('仍有快捷键捕获指向此结果事件，请先修改或删除捕获事件');
+    removeStatement(sources, event);
   } else if (op.action === 'gallery') {
     const id = str(op.id, 128), image = str(op.image, 256);
     const titleKey = typeof op.titleKey === 'string' && op.titleKey.trim() ? str(op.titleKey, 128) : undefined;

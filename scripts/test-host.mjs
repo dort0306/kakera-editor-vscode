@@ -13,10 +13,10 @@ await cp('templates/minimal/content', path.join(root, 'content'), { recursive: t
 const uiPath = path.join(root, 'content', 'ui.xml'), ui = await readFile(uiPath, 'utf8');
 if (!ui.includes('kakera.test.start')) await writeFile(uiPath, ui.replace('</screen>', '<button id="kakera.test.start" x="0" y="0" width="1280" height="720" text="开始" event="kakera.test.start" /></screen>'));
 const hostUiScript = path.join(root, 'content', 'scripts', 'ui.js');
-await writeFile(hostUiScript, (await readFile(hostUiScript, 'utf8')) + '\nui("kakera.test.start").bind("kakera.test.start", ctx => { ctx.open("hud"); ctx.restart("opening"); });\n');
+await writeFile(hostUiScript, (await readFile(hostUiScript, 'utf8')) + '\nevent.register("kakera.test.start", ctx => { ctx.open("hud"); ctx.restart("opening"); });\n');
 const storyPath = path.join(root, 'content', 'story.xml');
 await writeFile(storyPath, '\uFEFF' + (await readFile(storyPath, 'utf8')).replace(/^\uFEFF/, ''));
-await writeFile(path.join(root, 'project.kakera-editor.json'), JSON.stringify({ editorSchema: 1, engineContract: '0.11.0', contentRoot: 'content' }));
+await writeFile(path.join(root, 'project.kakera-editor.json'), JSON.stringify({ editorSchema: 1, engineContract: '0.11.1', contentRoot: 'content' }));
 const executable = process.env.VSCODE_EXECUTABLE || path.join(process.env.LOCALAPPDATA, 'Programs', 'Microsoft VS Code', 'Code.exe');
 await runTests({
   vscodeExecutablePath: executable, extensionDevelopmentPath: process.cwd(), extensionTestsPath: path.resolve('.test-work/host.cjs'),

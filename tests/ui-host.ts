@@ -56,7 +56,7 @@ export async function verifyUiHost(session: Session): Promise<void> {
     assert.equal(await vscode.workspace.applyEdit(edit), true);
   };
   try {
-    await replaceBuffer(script, scriptBefore + '\nui("settings").bind("screen.open", ctx => {});\nui("hud").bind("handoff.check", ctx => ctx.present("settings"));\n');
+    await replaceBuffer(script, scriptBefore + '\nui("settings").bind("screen.open", ctx => {});\nevent.register("handoff.check", ctx => ctx.present("settings"));\n');
     await replaceBuffer(pages, pagesBefore.replace('id="settings"', 'id="settings.draft"'));
     loaded = await session.load();
     assert.equal(script.isDirty, true); assert.equal(pages.isDirty, true);

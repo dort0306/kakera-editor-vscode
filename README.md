@@ -2,7 +2,7 @@
 
 面向 Kakera AVG 的可视创作插件：以“一格一幕”的分镜工作台编辑剧情，保留普通 XML/JS 源码，使用真实播放器验证和试玩。
 
-**当前版本：0.11.0，Windows x64 本地桌面开发预览版。** 本版同步 Kakera v0.11.0 新版 JS 注册 API：剧情使用 `frame("幕ID").advance/choice/end`，生命周期使用 `frame(id).enter/exit` 与 `ui("页面").bind("screen.open"/"screen.close")`，界面使用 `ui("控件或页面").bind("事件", 回调)`，全局进入钩子与捕获结果固定绑定虚拟目标 `ui("$game")`/`ui("$host")`。旧 `on.*` 入口已从匹配播放器移除，编辑器遇到旧注册只显示迁移诊断并暂停相关可视化改写；事件注册改为（目标、事件名）作用域，两个控件可以共享事件名而各自绑定回调，新建控件时从可证明的固定回调复制到新控件。其余能力保持：HSL 方形 `color-picker`/`color-bind`/`palette`、游戏文本/语音国际化与 FTL、快捷确认弹窗、玩家快捷键、专用 `<cg>`、多起始幕、UI 显式起始幕、故事/UI 变量、生命周期、演出/音效、点九/图集、JS/XML 实时映射、分镜拖动/重连线、标题/人物/立绘/Live2D、真实试玩/调试/构建。实际验证与限制见[实现记录](doc/12-implementation-status.zh-cn.md)，日常操作见[可视化编辑器使用说明](doc/18-visual-editor-guide.zh-cn.md)，本地化细节见[本地化说明](doc/19-localization.zh-cn.md)。
+**当前版本：0.11.1，Windows x64 本地桌面开发预览版。** 本版同步 Kakera v0.11.1 的独立事件 API：剧情使用 `frame("幕ID").advance/choice/end`，生命周期使用 `frame(id).enter/exit` 与 `ui("页面").bind("screen.open"/"screen.close")`，普通界面事件先由 `event.register("事件ID", 回调)` 独立定义，再由控件 XML `event`、页面 `background-click`/`background-right-click` 或 `ui("控件或页面").bind("事件ID")` 引用。控件事件可省略或为空，未被引用的事件定义允许存在；全局进入钩子仍是 `ui("$game").bind("game.enter", 回调)`，捕获结果事件改为普通 `event.register`，`$host` 绑定已删除。旧 `on.*` 与 v0.11.0 两参数普通 `ui(id).bind(事件, 回调)` 都由匹配播放器拒绝；编辑器遇到旧注册只显示迁移诊断并暂停相关可视化改写。其余能力保持：HSL 方形 `color-picker`/`color-bind`/`palette`、游戏文本/语音国际化与 FTL、快捷确认弹窗、玩家快捷键、专用 `<cg>`、多起始幕、UI 显式起始幕、故事/UI 变量、生命周期、演出/音效、点九/图集、JS/XML 实时映射、分镜拖动/重连线、标题/人物/立绘/Live2D、真实试玩/调试/构建。实际验证与限制见[实现记录](doc/12-implementation-status.zh-cn.md)，日常操作见[可视化编辑器使用说明](doc/18-visual-editor-guide.zh-cn.md)，本地化细节见[本地化说明](doc/19-localization.zh-cn.md)。
 
 ## 项目目标
 
@@ -16,26 +16,26 @@
 
 ## 能力与状态
 
-当前同版本增量已将选色器同步为 HSL 色相环与正方形：横向饱和度、纵向亮度，黑白边缘保留标记；属性色盘和只读画布均已更新。XML/JS、`#RRGGBBAA` 和偏好格式不变，随附工具由包含该改动的 v0.11.0 源码重新构建；旧三角 HSV 说明仅为历史。0.10.2 起 Activity Bar“界面”分类按 include 列出全部 UI XML，左键打开对应可视化编辑器，右键打开源码。0.10.3 起按上游职责拆分：控件只绘制环/正方形/可选 alpha，无内置预览或 HEX；`alpha=false` 至少 128×128，默认/`true` 至少 128×154，色盘组按 `D=min(W,H−R)` 居中，画布预览同步。
+当前同版本增量已将选色器同步为 HSL 色相环与正方形：横向饱和度、纵向亮度，黑白边缘保留标记；属性色盘和只读画布均已更新。XML/JS、`#RRGGBBAA` 和偏好格式不变，随附工具由包含该改动的 v0.11.1 源码重新构建；旧三角 HSV 说明仅为历史。0.10.2 起 Activity Bar“界面”分类按 include 列出全部 UI XML，左键打开对应可视化编辑器，右键打开源码。0.10.3 起按上游职责拆分：控件只绘制环/正方形/可选 alpha，无内置预览或 HEX；`alpha=false` 至少 128×128，默认/`true` 至少 128×154，色盘组按 `D=min(W,H−R)` 居中，画布预览同步。
 
-2026-10-31 同步检查：相邻 `kakera-avg-rust` 工作区版本 0.11.0，新增 `frame()`/`ui()` 注册 API、结构化（目标、事件名）回调、`$game`/`$host` 虚拟目标和旧 `on.*` 硬拒绝；story 8 / UI 3 / save 9 / KPAK 1/2 与 demo content-version=11 不变。编辑器只写新语法，模板、工具哈希与版本检查同步，具体检查见[实现记录](doc/12-implementation-status.zh-cn.md)。
+2026-10-31 同步检查：相邻 `kakera-avg-rust` 工作区版本 0.11.1，普通 UI 回调改为 `event.register(id, callback)` 独立定义，XML `event`/页面背景属性与单参数 `ui(id).bind(eventId)` 只做引用；控件事件可省略或为空、未引用定义允许存在，两参数普通 bind 与 `$host` 绑定被删除。`frame()` 剧情/生命周期、story 8 / UI 3 / save 9 / KPAK 1/2、profile/read 1 与 demo content-version=11 不变。编辑器只写新语法，模板、工具哈希与版本检查同步，具体检查见[实现记录](doc/12-implementation-status.zh-cn.md)。
 
 | 范围 | 基线或计划 | 本仓库状态 |
 | --- | --- | --- |
-| 游戏格式 | v0.11.0 story 8 / UI 3 / save 9 | 模板与候选通过真实 v0.11.0 引擎检查；JS 注册为 `frame()`/`ui()`，支持 game localization、FTL、text-key/text-arg、locale 绑定与独立 language.json；保留专用 CG、palette/color-bind/color-picker；旧 `on.*` 显示迁移诊断 |
+| 游戏格式 | v0.11.1 story 8 / UI 3 / save 9 | 模板与候选通过真实 v0.11.1 引擎检查；JS 注册为 `frame()`、`event.register()` 与 `ui().bind(eventId)`，支持 game localization、FTL、text-key/text-arg、locale 绑定与独立 language.json；保留专用 CG、palette/color-bind/color-picker；旧 `on.*` 与两参数普通 `ui().bind()` 显示迁移诊断 |
 | 标题与人物 | 游戏标题、人物创建/改名、批量立绘、Live2D 模型/依赖与回退图、外观编辑和放入当前幕 | 已实现；标题/人物名称均写入实际 XML，保持稳定引用 |
 | 分支分镜 | 选项分叉、目标汇合、循环和未知目标 | 分支分色、普通续接同行；拖动布局保存，拖线/点击连接；新建/删除明确调整连接 |
 | 手动创作 | 新建/打开、分镜、台词/人物/音频、独立三槽画面、选择/条件分流/有序更新、稳定 ID | 已实现；生成脚本和可逆固定注册均可编辑，按幕确定可写范围 |
 | 源码与资源 | 多章节、局部 XML 补丁、Opaque JS 保留、资源导入/已知引用、恢复记录 | 已实现基础能力、人物模型关联、点九/图集工具；复杂模型参数和合并待补 |
 | UI 编辑器 | UI 3 多文件页面、控件树/画布、属性与交互，快捷弹窗、玩家快捷键事件、HSL 选色器与配色槽位 | 已实现基础可视编辑、父级/绘制顺序、变量创建/编辑/删除、palette/color-bind/color-picker、快捷键捕获/绑定/重置事件、颜色覆盖读取 UI string 和快捷确认弹窗；侧栏按 include 列出 UI XML 并支持可视化/源码打开；静态示例预览，精确效果需试玩 |
 | AI 辅助 | 用户配置、SecretStorage、纯文本拆幕、JSON/SSE、原文保真与审阅 | 已实现受限提案；真实服务与图片/资源关联尚未验收 |
-| IDE 调试 | DAP、XML frame 断点、当前/候选只读变量、推进、选项选择 | 已接入真实 v0.11.0 播放器；不提供 JS 行级调试 |
+| IDE 调试 | DAP、XML frame 断点、当前/候选只读变量、推进、选项选择 | 已接入真实 v0.11.1 播放器；不提供 JS 行级调试 |
 | 游戏发行 | 依赖选择、实际包内文件审阅、KPAK 2、独立目录和报告 | 已实现；底层工具 KPAK 1/2 均已测试 |
 | 插件发行 | 构建与离线 VSIX，匹配工具、模板和字体许可 | 已生成内部预览包；尚未公开发布 |
 
 ## 安装与开始使用
 
-在 VS Code 命令面板执行 **Extensions: Install from VSIX...**，选择生成的 `artifacts/kakera-editor-vscode-0.11.0.vsix`。当前预览包包含经过 SHA-256 核验的 v0.11.0 播放器、打包器和 Noto CJK 字体，不需要 Rust 或 AI 服务；安装后扩展 ID 为 `dort0306.kakera-editor-vscode@0.11.0`。
+在 VS Code 命令面板执行 **Extensions: Install from VSIX...**，选择生成的 `artifacts/kakera-editor-vscode-0.11.1.vsix`。当前预览包包含经过 SHA-256 核验的 v0.11.1 播放器、打包器和 Noto CJK 字体，不需要 Rust 或 AI 服务；安装后扩展 ID 为 `dort0306.kakera-editor-vscode@0.11.1`。
 
 1. 执行 **Kakera：打开创作首页**，新建工程或打开已有内容根。
 2. 在分镜中选择一幕，编辑台词、说话人、画面、音频与路由。
@@ -124,7 +124,7 @@ AI 是可选功能：执行 **Kakera：配置 AI 服务**，在普通原稿编�
 - [UI 编辑器](doc/16-ui-editor.zh-cn.md)、[JS/XML 实时映射](doc/13-live-logic-mapping.zh-cn.md)：控件写入、事件/生命周期与源码边界。
 - [游戏本地化](doc/19-localization.zh-cn.md)：v0.10.1 清单/FTL、文本来源、参数、预览与限制。
 
-原始资料中的部分相对链接指向上游引擎源码、版本验收或归档，这些文件未复制进本仓库。本轮根据开发机上的实际 v0.11.0 源码核对模板、JS 注册、UI 扩展、国际化与 CLI，并通过准备脚本复制工具；没有运行上游全部测试。
+原始资料中的部分相对链接指向上游引擎源码、版本验收或归档，这些文件未复制进本仓库。本轮根据开发机上的实际 v0.11.1 源码核对模板、JS 注册、UI 扩展、国际化与 CLI，并通过准备脚本复制工具；没有运行上游全部测试。
 
 ## 后续目标
 
@@ -164,7 +164,7 @@ kakera-editor-vscode/
 npm ci
 npm run check                 # 类型、单元/协议测试与构建
 npm run test:browser          # Edge/Chromium：工作台/首页、流程图与 UI 控件原生交互及截图
-# 准备匹配工具，参数为实际 v0.11.0 release 二进制目录
+# 准备匹配工具，参数为实际 v0.11.1 release 二进制目录
 node scripts/prepare-tools.mjs D:\path\to\kakera\target\release
 npm run test:integration      # 真实模板、快照、KPAK 1/2 与独立宿主检查
 npm run test:host             # 本机 VS Code：未保存缓冲、undo/redo、多视图、DAP
@@ -175,7 +175,7 @@ npm run package              # 生成 artifacts/ 下的离线 VSIX
 
 浏览器交互回归使用已安装的 Edge/Chromium，创建独立临时配置，通过原生输入验证点击、拖动和键盘选中。可用 `KAKERA_TEST_BROWSER` 指定浏览器可执行文件；不会下载浏览器或操作日常浏览器会话。
 
-源码仓库不提交工具二进制，干净克隆需要执行准备脚本；现成 VSIX 已附工具。历史 UI 拆分补丁曾沿用 v0.8.3 版本号；按钮原生导航及 UI 演出增量沿用 v0.8.4 版本号；v0.9.0 增加生命周期、隐藏交接槽与 save 9，v0.9.1 增加末幕退出和 UI 显式起始幕；v0.10.0 增加快捷弹窗、玩家快捷键、HSL 方形/配色槽位与动态图片查看组合；v0.10.1 增加默认关闭的游戏文本/语音国际化、Fluent 词条、独立语言偏好与 `ctx.locale`；v0.11.0 把 JS 注册改为 `frame()`/`ui()`、按目标绑定事件并移除旧 `on.*`。请从当前 v0.11.0 源码编译 release 后重新准备工具。自定义工具目录必须含 `tools.json` 哈希清单，通过 **Kakera：配置播放器工具目录** 设置。当前不包含 Live2D Core。
+源码仓库不提交工具二进制，干净克隆需要执行准备脚本；现成 VSIX 已附工具。历史 UI 拆分补丁曾沿用 v0.8.3 版本号；按钮原生导航及 UI 演出增量沿用 v0.8.4 版本号；v0.9.0 增加生命周期、隐藏交接槽与 save 9，v0.9.1 增加末幕退出和 UI 显式起始幕；v0.10.0 增加快捷弹窗、玩家快捷键、HSL 方形/配色槽位与动态图片查看组合；v0.10.1 增加默认关闭的游戏文本/语音国际化、Fluent 词条、独立语言偏好与 `ctx.locale`；v0.11.0 把 JS 注册改为 `frame()`/`ui()`、按目标绑定事件并移除旧 `on.*`；v0.11.1 把普通界面回调拆为独立 `event.register` 定义与可选控件绑定，删除两参数普通 bind 和 `$host`。请从当前 v0.11.1 源码编译 release 后重新准备工具。自定义工具目录必须含 `tools.json` 哈希清单，通过 **Kakera：配置播放器工具目录** 设置。当前不包含 Live2D Core。
 
 已采用 TypeScript Extension Host、React Webview 与独立领域/源码模块；当前通过匹配 CLI 复用 Rust 引擎，未另造运行时。独立结构化 Rust wrapper 尚未交付，诊断保留真实 CLI 文本。具体依赖边界见[落地方案](doc/11-vscode-extension-implementation-plan.zh-cn.md#3-代码组织与依赖方向)。
 
@@ -194,7 +194,7 @@ npm run package              # 生成 artifacts/ 下的离线 VSIX
 
 ## 许可证
 
-本仓库代码采用 [MIT 许可证](LICENSE)。React、Acorn、Saxes 等运行依赖的声明由构建脚本汇总至 `THIRD_PARTY_NOTICES.txt`；saxes npm 包遗漏的许可来自[官方 v6.0.0 LICENSE](https://raw.githubusercontent.com/lddubeau/saxes/v6.0.0/LICENSE)。v0.11.0 播放器内嵌的 Fluent/unic-langid 双许可选择与全文随离线包放在 `resources/licenses/engine-i18n/`，并汇总进同一通知文件。模板字体遵循 [SIL OFL 1.1](templates/minimal/content/assets/licenses/OFL.txt)。播放器及其他素材保留各自授权，当前内部预览包不包含 Live2D Core 或模型。
+本仓库代码采用 [MIT 许可证](LICENSE)。React、Acorn、Saxes 等运行依赖的声明由构建脚本汇总至 `THIRD_PARTY_NOTICES.txt`；saxes npm 包遗漏的许可来自[官方 v6.0.0 LICENSE](https://raw.githubusercontent.com/lddubeau/saxes/v6.0.0/LICENSE)。v0.11.1 播放器内嵌的 Fluent/unic-langid 双许可选择与全文随离线包放在 `resources/licenses/engine-i18n/`，并汇总进同一通知文件。模板字体遵循 [SIL OFL 1.1](templates/minimal/content/assets/licenses/OFL.txt)。播放器及其他素材保留各自授权，当前内部预览包不包含 Live2D Core 或模型。
 
 ### UI 演出与音效（0.6.2）
 
@@ -216,14 +216,15 @@ npm run package              # 生成 artifacts/ 下的离线 VSIX
 
 同步 Kakera v0.9.0：`frame(id).enter/exit`、`ui(page).bind("screen.open"/"screen.close")` 被识别为独立的源码生命周期注册，不混入 `frame(id).advance/choice/end` 或按钮事件；静态目标参与删除保护，动态/缺失目标显示约束。`ctx.present` 和 `ctx.resume` 可由事件向导追加，帧/页面目标在写入前校验。视频只在 UI `ui-media.sequence` 中创建；frame 级 `<video>`、`ctx.skipVideo` 和 `game.videoPlaying/game.videoSkippable` 等旧契约会显示诊断或不再出现在绑定建议中。隐藏 `flow-checkpoint.json` 与 `ui-audio.json` 等玩家文件一样排除出冻结代次和发行包；save 9 由真实播放器负责，编辑器不写玩家槽位。
 
-### 新版 JS 注册 API 与目标作用域事件（0.11.0）
+### 新版 JS 注册 API、独立事件与控件绑定（0.11.0 / 0.11.1）
 
-同步 Kakera v0.11.0，剧情和界面注册不再使用全局 `on.*`：
+同步 Kakera v0.11.x，剧情和界面注册不再使用全局 `on.*`：
 
-- **剧情与生命周期**：`frame("幕ID").advance(targetOrRun)`、`.choice("选项ID", targetOrRun, when?)`、`.end()`；离幕/进入用 `frame(id).exit/enter(...)`，页面关闭/进入用 `ui("页面").bind("screen.close"/"screen.open", ...)`。全局进入钩子和快捷键捕获结果分别固定为 `ui("$game").bind("game.enter", ...)`、`ui("$host").bind(结果事件, ...)`。
-- **界面事件按目标绑定**：每个 XML 事件必须恰好一个 `ui("控件或页面").bind("事件", 回调)`，两个控件可共享 `event` 名而各自绑定回调。可视化事件列表显示“目标 · 事件名”，改名/删除只处理该目标的 XML 引用；新增控件时编辑器从可证明的固定回调复制到新控件自己的注册，`color-picker` 自动事件也绑定自身控件。`screen.open/close` 由生命周期编辑维护，不混入普通事件列表。
-- **旧脚本迁移**：`on.*` 已从播放器删除且无别名；旧工程在启动、`--check` 和打包时会被拒绝。编辑器遇到旧注册只给带上游 API 第 37.5 节指引的诊断，不自动整文件迁移，也不把旧注册猜成可编辑路线。
-- **工具与版本**：模板、受管路线文件头（`Kakera Managed Routes v2`）、真实引擎检查、KPAK 1/2 和宿主测试同步到 v0.11.0；插件版本按“x.y 与上游一致”的规则升至 0.11.0，已在 AGENTS §8 记录。
+- **剧情与生命周期**：`frame("幕ID").advance(targetOrRun)`、`.choice("选项ID", targetOrRun, when?)`、`.end()`；离幕/进入用 `frame(id).exit/enter(...)`，页面关闭/进入用 `ui("页面").bind("screen.close"/"screen.open", ...)`。全局进入钩子固定为 `ui("$game").bind("game.enter", ...)`；v0.11.1 起快捷键捕获结果也改用普通 `event.register(结果事件ID, 回调)`，不再需要 `$host` 绑定。
+- **独立事件定义**：普通界面回调先写 `event.register("事件ID", 回调)`，同一 ID 只能定义一次；多个控件共享同一事件，未绑定定义允许存在。控件 XML `event`、页面 `background-click`/`background-right-click` 或单参数 `ui("控件或页面").bind("事件ID")` 是三种引用方式，控件事件可以省略或为空。`screen.open/close` 仍是生命周期，由页面生命周期编辑维护。
+- **编辑器行为**：交互事件列表显示事件 ID 与已证明的绑定目标；编辑动作会替换该 `event.register`，改名同步可证明的 XML 属性与脚本 bind，删除前要求解除全部引用。新增控件、`color-picker` 自动事件和快捷弹窗只引用已有定义（没有定义时自动创建新 ID），不再复制其他目标的回调。`route` 按钮、只读控件、重复 bind、未知引用与保留名称仍在校验或诊断中拒绝。
+- **旧脚本迁移**：`on.*` 与 v0.11.0 两参数普通 `ui(id).bind("事件", 回调)` 已被播放器删除且无别名；旧工程在启动、`--check` 和打包时会被拒绝。编辑器遇到旧注册只给带上游 API 第 37.2–37.4 节指引的诊断，不自动整文件迁移，也不把旧注册猜成可编辑事件。
+- **工具与版本**：模板、受管路线文件头（`Kakera Managed Routes v2`）、真实引擎检查、KPAK 1/2 和宿主测试同步到 v0.11.1；插件版本按“x.y 与上游一致”的规则升至 0.11.1，已在 AGENTS §8 记录。
 
 ### 游戏国际化与独立语言偏好（0.10.1）
 

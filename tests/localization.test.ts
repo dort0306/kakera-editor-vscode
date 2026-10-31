@@ -45,7 +45,7 @@ function fixture(): Sources {
     <label id="plain" x="10" y="160" width="500" height="40" text="字面量"/>
   </screen>
 </ui>`],
-    ['ui.js', 'ui("dynamic").bind("advance", (ctx) => { ctx.advance(); });\nui("dynamic").bind("switch-language", (ctx) => { ctx.locale("text", "en-US"); });']
+    ['ui.js', 'event.register("advance", (ctx) => { ctx.advance(); });\nevent.register("switch-language", (ctx) => { ctx.locale("text", "en-US"); });\nui("dynamic").bind("switch-language");']
   ]);
 }
 const merge = (input: Sources, changes: Sources) => new Map([...input, ...changes]);
@@ -163,11 +163,11 @@ test('UI text-key、动态 key、text-arg、画廊与根标题可编辑且保持
   const events = readUiDesign(sources).events;
   assert.equal(events.find(event => event.name === 'switch-language')!.channel, 'text');
   assert.equal(events.find(event => event.name === 'switch-language')!.locale, 'en-US');
-  result = editUi(sources, { action: 'event', name: 'switch-language', original: 'switch-language', target: 'dynamic', command: 'locale', channel: 'voice', locale: 'zh-CN' }); sources = merge(sources, result.changes);
+  result = editUi(sources, { action: 'event', name: 'switch-language', original: 'switch-language', command: 'locale', channel: 'voice', locale: 'zh-CN' }); sources = merge(sources, result.changes);
   assert.ok(sources.get('ui.js')!.includes('ctx.locale("voice", "zh-CN")'));
-  assert.throws(() => editUi(sources, { action: 'event', name: 'bad-locale', target: 'dynamic', command: 'locale', channel: 'text', locale: 'fr-FR' }), /已声明/);
-  assert.throws(() => editUi(sources, { action: 'event', name: 'bad-channel', target: 'dynamic', command: 'locale', channel: 'music', locale: 'en-US' }), /通道/);
-  result = editUi(sources, { action: 'event', name: 'auto-language', target: 'dynamic', command: 'locale', channel: 'text', locale: '' }); sources = merge(sources, result.changes);
+  assert.throws(() => editUi(sources, { action: 'event', name: 'bad-locale', command: 'locale', channel: 'text', locale: 'fr-FR' }), /已声明/);
+  assert.throws(() => editUi(sources, { action: 'event', name: 'bad-channel', command: 'locale', channel: 'music', locale: 'en-US' }), /通道/);
+  result = editUi(sources, { action: 'event', name: 'auto-language', command: 'locale', channel: 'text', locale: '' }); sources = merge(sources, result.changes);
   assert.ok(sources.get('ui.js')!.includes('ctx.locale("text", null)'));
 });
 

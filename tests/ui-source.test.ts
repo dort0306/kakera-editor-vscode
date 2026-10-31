@@ -9,14 +9,40 @@ import { validateStory } from '../packages/domain/src/index';
 import { previewUi } from '../packages/domain/src/ui-preview';
 import { uiFixture } from './ui-fixture';
 const merge = (input: Sources, changes: Sources) => new Map([...input, ...changes]);
+
+test('v0.11.1 $game 钩子、空事件属性与捕获结果引用按独立事件模型处理', () => {
+  // $game keeps its preserved two-argument hook and is editable/deletable as one definition.
+  let sources = merge(uiFixture(), editUi(uiFixture(), { action: 'event', name: 'game.enter', target: '$game', command: 'setUi', targetValue: 'show' }).changes);
+  assert.ok(sources.get('ui.js')!.includes('ui("$game").bind("game.enter", (ctx) => { ctx.setUi("show", ctx.value); });'));
+  let game = readUiDesign(sources).events.find(event => event.kind === 'game')!;
+  assert.equal(game.editable, true); assert.equal(game.command, 'setUi');
+  sources = merge(sources, editUi(sources, { action: 'event', original: 'game.enter', name: 'game.enter', command: 'setUi', targetValue: 'windowTitle' }).changes);
+  assert.equal(readUiDesign(sources).events.find(event => event.kind === 'game')!.commandTarget, 'windowTitle');
+  assert.throws(() => editUi(sources, { action: 'event', original: 'game.enter', name: 'game.start', command: 'advance' }), /不能改名/);
+  sources = merge(sources, editUi(sources, { action: 'deleteEvent', name: 'game.enter' }).changes);
+  assert.equal(readUiDesign(sources).events.some(event => event.kind === 'game'), false);
+
+  // An empty XML event attribute is equivalent to omitting it and needs no definition.
+  const empty = merge(uiFixture(), editUi(uiFixture(), { action: 'patchNode', id: 'choice', patch: { event: '', sound: 'ui.click' } }).changes);
+  const design = readUiDesign(empty);
+  assert.equal(locateUi(empty, 'choice').node.attrs.event, undefined);
+  assert.equal(design.warnings.some(warning => warning.includes('choice.advance')), false);
+
+  // A capture result event is an ordinary definition; deleting it while a capture references it is refused.
+  let capture = merge(uiFixture(), editUi(uiFixture(), { action: 'event', name: 'unused.result', command: 'setUi', targetValue: 'windowTitle' }).changes);
+  capture = merge(capture, editUi(capture, { action: 'event', name: 'capture', command: 'captureShortcut', actionValue: 'advance', resultEvent: 'unused.result' }).changes);
+  assert.equal(readUiDesign(capture).events.find(event => event.name === 'capture')!.resultEvent, 'unused.result');
+  assert.throws(() => editUi(capture, { action: 'deleteEvent', name: 'unused.result' }), /快捷键捕获/);
+});
+
 test('多起始幕 restart 事件必须选择已声明起点，并保留目标', () => {
   const input = uiFixture();
   input.set('story.xml', input.get('story.xml')!.replace('entry="a"', 'entry="a b"').replace('</frames>', '<frame id="b"><text>第二起点</text></frame></frames>'));
   const design = readUiDesign(input); assert.deepEqual(design.entry, 'ui.xml');
-  const next = merge(input, editUi(input, { action: 'event', name: 'start.b', target: 'choice', command: 'restart', targetValue: 'b', page: 'hud' }).changes);
+  const next = merge(input, editUi(input, { action: 'event', name: 'start.b', command: 'restart', targetValue: 'b', page: 'hud' }).changes);
   assert.ok(next.get('ui.js')!.includes('ctx.open("hud"); ctx.restart("b")'));
-  assert.throws(() => editUi(input, { action: 'event', name: 'start.none', target: 'choice', command: 'restart' }), /必须指定起始幕/);
-  assert.throws(() => editUi(input, { action: 'event', name: 'start.c', target: 'choice', command: 'restart', targetValue: 'c' }), /起始幕/);
+  assert.throws(() => editUi(input, { action: 'event', name: 'start.none', command: 'restart' }), /必须指定起始幕/);
+  assert.throws(() => editUi(input, { action: 'event', name: 'start.c', command: 'restart', targetValue: 'c' }), /起始幕/);
 });
 test('按钮原生页面导航跨 include 验证目标，event 互斥、错误路由及被引用页面删除拒绝', () => {
   const sources = uiFixture(), result = editUi(sources, { action: 'patchNode', id: 'choice', patch: { route: 'open:settings', event: '' } });
@@ -96,9 +122,9 @@ test('页面、UI 变量和新事件使用真实 XML/JS；旧事件不重写，�
   let sources = uiFixture();
   const add = editUi(sources, { action: 'addScreen', file: 'ui/pages.xml', name: '' }); assert.match(add.screen!, /^[0-9a-f]{16}$/);
   const screen = editUi(sources, { action: 'addScreen', file: 'ui/pages.xml', name: 'newPage' }); sources = merge(sources, screen.changes); assert.equal(screen.screen, 'newPage');
-  const event = editUi(sources, { action: 'event', name: 'open.newPage', target: 'choice', command: 'open', targetValue: 'newPage' }); sources = merge(sources, event.changes);
+  const event = editUi(sources, { action: 'event', name: 'open.newPage', command: 'open', targetValue: 'newPage' }); sources = merge(sources, event.changes);
   assert.ok(sources.get('ui.js')!.startsWith(uiFixture().get('ui.js')!)); assert.ok(sources.get('ui.js')!.includes('ctx.open("newPage")'));
-  const button = editUi(sources, { action: 'addNode', screen: 'hud', kind: 'button', event: 'open.newPage', eventTarget: 'choice' }); sources = merge(sources, button.changes);
+  const button = editUi(sources, { action: 'addNode', screen: 'hud', kind: 'button', event: 'open.newPage' }); sources = merge(sources, button.changes);
   assert.equal(uiNodes(readUiDesign(sources).screens[0].children).find(n => n.id === button.selected)!.attrs.event, 'open.newPage');
   assert.throws(() => editUi(sources, { action: 'deleteScreen', id: 'newPage' }), /脚本可能/); assert.throws(() => editUi(sources, { action: 'deleteScreen', id: 'hud' }), /初始页面/);
   const variable = editUi(sources, { action: 'variable', file: 'ui/state.xml', name: 'score', type: 'int', initial: '9007199254740993', max: '9223372036854775807' }); sources = merge(sources, variable.changes);
@@ -120,7 +146,7 @@ test('UI 变量删除检查控件、标题、事件与脚本引用，只删除�
   bound = merge(bound, editUi(bound, { action: 'patchNode', id: 'picture.node', patch: { region: '', 'region-bind': 'ui.region' } }).changes);
   assert.throws(() => editUi(bound, { action: 'deleteVariable', id: 'region' }), /region-bind/);
 
-  let events = merge(uiFixture(), editUi(uiFixture(), { action: 'event', name: 'update.show', target: 'choice', command: 'setUi', targetValue: 'show' }).changes);
+  let events = merge(uiFixture(), editUi(uiFixture(), { action: 'event', name: 'update.show', command: 'setUi', targetValue: 'show' }).changes);
   assert.throws(() => editUi(events, { action: 'deleteVariable', id: 'show' }), /事件 update\.show/);
 
   const scripted = new Map(uiFixture());
@@ -170,9 +196,9 @@ test('UI 演出与音效组跨文件编辑，步骤排序/注释保留，页面�
   apply({action:'patchNode',id:'choice',patch:{event:'',sound:'ui.click'}});
   assert.equal(locateUi(sources,'choice').node.attrs.sound,'ui.click');
   const originalJs = sources.get('ui.js')!;
-  apply({action:'event',name:'show.reveal',target:'choice',command:'sequence',targetValue:'reveal'});
-  apply({action:'event',name:'play.click',target:'choice',command:'playSound',targetValue:'ui.click'});
-  apply({action:'event',name:'sound.toggle',target:'choice',command:'soundEnabled'});
+  apply({action:'event',name:'show.reveal',command:'sequence',targetValue:'reveal'});
+  apply({action:'event',name:'play.click',command:'playSound',targetValue:'ui.click'});
+  apply({action:'event',name:'sound.toggle',command:'soundEnabled'});
   assert.ok(sources.get('ui.js')!.startsWith(originalJs)); assert.ok(sources.get('ui.js')!.includes('ctx.sequence("reveal")')); assert.ok(sources.get('ui.js')!.includes('ctx.soundEnabled(ctx.value)'));
   for (const steps of [[{kind:'fade',attrs:{target:'panel',from:'2'}}],[{kind:'fade',attrs:{target:'panel',duration:'10001'}}],[{kind:'video',attrs:{asset:'v',src:'unsafe'}}],[]]) assert.throws(()=>apply({action:'media',item:{...item,steps}}));
   assert.throws(()=>apply({action:'media',item:{kind:'sound',id:'bad',file:'ui.xml',attrs:{},steps:[{kind:'clip',attrs:{asset:'v',weight:'0'}}]}}));
@@ -181,16 +207,16 @@ test('UI 演出与音效组跨文件编辑，步骤排序/注释保留，页面�
 test('v0.9.1 交接触发事件可显式指定起始幕并先打开页面，目标受校验', () => {
   let sources = uiFixture();
   const apply = (operation: unknown) => { const result = editUi(sources, operation); sources = merge(sources, result.changes); return result; };
-  apply({ action: 'event', name: 'watch.intro', target: 'choice', command: 'present', targetValue: 'settings' });
-  apply({ action: 'event', name: 'back.pending', target: 'choice', command: 'resume', targetValue: '', page: 'settings' });
-  apply({ action: 'event', name: 'back.hud', target: 'choice', command: 'resume', targetValue: 'a', page: 'settings' });
+  apply({ action: 'event', name: 'watch.intro', command: 'present', targetValue: 'settings' });
+  apply({ action: 'event', name: 'back.pending', command: 'resume', targetValue: '', page: 'settings' });
+  apply({ action: 'event', name: 'back.hud', command: 'resume', targetValue: 'a', page: 'settings' });
   const js = sources.get('ui.js')!;
   assert.ok(js.includes('ctx.present("settings")')); assert.ok(js.includes('ctx.open("settings"); ctx.resume();')); assert.ok(js.includes('ctx.open("settings"); ctx.resume("a")'));
-  assert.throws(() => apply({ action: 'event', name: 'watch.missing', target: 'choice', command: 'present', targetValue: 'missing' }));
-  assert.throws(() => apply({ action: 'event', name: 'back.missing', target: 'choice', command: 'resume', targetValue: 'missing' }));
-  assert.throws(() => apply({ action: 'event', name: 'back.missingPage', target: 'choice', command: 'resume', targetValue: 'a', page: 'missing' }), /页面不存在/);
-  assert.throws(() => apply({ action: 'event', name: 'bad.page', target: 'choice', command: 'open', targetValue: 'settings', page: 'settings' }), /只有开始/);
-  for (const name of ['game.enter', 'frame.enter:a', 'screen.open:settings']) assert.throws(() => apply({ action: 'event', name, target: 'choice', command: 'close' }));
+  assert.throws(() => apply({ action: 'event', name: 'watch.missing', command: 'present', targetValue: 'missing' }));
+  assert.throws(() => apply({ action: 'event', name: 'back.missing', command: 'resume', targetValue: 'missing' }));
+  assert.throws(() => apply({ action: 'event', name: 'back.missingPage', command: 'resume', targetValue: 'a', page: 'missing' }), /页面不存在/);
+  assert.throws(() => apply({ action: 'event', name: 'bad.page', command: 'open', targetValue: 'settings', page: 'settings' }), /只有开始/);
+  for (const name of ['game.enter', 'frame.enter:a', 'screen.open:settings']) assert.throws(() => apply({ action: 'event', name, command: 'close' }));
   const lifecycle = merge(sources, new Map([['ui.js', sources.get('ui.js')! + "\nui('settings').bind('screen.open', ctx => {});\n"]]));
   assert.throws(() => editUi(lifecycle, { action: 'deleteScreen', id: 'settings' }), /screen\.open|页面/);
   const present = merge(sources, new Map([['ui.js', sources.get('ui.js')! + "\nui('choice').bind('handoff', ctx => ctx.present('settings'));\n"]]));
@@ -199,28 +225,34 @@ test('v0.9.1 交接触发事件可显式指定起始幕并先打开页面，目�
 
 test('可视事件可修改名称/动作并同步控件引用，未引用事件可删除，手写回调保留', () => {
   const input = uiFixture(), design = readUiDesign(input), advance = design.events.find(e => e.name === 'advance')!;
-  assert.equal(advance.editable, true); assert.equal(advance.command, 'advance');
-  const edited = editUi(input, { action: 'event', original: 'advance', target: 'choice', name: 'advance.next', command: 'open', targetValue: 'settings' });
+  assert.equal(advance.editable, true); assert.equal(advance.command, 'advance'); assert.deepEqual(advance.targets, ['choice']);
+  const edited = editUi(input, { action: 'event', original: 'advance', name: 'advance.next', command: 'open', targetValue: 'settings' });
   const after = merge(input, edited.changes), next = readUiDesign(after);
   assert.ok(after.get('ui.js')!.includes('ctx.open("settings");')); assert.ok(after.get('ui.js')!.includes('// 作者 JS，保持原文'));
   assert.ok(after.get('ui/pages/hud.xml')!.includes('event="advance.next"'));
   assert.deepEqual(next.events.map(e => e.name), ['advance.next']);
   const background = merge(input, new Map([['ui/pages/hud.xml', input.get('ui/pages/hud.xml')!.replace('<screen id="hud" modal="false" pause="false">', '<screen id="hud" modal="false" pause="false" background-click="advance">')]]));
-  const backgroundScript = new Map([...background, ['ui.js', background.get('ui.js')! + '\nui("hud").bind("advance", (ctx) => { ctx.advance(); });\n']]);
-  const backgroundRenamed = merge(backgroundScript, editUi(backgroundScript, { action: 'event', original: 'advance', target: 'hud', name: 'advance.next', command: 'advance' }).changes);
+  const backgroundRenamed = merge(background, editUi(background, { action: 'event', original: 'advance', name: 'advance.next', command: 'advance' }).changes);
   assert.ok(backgroundRenamed.get('ui/pages/hud.xml')!.includes('background-click="advance.next"'));
-  assert.throws(() => editUi(backgroundScript, { action: 'deleteEvent', name: 'advance', target: 'hud' }), /背景/);
-  assert.throws(() => editUi(after, { action: 'deleteEvent', name: 'advance.next', target: 'choice' }), /仍有控件/);
-  const added = editUi(after, { action: 'event', name: 'unused.close', target: 'choice', command: 'close' });
+  assert.ok(backgroundRenamed.get('ui/pages/hud.xml')!.includes('event="advance.next"'));
+  assert.throws(() => editUi(background, { action: 'deleteEvent', name: 'advance' }), /引用/);
+  assert.throws(() => editUi(after, { action: 'deleteEvent', name: 'advance.next' }), /仍有控件/);
+  const added = editUi(after, { action: 'event', name: 'unused.close', command: 'close' });
   const withUnused = merge(after, added.changes);
   assert.equal(readUiDesign(withUnused).events.find(e => e.name === 'unused.close')!.editable, true);
-  const removed = editUi(withUnused, { action: 'deleteEvent', name: 'unused.close', target: 'choice' });
+  const removed = editUi(withUnused, { action: 'deleteEvent', name: 'unused.close' });
   const cleaned = merge(withUnused, removed.changes);
   assert.equal(readUiDesign(cleaned).events.some(e => e.name === 'unused.close'), false);
-  assert.ok(!cleaned.get('ui.js')!.includes('ui("choice").bind("unused.close"'));
-  const custom = merge(after, new Map([['ui.js', after.get('ui.js')! + 'ui("choice").bind("custom", ctx => { const x = 1; ctx.advance(); });\n']]));
-  assert.throws(() => editUi(custom, { action: 'event', original: 'custom', target: 'choice', name: 'custom.next', command: 'advance' }), /自定义|保留源码/);
-  assert.throws(() => editUi(custom, { action: 'deleteEvent', name: 'custom', target: 'choice' }), /自定义|保留源码/);
+  assert.ok(!cleaned.get('ui.js')!.includes('unused.close'));
+  const custom = merge(after, new Map([['ui.js', after.get('ui.js')! + 'event.register("custom", ctx => { const x = 1; ctx.advance(); });\n']]));
+  assert.throws(() => editUi(custom, { action: 'event', original: 'custom', name: 'custom.next', command: 'advance' }), /自定义|保留源码/);
+  assert.throws(() => editUi(custom, { action: 'deleteEvent', name: 'custom' }), /自定义|保留源码/);
+  // Renaming also rewrites proven script bindings, while an uncertain analysis refuses.
+  const bound = merge(input, new Map([['ui.js', input.get('ui.js')! + '\nui("choice").bind("advance");\n']]));
+  const renamedBinding = merge(bound, editUi(bound, { action: 'event', original: 'advance', name: 'advance.bound', command: 'advance' }).changes);
+  assert.ok(renamedBinding.get('ui.js')!.includes('ui("choice").bind("advance.bound");'));
+  const legacy = merge(bound, new Map([['ui.js', bound.get('ui.js')! + 'ui("choice").bind("legacy", ctx => ctx.advance());\n']]));
+  assert.throws(() => editUi(legacy, { action: 'event', original: 'advance', name: 'advance.again', command: 'advance' }), /无法静态解析/);
 });
 
 test('CG 专用资源自动进入画廊，可编辑中文标题/初值并恢复自动条目', () => {
@@ -236,10 +268,10 @@ test('CG 专用资源自动进入画廊，可编辑中文标题/初值并恢复�
   sources = merge(sources, edited.changes);
   const updated = readUiDesign(sources).gallery.find(g => g.id === 'cg.promise')!;
   assert.equal(updated.title, '新的标题'); assert.equal(updated.unlocked, false); assert.equal(updated.implicit, undefined);
-  const unlock = editUi(sources, { action: 'event', name: 'cg.unlock', target: 'choice', command: 'unlock', targetValue: 'cg.promise' });
+  const unlock = editUi(sources, { action: 'event', name: 'cg.unlock', command: 'unlock', targetValue: 'cg.promise' });
   sources = merge(sources, unlock.changes);
   assert.ok(sources.get('ui.js')!.includes('ctx.unlock("cg.promise")'));
-  const current = editUi(sources, { action: 'event', original: 'cg.unlock', target: 'choice', name: 'cg.unlock', command: 'unlock', targetValue: '' });
+  const current = editUi(sources, { action: 'event', original: 'cg.unlock', name: 'cg.unlock', command: 'unlock', targetValue: '' });
   sources = merge(sources, current.changes);
   assert.ok(sources.get('ui.js')!.includes('ctx.unlock(ctx.game.cgId)'));
   assert.equal(readUiDesign(sources).events.find(e => e.name === 'cg.unlock')!.editable, true);
@@ -295,27 +327,37 @@ test('v0.9.0 移除 frame 视频与 game.video* 绑定：旧内容给出源码�
   assert.ok(validateStory(parsed).some(issue => issue.message.includes('frame.video')));
 });
 
-test('v0.11 目标作用域回调随控件复制/删除，页面删除清理自身与子控件注册', () => {
+test('v0.11.1 独立事件可被复制控件共享，删除控件/页面清理脚本绑定并保留未引用定义', () => {
   let sources = uiFixture();
-  const original = readUiDesign(sources).events.find(event => event.target === 'choice' && event.name === 'advance')!;
-  assert.equal(original.editable, true);
+  const original = readUiDesign(sources).events.find(event => event.name === 'advance')!;
+  assert.equal(original.editable, true); assert.deepEqual(original.targets, ['choice']);
   const clone = editUi(sources, { action: 'duplicateNode', id: 'choice' }); sources = merge(sources, clone.changes);
   const cloneId = clone.selected!;
-  assert.ok(readUiDesign(sources).events.some(event => event.target === cloneId && event.name === 'advance'));
-  assert.ok(sources.get('ui.js')!.includes(`ui(${JSON.stringify(cloneId)}).bind("advance"`));
+  assert.deepEqual(readUiDesign(sources).events.find(event => event.name === 'advance')!.targets!.sort(), ['choice', cloneId].sort());
+  assert.ok(!sources.get('ui.js')!.includes(cloneId));
   const removed = editUi(sources, { action: 'deleteNode', id: cloneId }); sources = merge(sources, removed.changes);
-  assert.equal(readUiDesign(sources).events.some(event => event.target === cloneId), false);
+  assert.deepEqual(readUiDesign(sources).events.find(event => event.name === 'advance')!.targets, ['choice']);
+
+  // A script binding that names a deleted control is removed with it.
+  sources = merge(sources, new Map([['ui.js', sources.get('ui.js')! + '\nui("choice").bind("advance");\n']]));
+  assert.equal(readUiDesign(sources).bindings.filter(binding => binding.kind === 'script' && binding.target === 'choice').length, 1);
+  const boundClone = editUi(sources, { action: 'duplicateNode', id: 'choice' }); sources = merge(sources, boundClone.changes);
+  const boundId = boundClone.selected!;
+  sources = merge(sources, new Map([['ui.js', sources.get('ui.js')! + `\nui(${JSON.stringify(boundId)}).bind("advance");\n`]]));
+  const erased = editUi(sources, { action: 'deleteNode', id: boundId }); sources = merge(sources, erased.changes);
+  assert.ok(!sources.get('ui.js')!.includes(`ui(${JSON.stringify(boundId)}).bind`));
+  assert.ok(readUiDesign(sources).events.some(event => event.name === 'advance'));
 
   const pageResult = editUi(sources, { action: 'addScreen', file: 'ui/pages.xml', name: 'scratch' }); sources = merge(sources, pageResult.changes);
   const page = pageResult.screen!;
   const buttonResult = editUi(sources, { action: 'addNode', screen: page, kind: 'button' }); sources = merge(sources, buttonResult.changes);
   const button = buttonResult.selected!;
   sources = merge(sources, editUi(sources, { action: 'event', name: 'scratch.close', target: button, command: 'close' }).changes);
-  sources = merge(sources, editUi(sources, { action: 'patchNode', id: button, patch: { event: 'scratch.close' } }).changes);
-  assert.ok(sources.get('ui.js')!.includes('scratch.close'));
+  assert.ok(sources.get('ui.js')!.includes('event.register("scratch.close"'));
   const deleted = editUi(sources, { action: 'deleteScreen', id: page }); sources = merge(sources, deleted.changes);
   assert.equal(readUiDesign(sources).screens.some(screen => screen.id === page), false);
-  assert.ok(!sources.get('ui.js')!.includes('scratch.close'));
+  assert.ok(readUiDesign(sources).events.some(event => event.name === 'scratch.close'));
+  assert.equal(readUiDesign(sources).events.find(event => event.name === 'scratch.close')!.targets, undefined);
 
   const guardedResult = editUi(sources, { action: 'addScreen', file: 'ui/pages.xml', name: 'guarded' }); sources = merge(sources, guardedResult.changes);
   const guarded = guardedResult.screen!;

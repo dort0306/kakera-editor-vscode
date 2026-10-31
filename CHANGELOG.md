@@ -1,5 +1,14 @@
 # 更新记录
 
+## 0.11.1 独立事件与可选控件绑定（适配播放器 v0.11.1） · 2026-10-31
+
+- 同步上游 v0.11.1：普通界面回调改为独立定义 `event.register("事件ID", 回调)`，同一 ID 只能定义一次；控件 XML `event`、页面 `background-click`/`background-right-click` 和单参数 `ui("控件或页面").bind("事件ID")` 只做引用。控件事件可省略或为空，未被引用的事件定义合法，多个控件可共享同一事件；两参数普通 `ui(id).bind(事件, 回调)` 与 `$host` 绑定已被播放器删除，`captureShortcut` 结果事件改为普通事件定义。`frame()` 剧情/生命周期、story 8 / UI 3 / save 9 / KPAK 1/2 与 demo content-version=11 不变。
+- 阅读与校验：`UiEvent` 改为独立事件（附已证明的 `targets`），新增 `UiBinding` 列出 XML 与脚本引用；允许 `event=""`、slider/toggle/color-picker 无事件、未绑定事件定义，`color-picker` 未绑定只给“不会提交颜色”诊断。未知 XML/JS 引用、只读控件或 `route` 按钮上的 bind、同控件 XML 与脚本指向不同事件、重复 bind、保留名称继续报错或诊断；旧式注册把事件列表标记为不确定并暂停可视化改写。
+- 可视化编辑：交互事件列表显示事件 ID 与绑定目标；新建事件可指定绑定目标（控件、页面、`$game` 或不绑定），编辑替换该定义，改名同步可证明的 XML 属性与脚本 bind，删除要求先解除 XML/脚本/捕获结果引用。新增/复制控件、快捷弹窗只引用已有定义；`color-picker` 与 `ctx.quit` 在缺少定义时创建独立事件，不再复制其他目标的回调。删除控件/页面时同步移除其可证明脚本 bind，事件定义保留为可复用或未引用。
+- 模板与工具：模板 `scripts/ui.js` 改为 `event.register` 定义并由 XML `event`/`background-click` 引用；从相邻 v0.11.1 工作区 `cargo build --release --locked --bins` 重新构建播放器/打包器并重新准备 `resources/tools/win32-x64/tools.json`（播放器 SHA-256 `4803c3d7262485ebd7be2abe69e6bb584ea927d7fcb67268497744cccae03d06`、打包器 `da3e9f046c86b35f2d64d7d755fa59511841623abcfb5eb5f68fe487e7fbf9c6`）。工程清单、调试版本、构建/发行检查默认 0.11.1 并继续接受 0.8.3–0.11.0。
+- 版本与文档：插件升至 0.11.1，保持 `x.y` 与上游引擎一致；`package-lock.json`、`package` 制品名、README、AGENTS、当前状态栏与 04/12/13/16/18/19 等说明同步独立事件模型和迁移入口（上游 API 第 37.2–37.4 节）。
+- 验证：`npm run check`（typecheck、132 项测试、构建）、`npm run test:browser`（Edge 156：工作台/流程图/UI 画布/HSL 事件表单/只读与拖动取消）、`npm run test:host`（真实本机 VS Code：激活、未保存缓冲、冻结 CLI、撤销/重做、多自定义编辑器、真实播放器 inline DAP、UI 子文件/生命周期/屏幕引用、只读工作区）与 `npm run test:integration`（真实 v0.11.1 模板 `--check`、独立事件 UI 编辑器、生命周期、本地化、条件/i64、KPAK 1/2 与独立宿主）通过；`npm run package` 生成 `artifacts/kakera-editor-vscode-0.11.1.vsix`（41 个文件、21,726,881 字节、SHA-256 `4047BC536479E39E3768F8DA39F9D60D403BFBFB880A3263C506EE5CCA28BA9D`）。未执行项与剩余依赖见[实现记录](doc/12-implementation-status.zh-cn.md)。
+
 ## 0.11.0 新版 JS 注册 API 同步（适配播放器 v0.11.0） · 2026-10-31
 
 - 同步上游 v0.11.0：剧情注册改为 `frame("幕ID").advance/choice/end`，生命周期改为 `frame(id).enter/exit` 与 `ui("页面").bind("screen.open"/"screen.close")`，界面回调改为 `ui("控件或页面").bind("作者事件名", 回调)`；全局进入钩子与捕获结果固定绑定虚拟目标 `ui("$game")`/`ui("$host")`。旧 `on.*` 已被播放器删除且无别名；编辑器遇到旧注册只给迁移诊断，不把它猜成或改写成新路线。

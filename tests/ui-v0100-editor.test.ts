@@ -11,7 +11,7 @@ import type { EditorState } from '../packages/protocol/src/index';
 function fixture(): Sources {
   return new Map([
     ['story.xml', '<story schema="8" id="s" content-version="1" entry="a"><interface src="ui.xml"/><scripts><script src="ui.js"/></scripts><frames><frame id="a"><text>台词</text></frame></frames><next end="true"/></story>'],
-    ['ui.js', 'ui("backgroundPicker").bind("color-bg", (ctx) => { ctx.setUi("bgDraft", ctx.value); });\nui("advance").bind("advance", (ctx) => { ctx.advance(); });\nui("$host").bind("shortcut-captured", (ctx) => { ctx.setUi("shortcutDraft", ctx.value); });\n'],
+    ['ui.js', 'event.register("color-bg", (ctx) => { ctx.setUi("bgDraft", ctx.value); });\nevent.register("advance", (ctx) => { ctx.advance(); });\nevent.register("shortcut-captured", (ctx) => { ctx.setUi("shortcutDraft", ctx.value); });\n'],
     ['ui.xml', `<ui schema="3" width="1280" height="720" initial="hud"><variables><string id="bgDraft" initial="#10253BFF"/><string id="shortcutDraft" initial=""/></variables><palette><color id="dialogue_background" initial="#10253BFF"/></palette><screen id="hud" modal="false" pause="false"><panel id="panel" x="20" y="20" width="300" height="120" color="#263B4B"/><color-picker id="backgroundPicker" x="40" y="160" width="256" height="320" value="ui.bgDraft" event="color-bg"/><button id="advance" x="40" y="520" width="200" height="40" text="继续" event="advance"/></screen></ui>`]
   ]);
 }
@@ -61,7 +61,7 @@ test('UI 编辑器接入 palette、color-picker、HSL 选色器、快捷键事�
     await click(button('保存设置'));
     assert.equal(readUiDesign(sources).palette.find(slot => slot.id === 'accent')!.initial, '#FF00FFFF');
 
-    await select('控件类型', 'color-picker'); await select('新控件颜色变量', 'ui.bgDraft'); await select('新控件事件', 'backgroundPicker\u0000color-bg'); await click(button('添加控件'));
+    await select('控件类型', 'color-picker'); await select('新控件颜色变量', 'ui.bgDraft'); await select('新控件事件', 'color-bg'); await click(button('添加控件'));
     assert.ok(readUiDesign(sources).screens[0].children.some(item => item.kind === 'color-picker' && item.attrs.value === 'ui.bgDraft'));
     await select('新控件事件', ''); await click(button('添加控件'));
     const autoPicker = readUiDesign(sources).screens[0].children.filter(item => item.kind === 'color-picker').at(-1)!;

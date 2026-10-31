@@ -610,7 +610,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         { frame: ids.get('ending')!, kind: 'end', updates: [] }
       ];
       await fs.writeFile(path.join(target, 'content/scripts/routes.js'), emitRoutes(routes));
-      await fs.writeFile(path.join(target, 'project.kakera-editor.json'), JSON.stringify({ editorSchema: 1, engineContract: '0.11.0', contentRoot: 'content' }, null, 2) + '\n');
+      await fs.writeFile(path.join(target, 'project.kakera-editor.json'), JSON.stringify({ editorSchema: 1, engineContract: '0.11.1', contentRoot: 'content' }, null, 2) + '\n');
       await fs.writeFile(path.join(target, '.gitignore'), '.editor/\n.cache/\n.work/\nbuilds/\n');
       await fs.mkdir(path.join(target, 'authoring'));
       const session = await sessionFor(vscode.Uri.file(path.join(target, 'project.kakera-editor.json')));
@@ -756,7 +756,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       await fs.mkdir(candidate);
       try {
         await session.check(frozen, signal); await frozen.assertCurrent();
-        if (await vscode.window.showInformationMessage(`将以 v0.11.0 依赖选择构建 ${loaded.story.id}。全部声明资源及 licenses、assets/licenses 中的许可证会入包；额外文件仅按 kakera.package.json。请确认授权与附加清单，动态路线需自行试玩覆盖。`, { modal: true }, '生成本地发行目录') !== '生成本地发行目录') return;
+        if (await vscode.window.showInformationMessage(`将以 v0.11.1 依赖选择构建 ${loaded.story.id}。全部声明资源及 licenses、assets/licenses 中的许可证会入包；额外文件仅按 kakera.package.json。请确认授权与附加清单，动态路线需自行试玩覆盖。`, { modal: true }, '生成本地发行目录') !== '生成本地发行目录') return;
         const pack = path.join(candidate, 'game.kpak');
         const hasModels = loaded.story.assets.some(a => a.kind === 'live2d');
         if (hasModels && await waitReview(vscode.window.showWarningMessage('当前构建会生成 Live2D 静态回退版，不复制 Cubism Core；请通过“开始游戏.cmd”运行。', '构建静态回退版', '取消'), signal) !== '构建静态回退版') return;

@@ -183,7 +183,7 @@ export function analyzeLogic(sources: Sources, story: Story): LogicAnalysis {
           const parent = parents.get(n);
           if (parent?.type === 'MemberExpression' && parent.object === n && legacy(member(parent) ?? '')) {
             const call = parents.get(parent);
-            issues.push(`${file}:${n.loc.start.line} 仍使用已移除的 on.${member(parent)}；请改为 frame("幕").advance/choice/end 或 ui("目标").bind("事件", 回调)（上游 API 第 37.5 节）`);
+            issues.push(`${file}:${n.loc.start.line} 仍使用已移除的 on.${member(parent)}；请改为 frame("幕").advance/choice/end 或 event.register/ui() 注册（上游 API 第 37.4 节）`);
             if (call?.type === 'CallExpression' && call.callee === parent && !call.optional) markGlobal(`第 ${n.loc.start.line} 行仍使用已移除的 on.* 注册；必须迁移到 frame()/ui() 注册后重新检查`);
             return;
           }
@@ -313,7 +313,8 @@ export function analyzeLogic(sources: Sources, story: Story): LogicAnalysis {
           }
           return;
         }
-        // ui(id).bind(...) is the v0.11.0 interface callback and page lifecycle form.
+        // v0.11.1: ordinary callbacks are independent `event.register` definitions;
+        // `ui(id).bind(eventId)` only references one, and lifecycle keeps two arguments.
         if (target.kind === 'ui') {
           if (method !== 'bind') { markGlobal('存在未知的 ui(...) 注册方法'); return; }
           const event = staticString(n.arguments[0], constants);
@@ -325,6 +326,10 @@ export function analyzeLogic(sources: Sources, story: Story): LogicAnalysis {
             lifecycle.push(entry);
             if (raw === undefined) screenIssue(`${file}:${n.loc.start.line} 生命周期目标不确定；删除相关幕或页面需先查看源码`);
             else { references.screens.add(raw); if (screens && !screens.has(raw)) screenIssue(`${file}:${n.loc.start.line} 生命周期页面不存在：${raw}`); }
+          } else if (n.arguments.length === 2 && target.raw !== '$game' && event !== undefined) {
+            // The removed v0.11.0 target-scoped form. Diagnose it and keep source bytes;
+            // UI event editing is paused by the UI reader's uncertainty flag.
+            issues.push(`${file}:${n.loc.start.line} 仍使用 v0.11.0 普通 ui(${JSON.stringify(target.raw ?? '')}).bind("${event}", 回调)；请改为 event.register("${event}", 回调) 后再 ui(${JSON.stringify(target.raw ?? '')}).bind("${event}")（上游 API 第 37.4 节）`);
           }
         }
       });

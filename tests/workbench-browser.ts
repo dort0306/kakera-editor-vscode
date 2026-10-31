@@ -49,7 +49,7 @@ const story: Story = {
 };
 const ui: UiDesign = {
   entry: 'ui.xml', files: ['ui.xml'], width: 1280, height: 720, initial: 'hud', attrs: {},
-  screens: [], variables: [], palette: [], gallery: [], events: [], warnings: [],
+  screens: [], variables: [], palette: [], gallery: [], events: [], bindings: [], warnings: [],
   lifecycle: { frameExit: { opening: { mode: 'none', editable: true } }, screenClose: {} }
 };
 const state: EditorState = {

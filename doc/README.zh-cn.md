@@ -1,6 +1,6 @@
 # Kakera 编辑器规划与开发手册
 
-更新：2026-10-31，基线为播放器 **v0.11.0**（story 8 / UI 3 / save 9）。插件 0.11.0 已交付现代 IDE 风格工作区、可视分镜、UI 编辑器、快捷确认弹窗、玩家快捷键事件、HSL 选色器/配色槽位/color-bind、游戏文本/语音国际化、生命周期映射、UI 显式起始幕、事件编辑/删除、幕 ID 重命名、CG 专用资源/画廊/共享解锁、多起始幕与 UI 首次进入、故事与 UI 变量编辑/删除、颜色覆盖读取 UI string、侧栏 UI XML 文件导航、VS Code 原生分类侧栏与右键菜单、侧栏幕定位/XML 分组/自动短 ID、流程图多选与常用快捷键、流程图背景平移、试玩/调试与构建适配，并同步 `frame()`/`ui()` 新版 JS 注册 API（目标作用域事件、`$game`/`$host`）；实际能力见 [12 实现与验证](12-implementation-status.zh-cn.md)，日常操作见 [18 可视化编辑器使用说明](18-visual-editor-guide.zh-cn.md)。旧规划保存在 doc/archive/editor-v0.8.2。
+更新：2026-10-31，基线为播放器 **v0.11.1**（story 8 / UI 3 / save 9）。插件 0.11.1 已交付现代 IDE 风格工作区、可视分镜、UI 编辑器、快捷确认弹窗、玩家快捷键事件、HSL 选色器/配色槽位/color-bind、游戏文本/语音国际化、生命周期映射、UI 显式起始幕、事件编辑/删除、幕 ID 重命名、CG 专用资源/画廊/共享解锁、多起始幕与 UI 首次进入、故事与 UI 变量编辑/删除、颜色覆盖读取 UI string、侧栏 UI XML 文件导航、VS Code 原生分类侧栏与右键菜单、侧栏幕定位/XML 分组/自动短 ID、流程图多选与常用快捷键、流程图背景平移、试玩/调试与构建适配，并同步 `frame()`、独立 `event.register` 与 XML/`ui().bind(eventId)` 新版 JS 注册 API；实际能力见 [12 实现与验证](12-implementation-status.zh-cn.md)，日常操作见 [18 可视化编辑器使用说明](18-visual-editor-guide.zh-cn.md)。旧规划保存在 doc/archive/editor-v0.8.2。
 
 AI 接口改为用户可配置的通用 Chat Completions 兼容 HTTP API，可连接自部署或远程服务，不再强制内置 Qwen3.8-27B。推荐先开发 **VS Code 插件 + 可视分镜工作台 + 可复用 Rust 工具**，不先分叉 Code-OSS；比较依据和后续独立壳条件见第 09 篇。
 
@@ -19,7 +19,7 @@ AI 接口改为用户可配置的通用 Chat Completions 兼容 HTTP API，可�
 | [09 平台方案比较](09-editor-platform-comparison.zh-cn.md) | VS Code 插件、Code-OSS 分叉、独立编辑器优劣和结论 |
 | [10 播放器调试 API](10-player-debug-api.zh-cn.md) | 已实现的认证、请求、命令、状态和限制（协议 v1） |
 | [11 VS Code 插件落地方案](11-vscode-extension-implementation-plan.zh-cn.md) | 本仓库的模块、宿主接入、事务、调试、阶段任务与验收门禁 |
-| [12 实现与验证记录](12-implementation-status.zh-cn.md) | 插件 0.11.0 的实际能力、真实工具/宿主检查与未完成项 |
+| [12 实现与验证记录](12-implementation-status.zh-cn.md) | 插件 0.11.1 的实际能力、真实工具/宿主检查与未完成项 |
 | [18 可视化编辑器使用说明](18-visual-editor-guide.zh-cn.md) | 工作台、UI、事件、幕 ID、设置、试玩与常见问题 |
 | [19 游戏本地化](19-localization.zh-cn.md) | v0.10.1 清单/FTL、文本来源、参数、语言/语音编辑、预览与限制 |
 | [13 JS/XML 实时同步映射](13-live-logic-mapping.zh-cn.md) | 语法树关联、逐幕能力、源码局部补丁和自定义逻辑边界 |
@@ -29,11 +29,11 @@ AI 接口改为用户可配置的通用 Chat Completions 兼容 HTTP API，可�
 
 [16 UI 编辑器](16-ui-editor.zh-cn.md)：上游 UI 拆分扫描、可视布局、属性/绑定/事件和实际验收。
 
-本仓库已实现插件 0.11.0 开发预览版，当前能力与检查见 [12 实现与验证](12-implementation-status.zh-cn.md)，日常操作见 [18 使用说明](18-visual-editor-guide.zh-cn.md)，项目入口见 [根 README](../README.md)，协作约束见 [AGENTS](../AGENTS.md)。下文及原始 01–10 手册保留原始设计状态，部分源码、demo、版本验收与归档链接来自上游引擎工程，未随本仓库提供；不能视作已在本仓库验证的证据。
+本仓库已实现插件 0.11.1 开发预览版，当前能力与检查见 [12 实现与验证](12-implementation-status.zh-cn.md)，日常操作见 [18 使用说明](18-visual-editor-guide.zh-cn.md)，项目入口见 [根 README](../README.md)，协作约束见 [AGENTS](../AGENTS.md)。下文及原始 01–10 手册保留原始设计状态，部分源码、demo、版本验收与归档链接来自上游引擎工程，未随本仓库提供；不能视作已在本仓库验证的证据。
 
 ## 能力状态
 
-- 已有：v0.11.0 story 8/UI 3/save 9、`frame()`/`ui()` JS 注册 API、KPAK 1/2、点九/图集/别名/标题、CG 专用资源/画廊/共享解锁、快捷确认弹窗、玩家快捷键 UI 事件、HSL 紧凑布局/color-bind/palette（无内置预览或 HEX）、UI 变量删除与颜色覆盖读取 UI string、UI 演出与生命周期映射、显式起始幕/交接编辑、事件编辑/删除、幕 ID 重命名、loopback 调试、发布依赖选择和显式附加清单。
+- 已有：v0.11.1 story 8/UI 3/save 9、`frame()` 与独立 `event.register` JS 注册 API、KPAK 1/2、点九/图集/别名/标题、CG 专用资源/画廊/共享解锁、快捷确认弹窗、玩家快捷键 UI 事件、HSL 紧凑布局/color-bind/palette（无内置预览或 HEX）、UI 变量删除与颜色覆盖读取 UI string、UI 演出与生命周期映射、显式起始幕/交接编辑、事件编辑/删除、幕 ID 重命名、loopback 调试、发布依赖选择和显式附加清单。
 - 插件已有 VSIX、可视分镜、资源管理、源码往返、AI 客户端、提案/编译服务和 DAP 适配；AI 真实服务与部分高级资源工具仍未验收。
 - 播放器后续能力：条件断点、JS 行级调试、推送事件、通用 JSON 诊断、源码指纹及受控跨代次替换；当前 API 不开放任意状态注入。
 
@@ -43,4 +43,4 @@ AI 接口改为用户可配置的通用 Chat Completions 兼容 HTTP API，可�
 
 编辑器、用户服务配置/密钥和原稿仍与 content 分离。打包 CLI 自动收集实际运行依赖与约定许可证，额外普通文件只通过 kakera.package.json 的显式 include 加入；低层原始容器 API 仍可编码任意授权数据，不等于 CLI 发布策略。
 
-调试 API 只在显式工程模式开启，发布模式拒绝；AI HTTP 服务与调试 JSON Lines 是不同边界。本仓库实际运行证据见 [12 实现与验证](12-implementation-status.zh-cn.md)；上游 v0.11.0 计划/验收不在本仓库，不虚构其内容。
+调试 API 只在显式工程模式开启，发布模式拒绝；AI HTTP 服务与调试 JSON Lines 是不同边界。本仓库实际运行证据见 [12 实现与验证](12-implementation-status.zh-cn.md)；上游 v0.11.1 计划/验收不在本仓库，不虚构其内容。

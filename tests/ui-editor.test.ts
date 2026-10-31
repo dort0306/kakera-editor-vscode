@@ -47,10 +47,10 @@ test('UI 编辑器表单、页面/控件创建、事件和变量请求实际生�
     await click(button('＋新建事件')); await input('UI 表单 name', 'resume.pending'); await select('UI 表单 command', 'resume'); await select('UI 表单 target', ''); await select('UI 表单 page', 'helpPage'); await click(button('保存设置')); assert.ok(sources.get('ui.js')!.includes('ctx.open("helpPage"); ctx.resume();'));
     await click(button('＋新建事件')); await input('UI 表单 name', 'restart.a'); await select('UI 表单 command', 'restart'); await select('UI 表单 target', 'a'); await select('UI 表单 page', 'helpPage'); await click(button('保存设置')); assert.ok(sources.get('ui.js')!.includes('ctx.open("helpPage"); ctx.restart("a")'));
     const resumeRow = [...node.querySelectorAll('.event-row')].find(r => r.textContent?.includes('resume.a'))!; assert.ok(resumeRow); await click(resumeRow.querySelector('button')!);
-    await input('UI 表单 name', 'resume.edited'); await click(button('保存设置')); assert.ok(sources.get('ui.js')!.includes('ui("helpPage").bind("resume.edited"'));
+    await input('UI 表单 name', 'resume.edited'); await click(button('保存设置')); assert.ok(sources.get('ui.js')!.includes('event.register("resume.edited"'));
     assert.equal(packets.at(-1)!.payload.operation.original, 'resume.a');
     const editedRow = [...node.querySelectorAll('.event-row')].find(r => r.textContent?.includes('resume.edited'))!; assert.ok(editedRow); await click(editedRow.querySelectorAll('button')[1]!);
-    assert.equal(readUiDesign(sources).events.some(e => e.name === 'resume.edited'), false); assert.ok(!sources.get('ui.js')!.includes('ui("helpPage").bind("resume.edited"'));
+    assert.equal(readUiDesign(sources).events.some(e => e.name === 'resume.edited'), false); assert.ok(!sources.get('ui.js')!.includes('resume.edited'));
     const galleryRow = [...node.querySelectorAll('.gallery-row')].find(r => r.textContent?.includes('cg.promise'))!; assert.ok(galleryRow); await click(galleryRow.querySelector('button')!);
     await input('UI 表单 title', '约定的 CG'); await select('UI 表单 unlocked', 'true'); await click(button('保存设置'));
     assert.equal(readUiDesign(sources).gallery.find(g => g.id === 'cg.promise')!.title, '约定的 CG');

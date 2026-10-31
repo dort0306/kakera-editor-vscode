@@ -4,7 +4,7 @@
 
 ## 1. 先确认事实与任务边界
 
-- 当前基线为 Kakera 播放器 v0.11.0：story 8、UI 3、save 9，调试协议 v1，demo content-version=11，JS 注册使用 `frame(id).advance/choice/end` 与 `ui(id).bind(event, callback)`。插件已有 0.11.0 开发预览实现；实际能力和未完成项见 [实现记录](doc/12-implementation-status.zh-cn.md)，不要把全部规划当成交付。
+- 当前基线为 Kakera 播放器 v0.11.1：story 8、UI 3、save 9，调试协议 v1，demo content-version=11，JS 注册使用 `frame(id).advance/choice/end`、独立 `event.register(id, callback)` 定义，以及 XML `event` / 单参数 `ui(id).bind(eventId)` 引用。插件已有 0.11.1 开发预览实现；实际能力和未完成项见 [实现记录](doc/12-implementation-status.zh-cn.md)，不要把全部规划当成交付。
 - 本文件初次编写时仓库只有文档与许可证，没有插件源码、引擎源码、构建系统或测试。开始任务时重新检查实际文件，不把规划目录和命令当作已经存在。
 - 当前实际检查命令为 `npm run check`、`npm run test:browser`、`npm run test:integration`、`npm run test:host` 和 `npm run package`。浏览器测试需本机 Edge/Chromium；引擎/宿主检查需要已准备的匹配工具/本机 VS Code，详见 README。独立 Rust wrapper 仍未实现，当前通过真实 CLI 复用引擎。
 - 本仓库负责 VS Code 插件及其内容工具适配，不默认承担上游引擎改造、Code-OSS 分叉或独立桌面壳。
@@ -86,7 +86,7 @@
 - 断点停在候选提交前，区分当前幕与 `pending_frame`，包括自循环；`next` 不保证每次跨一幕。
 - 不提供引擎没有的任意 jump、setVariables、eval、条件断点、JS 行级步进或推送事件。变量面板只读。
 - 试玩从入口启动，使用独立 save-dir；只管理自己启动的播放器。既有会话不悄悄替换成新代次。
-- 使用匹配的 `kakera-pack` 及 v0.11.0 依赖选择，额外文件只走 `kakera.package.json` 显式文件清单，保留排除规则。
+- 使用匹配的 `kakera-pack` 及 v0.11.1 依赖选择，额外文件只走 `kakera.package.json` 显式文件清单，保留排除规则。
 - 包和发行候选位于内容根之外，失败保留旧产物；发布前全包检查、许可证/隐私清单检查及源码外运行验证。公开上传需另有任务授权。
 
 ## 8. 验证与交付
@@ -141,7 +141,7 @@
 
 ## 事件编辑与幕 ID 重命名（0.8.3）
 
-- 事件修改/删除只作用于可证明的单一 `ui("目标").bind("字面量事件", (ctx) => { 固定动作 })` 注册；带注释、自定义语句、重复目标/事件或非字面量名称的注册保留源码。改名只同步该注册目标对应的控件 `event` 或页面 `background-click/background-right-click`，不批量改其他目标上的同名事件；删除前必须确认该目标无这些引用。
+- 事件修改/删除只作用于可证明的单一固定回调定义（v0.11.1 起为 `event.register("字面量事件", (ctx) => { 固定动作 })`，更早为目标作用域 bind）；带注释、自定义语句、重复定义或非字面量名称的注册保留源码。改名只同步可证明的控件 `event` 或页面 `background-click/background-right-click` 与单参数 bind；删除前必须确认没有这些引用。
 - 幕 ID 重命名要同步 `<frame>` ID/name、入口、已识别推进/选项目标和连接。存在动态/未识别路线、`frame(id).enter/exit`、`ctx.resume` 等引用时拒绝，不做猜测性替换；分镜手动位置迁移可以暂不处理，但不能改错源代码。
 - 所有改写走已有 revision/WorkspaceEdit/撤销/保存链；新增说明文档必须与实际按钮、限制和验证结果一致，不能把规划能力写成已交付。
 
@@ -176,7 +176,7 @@
 
 - `story.entry` 是至少一个空白分隔的 ID/name 列表；未知、空列表、重复或不同别名指向同幕都拒绝。列表顺序不代表默认进入；播放器首次只显示 XML 初始 UI，必须由 UI `ctx.resume("入口")`/`ctx.restart("入口")` 或读档显式选择。
 - 编辑器可增删起点、设为唯一入口；关系图所有起点都是根。删除/重命名入口幕只改列表中对应项，不覆盖其他起点。不得把列表第一项当自动入口。
-- `ctx.restart(frame)` 目标必须是已声明起点；多起始幕的无参 restart 拒绝。事件向导可先 `ctx.open(页面)` 再 restart/resume，但只有可证明的单个 `ui("目标").bind("事件", 固定回调)` 可重写。
+- `ctx.restart(frame)` 目标必须是已声明起点；多起始幕的无参 restart 拒绝。事件向导可先 `ctx.open(页面)` 再 restart/resume，但只有可证明的单个固定事件回调（v0.11.1 的 `event.register` 定义）可重写。
 - 调试状态 `game_started=false` 时 `frame_id/frame_name` 为 null；未进入状态禁止推进/保存/自动播放。编辑器不伪造成已进入，也不写隐藏槽。
 - 真实播放器集成测试需要 UI 起始输入；测试辅助代码只能添加在测试工程/测试脚本中，不进入产品模板。静态 `--check` 不能替代真实起点选择后的 DAP/生命周期验证。
 
@@ -187,7 +187,7 @@
 
 ## UI 扩展：快捷弹窗、快捷键与 HSV（0.10.0 / 引擎 v0.10.0）
 
-- 快捷确认弹窗使用普通 XML 模态 `screen`、现有控件/颜色/绑定和 `route="close"`，不得新增固定原生对话框或动态执行字符串。`ctx.quit()` 只允许普通 `ui("目标").bind("事件", 回调)`；编辑器不触发 frameExit/screenClose、不写新手动槽或隐藏槽。
+- 快捷确认弹窗使用普通 XML 模态 `screen`、现有控件/颜色/绑定和 `route="close"`，不得新增固定原生对话框或动态执行字符串。`ctx.quit()` 只允许普通事件回调（v0.11.1 的 `event.register` 定义）；编辑器不触发 frameExit/screenClose、不写新手动槽或隐藏槽。
 - 玩家快捷键只写 `ctx.captureShortcut`、`ctx.cancelShortcutCapture`、`ctx.keybinding`、`ctx.resetKeybindings` 等普通 UI 命令；绑定须符合 v0.10.0 token/ASCII/保留组合/前缀冲突规则。`keybindings.json` 是玩家偏好，由匹配播放器加载和原子保存；编辑器不读取、不写入、不把显示 Label 当存储格式。冻结代次和发行包排除 `keybindings.json`/`ui-colors.json` 的大小写变体。
 - HSV/配色只使用 UI 3 扩展：`color-picker`（必需 UI string `value` 与普通 event，`alpha` 可选默认 true；`alpha=false` ≥128×128、默认/true ≥128×154，最多 8 个，不能放入 repeat）、`color-bind`（panel/image/nine-patch/label/button/toggle，来源限 `ui.<string>`/`colors.<槽位>`，与 `color` 互斥）、根级 `palette`（`[a-z][a-z0-9_]{0,63}`，最多 32 个）。颜色值规范为未预乘大写 `#RRGGBBAA`；拖动只产生候选，由作者 `ctx.setUi` 决定提交。色盘按 `D=min(width,height−R)`（`R=alpha?26:0`）居中，控件只绘制环/正方形/可选 alpha 条，不内置预览或 HEX；作者用 `color-bind`/`bind` 读取同一草稿组合展示，矩形内留白不启动选色。palette 与 UI string 是引擎的分层设计：选色器不能直接绑定槽位；新增/修复选色器时必须保证存在直接 `ctx.setUi(草稿, ctx.value)` 更新事件，不能把其它固定动作当成提交。`ui-colors.json` 由匹配播放器维护，编辑器不创建或修改。
 - 静态画布/预览只读初值与示例，不执行捕获、焦点、策略或偏好写入；真实按键所有权、冲突、回滚、DPI/指针与原生窗口必须由匹配播放器单独验收。工具升级时同步 `tools.json`、工程清单/调试/构建版本检查和真实 `--check`。
@@ -208,11 +208,11 @@
 - XML/JS、UI 3、RGBA、palette 和玩家偏好格式不变；不写玩家偏好，不新增旧形状开关。准备工具前重新构建含 HSL 的同版本源码并更新哈希；真实 DOM 点阵/拖动不替代播放器 DPI/键盘/偏好验收。
 - 0.10.3 起同步上游职责拆分：控件只绘制环/正方形/可选 alpha，不内置预览或 HEX；`alpha=false` 至少 128×128、默认/true 至少 128×154，色盘按 `D=min(W,H−R)`、`R=alpha?26:0` 居中。作者用 `color-bind` 面板/图片和 `bind` label 读取同一草稿组合预览/数值，矩形内留白不启动选色。静态画布应使用同一几何，不生成内置预览/HEX。
 
-## v0.11.0 新版 JS 注册 API（引擎 v0.11.0）
+## 新版 JS 注册 API（引擎 v0.11.0 / v0.11.1）
 
-- 剧情路由只写 `frame("幕ID").advance(targetOrRun)`、`frame("幕ID").choice("选项", targetOrRun, when?)`、`frame("幕ID").end()`；`targetOrRun` 是固定字符串或无副作用的同步回调。生命周期写 `frame(id).enter/exit` 与 `ui("页面").bind("screen.open"/"screen.close")`；全局进入钩子和捕获结果分别固定绑定 `ui("$game").bind("game.enter", …)`、`ui("$host").bind(结果事件, …)`。`frame.enter:`/`frame.exit:`/`screen.open:`/`screen.close:` 是保留事件编码，不得作为普通 XML 事件。
-- 事件注册键是结构化的（目标类别、目标 ID、事件名），不再是全局事件名：两个控件可以共享 `event` 名并各自绑定不同回调。编辑器读写必须保留目标，新增/改名/删除只作用于该目标 XML 控件 `event` 或页面 `background-click/background-right-click`，不得批量改其他目标上的同名事件。`$game`/`$host` 是保留虚拟目标，真实 UI 页面/控件不能使用这两个 ID。
-- 旧 `on.*` 已删除且没有别名；启动、`--check` 与打包都会带文件名和栈拒绝。静态分析遇到旧注册只给迁移诊断并暂停相关可视化改写，不把旧注册猜成新路由，也不自动整文件迁移；作者按上游 API 第 37.5 节迁移后重新加载。
-- 只接管可证明的顶层字面量注册：选择器保存到变量、动态目标、函数/循环/条件内注册、共享回调、注释混合、未知方法或非白名单动作都保留源码 Opaque。静态字符串目标需要加入更新或条件时，只把该参数替换为内联回调，其他语句和注释保持字节。
-- 引擎要求每个 XML 事件恰好一个注册。新建控件的事件不能在全局事件名上复用：编辑器必须从可证明的固定回调复制到新控件的 `ui("新ID").bind(...)`，`color-picker` 自动生成的 `ctx.setUi` 事件也必须绑定自身控件；没有可复制回调时拒绝，而不是生成孤立注册。普通事件列表不包含 `screen.open`/`screen.close`，它们由生命周期编辑负责。
-- 工具升级同步 `tools.json` 哈希、工程清单/调试/构建版本检查（0.11.0）、模板/测试新语法与真实 `--check`/KPAK 回归；静态源码测试不能替代匹配播放器的注册装配验证。玩家偏好（`keybindings.json`、`ui-colors.json`、`language.json` 等）仍由匹配播放器维护，编辑器不读写。
+- 剧情路由只写 `frame("幕ID").advance(targetOrRun)`、`frame("幕ID").choice("选项", targetOrRun, when?)`、`frame("幕ID").end()`；`targetOrRun` 是固定字符串或无副作用的同步回调。生命周期写 `frame(id).enter/exit` 与 `ui("页面").bind("screen.open"/"screen.close")`；全局进入钩子仍是 `ui("$game").bind("game.enter", …)`。`frame.enter:`/`frame.exit:`/`screen.open:`/`screen.close:` 是保留事件编码，不得作为普通 XML 事件。
+- v0.11.1 起普通界面回调是独立定义：只写 `event.register("事件ID", 回调)`，同一 ID 只能定义一次；控件 XML `event`、页面 `background-click`/`background-right-click` 或单参数 `ui("控件或页面").bind("事件ID")` 只做引用。控件事件可省略或为空，未绑定定义允许存在；`$host` 绑定与两参数普通 `ui(id).bind(事件, 回调)` 已删除。多个控件可共享同一事件 ID，编辑器不得再按目标复制回调或按目标名去重。
+- 编辑器只接管可证明的顶层字面量定义与绑定：选择器保存到变量、动态目标/事件名、函数/循环/条件内注册、共享回调、注释混合、未知方法或非白名单动作都保留源码 Opaque。事件改名只同步可证明的 XML 属性与脚本 bind；删除定义前必须解除 XML/脚本/`captureShortcut` 结果引用。保留名称与 `route` 冲突仍拒绝。
+- 旧 `on.*`（以及 v0.11.0 的两参数普通 bind）启动、`--check` 与打包都会被拒绝。静态分析遇到旧注册只给迁移诊断并暂停相关可视化改写，不把旧注册猜成新事件，也不自动整文件迁移；作者按上游 API 第 37.2–37.4 节迁移后重新加载。
+- 剧情 `frame()` 注册的静态字符串目标需要加入更新或条件时，只把该参数替换为内联回调，其他语句和注释保持字节；`color-picker` 自动生成的 `ctx.setUi` 事件是新的独立定义，只在该控件 XML 上引用。普通事件列表不包含 `screen.open`/`screen.close`，它们由生命周期编辑负责；`game.enter` 使用固定 `$game` 目标。
+- 工具升级同步 `tools.json` 哈希、工程清单/调试/构建版本检查（0.11.1）、模板/测试新语法与真实 `--check`/KPAK 回归；静态源码测试不能替代匹配播放器的注册装配验证。玩家偏好（`keybindings.json`、`ui-colors.json`、`language.json` 等）仍由匹配播放器维护，编辑器不读写。

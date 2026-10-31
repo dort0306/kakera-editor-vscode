@@ -2,7 +2,7 @@
   "name": "kakera-editor-vscode",
   "displayName": "Kakera 可视分镜编辑器",
   "description": "Kakera AVG XML/JS 分镜创作、校验、试玩与帧级调试。",
-  "version": "0.11.0",
+  "version": "0.11.1",
   "publisher": "dort0306",
   "license": "MIT",
   "icon": "resources/kakera.png",
@@ -364,7 +364,7 @@
           "type": "string",
           "default": "",
           "scope": "application",
-          "description": "包含 v0.11.0 kakera-avg.exe 和 kakera-pack.exe 的本地目录。仅用户级设置。"
+          "description": "包含 v0.11.1 kakera-avg.exe 和 kakera-pack.exe 的本地目录。仅用户级设置。"
         },
         "kakera.tools.cubismCore": {
           "type": "string",
@@ -411,7 +411,7 @@
     "test:integration": "node scripts/integration.mjs",
     "test:host": "node scripts/test-host.mjs",
     "check": "npm run typecheck && npm test && npm run build",
-    "package": "npm run build && node scripts/verify-release.mjs && vsce package --target win32-x64 --no-dependencies --out artifacts/kakera-editor-vscode-0.11.0.vsix",
+    "package": "npm run build && node scripts/verify-release.mjs && vsce package --target win32-x64 --no-dependencies --out artifacts/kakera-editor-vscode-0.11.1.vsix",
     "vscode:prepublish": "npm run build",
     "test:browser": "node scripts/test-graph-browser.mjs"
   },

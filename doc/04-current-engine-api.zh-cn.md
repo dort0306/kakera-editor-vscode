@@ -1,6 +1,6 @@
 # 04 当前引擎 API 参考
 
-状态：**现有能力**，核对日期 2026-10-31。用于开发编辑器适配器，不能替代完整 XML/JS 手册。以下 Rust 名称为当前源码接口，不承诺跨版本稳定 ABI；编辑器应与引擎发布版本锁定。当前基线 v0.11.0：story 8 / UI 3 / save 9。
+状态：**现有能力**，核对日期 2026-10-31。用于开发编辑器适配器，不能替代完整 XML/JS 手册。以下 Rust 名称为当前源码接口，不承诺跨版本稳定 ABI；编辑器应与引擎发布版本锁定。当前基线 v0.11.1：story 8 / UI 3 / save 9。
 
 ## 1. 格式与入口
 
@@ -44,7 +44,7 @@ story 根需要 id、content-version、entry 和 schema；包含 scripts、inter
 
 全部 frame 必须覆盖且路由种类与 XML options 一致。条件在更新前变量上计算；主回调收集有序更新；目标条件也通过后才提交变量、位置与历史。动态目标只能在执行边界验证，启动检查不穷举全部路径。
 
-v0.9.0 另有四个独立生命周期注册，不产生剧情路由：v0.11.0 写法为 `frame(id).enter(fn)`、`frame(id).exit(fn)`、`ui("页面").bind("screen.open", fn)`、`ui("页面").bind("screen.close", fn)`（旧 `on.*` 入口已删除）。frame 可用实际 ID 或稳定 name，按实际幕去重；screen 必须是已声明页面。回调只收集 UI 命令，按候选计划整批提交。正常离幕在 Controller 目标/条件/更新验证后触发 exit 再 enter；自循环也触发，读档/隐藏槽恢复/历史重放不重放。`screen.close` 额外允许 `ctx.resume`；进入幕交接与 UI 页面在同一事务提交。编辑器静态分析只读取注册和目标，不执行回调。
+v0.9.0 另有四个独立生命周期注册，不产生剧情路由：v0.11.1 写法为 `frame(id).enter(fn)`、`frame(id).exit(fn)`、`ui("页面").bind("screen.open", fn)`、`ui("页面").bind("screen.close", fn)`（旧 `on.*` 入口已删除）。frame 可用实际 ID 或稳定 name，按实际幕去重；screen 必须是已声明页面。回调只收集 UI 命令，按候选计划整批提交。正常离幕在 Controller 目标/条件/更新验证后触发 exit 再 enter；自循环也触发，读档/隐藏槽恢复/历史重放不重放。`screen.close` 额外允许 `ctx.resume`；进入幕交接与 UI 页面在同一事务提交。编辑器静态分析只读取注册和目标，不执行回调。
 
 | 剧情 ctx | 类型/语义 |
 | --- | --- |
@@ -221,13 +221,14 @@ Windows 播放器为 GUI 子系统。自动化必须等待进程退出并捕获�
 - 文本来源：frame text `key`、option `text-key`、character `name-key`、变量 `label-key`、UI label/button/toggle `text-key`/`text-key-bind`、UI 根 `title-key`/`title-key-bind`、画廊 `title-key`。UI 可带最多 16 个 `text-arg`，参数只从 UI 标量、`cg`/`saves` 只读标量和 `locale.text/voice` 取值；剧情静态位置没有外部参数。动态 key 只绑定 UI string。
 - 普通 `on.ui` 可调用 `ctx.locale(channel, idOrNull)`；只读 `ctx.localeInfo` 提供 enabled/textRequested/voiceRequested/text/voice/textSource/voiceSource；XML 对应 locale 标量以空串表示 null，repeat 数据源 `textLocales`/`voiceLocales` 只有 id/label/selected/default。语言选择写 SaveStore 下固定 `language.json`（schema 1/story_id/text/voice），不属于内容根或 KPAK；切换事务、字体/语音候选、截图 revision 与隐藏恢复由播放器负责。
 - 全部游戏 FTL 最多 128 个/16MiB、单文件 1MiB、50000 条消息/术语、单 bundle 100000 条引用；拒绝属性导出/引用、带参数术语和自定义函数。编辑器读取/校验清单、FTL、文本来源和参数契约，但不执行 Fluent 或语言事务。
-- KPAK 1/2 在开启时收集全部声明语言依赖；`language.json` 及大小写变体排除监控、冻结和打包。编辑器工具哈希、工程清单和调试版本接受 0.11.0，同时保留 0.8.3–0.10.1 打开兼容。
+- KPAK 1/2 在开启时收集全部声明语言依赖；`language.json` 及大小写变体排除监控、冻结和打包。编辑器工具哈希、工程清单和调试版本接受 0.11.1，同时保留 0.8.3–0.11.1 打开兼容。
 
-## 15. v0.11.0 新版 JS 注册 API
+## 15. v0.11.x 新版 JS 注册 API
 
-- 应用版本 0.11.0；story 8 / UI 3 / save 9 / profile 1 / read 1 / KPAK 1/2 与 demo content-version=11 不变。`ctx` 参数、命令白名单、事务与预算不变。旧 `on.advance/choice/end/ui/frameEnter/frameExit/screenOpen/screenClose` **已删除且没有别名**，启动、`--check` 与打包会带文件名和栈拒绝。
+- 应用版本 0.11.1；story 8 / UI 3 / save 9 / profile 1 / read 1 / KPAK 1/2 与 demo content-version=11 不变。`ctx` 参数、命令白名单、事务与预算不变。旧 `on.advance/choice/end/ui/frameEnter/frameExit/screenOpen/screenClose` **已删除且没有别名**，启动、`--check` 与打包会带文件名和栈拒绝。
 - 剧情路由：`frame("幕ID").advance(targetOrRun)`、`frame("幕ID").choice("选项ID", targetOrRun, when?)`、`frame("幕ID").end()`。`targetOrRun` 只能是固定非空字符串或无副作用的同步回调；字符串等价于直接返回该字符串，函数可先 `ctx.set/add` 再返回。第三参数 `when` 只能是返回 boolean 的只读函数。同一幕只允许一种路由，选项集合必须与 XML 相等；重复 option、重复 advance/end、混合路由、ID/name 指向同一幕均拒绝。
-- 生命周期：`frame(id).enter(callback)` / `frame(id).exit(callback)` 只拿到 UI 命令上下文，不是剧情 set/add 上下文；页面用 `ui("页面").bind("screen.open"/"screen.close", callback)`。全局进入钩子固定为 `ui("$game").bind("game.enter", callback)`，快捷键等捕获结果固定为 `ui("$host").bind(结果事件, callback)`。`$game`/`$host` 是保留虚拟目标，不能作为真实 XML 页面/控件 ID，也不能新增其他虚拟目标。
-- 界面回调：`ui("控件模板ID或页面ID").bind("作者事件名", callback)`。注册键是结构化的（目标类别、目标 ID、事件名），同名事件不再全局共享；两个控件可保留同一个 XML `event` 并各自绑定不同回调，共享逻辑应把同一函数绑定到多个目标。每个 XML 事件（控件 `event`、页面 `background-click`/`background-right-click`）必须恰好有一个注册；每个注册必须指向真实目标且事件与 XML 完全一致。`ui()` 指向页面时只接受页面已声明事件与 `screen.open`/`screen.close`；`repeat` 只绑定模板子控件 ID。`button route="open:页面"/"close"` 与 `event` 互斥。XML 的 `bind="game.text"` 是数据绑定，与 JS `.bind(event, callback)` 无关。
-- 注册隔离：`frame`/`ui` 是不可写、不可配置的全局函数，选择器对象冻结；回调执行期间再注册或替换入口失败。选择器可以保存到变量或解构方法而不丢目标，单独的 `frame(id)` 不注册任何内容。静态字符串目标在完整装配后加载期校验存在，函数目标在执行边界校验；所有目标都走同一 Controller 条件/更新/历史事务。错误位置同时给出 JS 调用行与相关 XML 位置。
-- 编辑器规则：只读写上述规范形式；旧 `on.*` 只给迁移诊断（见上游 API 第 37.5 节），不自动整文件迁移；动态/别名/非顶层/共享回调保持 Opaque。受管路线文件使用 `// Kakera Managed Routes v2` 和 `frame(...)` 生成；UI 事件按（目标、事件名）管理，新增 XML 事件时必须在同一事务为目标创建注册。工具哈希、工程清单、调试与构建版本检查按 0.11.0 同步，最终装配由真实 `--check`/KPAK 验证。
+- 生命周期：`frame(id).enter(callback)` / `frame(id).exit(callback)` 只拿到 UI 命令上下文，不是剧情 set/add 上下文；页面用 `ui("页面").bind("screen.open"/"screen.close", callback)`。全局进入钩子固定为 `ui("$game").bind("game.enter", callback)`。`$game`/`$host` 是保留虚拟目标，不能作为真实 XML 页面/控件 ID，也不能新增其他虚拟目标；v0.11.1 起 `$host` 只保留宿主内部派发类别，不再接受脚本绑定。
+- 普通界面事件（v0.11.1）：`event.register("事件ID", callback)` 独立定义，同一 ID 只能定义一次。控件 XML `event`、页面 `background-click`/`background-right-click` 或单参数 `ui("控件模板ID或页面ID").bind("事件ID")` 是三种引用方式；控件事件可省略或为空，未被引用的事件定义允许存在。多个控件可引用同一 ID 共享回调，`ctx.item/value` 仍按行/控件传递。`event.register` 不接受 `game.enter`、`screen.open`/`screen.close` 或 `frame.*` 保留前缀。
+- 装配校验：每个非空 XML/JS 引用必须指向真实页面/按钮/滑条/开关/选色器与已定义事件；只读节点、`route` 按钮、重复绑定、同控件 XML 与 JS 指向不同事件、`$host` 绑定、未知目标都会拒绝。未绑定的 slider/toggle/picker 只更新自身显示，不自动提交业务值。
+- 注册隔离：`frame`/`ui`/`event` 是不可写、不可配置的全局入口，选择器与 `event` 对象冻结；回调执行期间再注册或替换入口失败。选择器可以保存到变量或解构方法而不丢目标，单独的 `frame(id)` 不注册任何内容。静态字符串目标在完整装配后加载期校验存在，函数目标在执行边界校验；所有目标都走同一 Controller 条件/更新/历史事务。错误位置同时给出 JS 调用行与相关 XML 位置。
+- 编辑器规则：只读写上述规范形式；旧 `on.*` 与 v0.11.0 两参数普通 `ui(id).bind(事件, 回调)` 只给迁移诊断（见上游 API 第 37.2–37.4 节），不自动整文件迁移；动态/别名/非顶层/共享回调保持 Opaque。受管路线文件使用 `// Kakera Managed Routes v2` 和 `frame(...)` 生成；UI 事件按独立事件 ID 管理，定义与引用分开，改名只同步可证明的 XML 属性与脚本 bind。工具哈希、工程清单、调试与构建版本检查按 0.11.1 同步，最终装配由真实 `--check`/KPAK 验证。

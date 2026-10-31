@@ -98,7 +98,7 @@ test('旧 on.* 注册给出迁移诊断，不再当作可编辑路线', () => {
   const sources = input("on.advance('a',()=> 'b'); frame('b').advance(()=> 'c'); frame('c').end();");
   const result = analyze(sources);
   assert.equal(result.complete, false); assert.equal(result.registrationUncertain, true);
-  assert.ok(result.issues.some(issue => issue.includes('on.advance') && issue.includes('第 37.5 节')));
+  assert.ok(result.issues.some(issue => issue.includes('on.advance') && issue.includes('第 37.4 节')));
   assert.ok(result.frames.a.reason?.includes('on.*'));
 });
 
@@ -132,7 +132,7 @@ test('待连接选项补幕后仍能持续识别，不依赖生成器逐字匹�
 });
 
 test('v0.11.0 生命周期注册不当作剧情路由，仍保留幕/页面引用与删除保护', () => {
-  const sources = input("frame('a').advance(()=> 'b'); frame('b').advance(()=> 'c'); frame('c').end();\nframe('a-id').enter(ctx => {}); frame('b').exit(state => state.open('hud'));\nui('hud').bind('screen.open', ctx => {});\nui('hud').bind('screen.close', ctx => ctx.resume('c-id'));\nui('back').bind('present', ctx => ctx.present('hud'));");
+  const sources = input("frame('a').advance(()=> 'b'); frame('b').advance(()=> 'c'); frame('c').end();\nframe('a-id').enter(ctx => {}); frame('b').exit(state => state.open('hud'));\nui('hud').bind('screen.open', ctx => {});\nui('hud').bind('screen.close', ctx => ctx.resume('c-id'));\nevent.register('present', ctx => ctx.present('hud')); ui('back').bind('present');");
   const result = analyze(sources);
   assert.equal(result.complete, true);
   assert.deepEqual(result.lifecycle.map(l => `${l.kind}:${l.target}`).sort(), ['frameEnter:a-id', 'frameExit:b', 'screenClose:hud', 'screenOpen:hud']);
@@ -148,16 +148,16 @@ test('v0.11.0 生命周期注册不当作剧情路由，仍保留幕/页面引�
   const dynamic = analyze(input("frame('a').advance(()=> 'b'); frame('b').advance(()=> 'c'); frame('c').end();\nframe(target()).exit(ctx => {});"));
   assert.equal(dynamic.complete, true); assert.equal(dynamic.references.dynamicFrames, true); assert.ok(dynamic.issues.some(issue => issue.includes('生命周期目标不确定')));
   assert.throws(() => deleteConnectedFrame(sources, dynamic.routes, 'routes.js', 'b', dynamic), /动态/);
-  const dynamicResume = analyze(input("frame('a').advance(()=> 'b'); frame('b').advance(()=> 'c'); frame('c').end();\nui('back').bind('resume', ctx => ctx.resume(ctx.value));"));
+  const dynamicResume = analyze(input("frame('a').advance(()=> 'b'); frame('b').advance(()=> 'c'); frame('c').end();\nevent.register('resume', ctx => ctx.resume(ctx.value));"));
   assert.equal(dynamicResume.references.dynamicFrames, true); assert.ok(dynamicResume.issues.some(issue => issue.includes('UI 返回目标不确定')));
-  const pendingResume = analyze(input("frame('a').advance(()=> 'b'); frame('b').advance(()=> 'c'); frame('c').end();\nui('back').bind('resume', ctx => ctx.resume());"));
+  const pendingResume = analyze(input("frame('a').advance(()=> 'b'); frame('b').advance(()=> 'c'); frame('c').end();\nevent.register('resume', ctx => ctx.resume());"));
   assert.equal(pendingResume.references.dynamicFrames, false);
-  const resumeMissing = analyze(input("frame('a').advance(()=> 'b'); frame('b').advance(()=> 'c'); frame('c').end();\nui('back').bind('resume', ctx => ctx.resume('missing'));"));
+  const resumeMissing = analyze(input("frame('a').advance(()=> 'b'); frame('b').advance(()=> 'c'); frame('c').end();\nevent.register('resume', ctx => ctx.resume('missing'));"));
   assert.ok(resumeMissing.issues.some(issue => issue.includes('UI 返回目标不存在')));
 });
 
 test('页面引用缺失诊断进入剧情工作台但不限制已识别路由，坏 UI 不误报全部目标缺失', () => {
-  const sources = input("frame('a').advance(()=> 'b'); frame('b').advance(()=> 'c'); frame('c').end();\nui('missing').bind('screen.open', ctx => {});\nui('show').bind('present', ctx => ctx.present('hud'));", xml.replace('<scripts>', '<interface src="ui.xml"/><scripts>'));
+  const sources = input("frame('a').advance(()=> 'b'); frame('b').advance(()=> 'c'); frame('c').end();\nui('missing').bind('screen.open', ctx => {});\nevent.register('present', ctx => ctx.present('hud')); ui('show').bind('present');", xml.replace('<scripts>', '<interface src="ui.xml"/><scripts>'));
   sources.set('ui.xml', '<ui schema="3"><include src="pages.xml"/></ui>');
   sources.set('pages.xml', '<ui schema="3"><screen id="hud"/></ui>');
   const result = analyze(sources);

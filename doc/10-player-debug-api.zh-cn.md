@@ -1,6 +1,6 @@
-# 10 播放器调试 API v1（v0.8.3 已实现，v0.11.0 保持兼容）
+# 10 播放器调试 API v1（v0.8.3 已实现，v0.11.1 保持兼容）
 
-这是已实现的播放器宿主 API，源码见 [transport](../../src/debug.rs) 与 [App 适配](../../src/app/debug.rs)。本仓库 DAP 适配器已接入，但这里描述的是播放器端 TCP 契约；不要与通用 AI HTTP API 混淆。协议版本仍为 1；v0.9.0 未增加新命令/字段，v0.9.1 多起始幕增加 `game_started` 并允许未进入时 `frame_id/frame_name=null`，v0.10.0 只把 `engine_version` 推进到 0.10.0；v0.10.1 继续把 `engine_version` 推进到 0.10.1；v0.11.0 把 `engine_version` 推进到 0.11.0，未增加调试命令或字段。
+这是已实现的播放器宿主 API，源码见 [transport](../../src/debug.rs) 与 [App 适配](../../src/app/debug.rs)。本仓库 DAP 适配器已接入，但这里描述的是播放器端 TCP 契约；不要与通用 AI HTTP API 混淆。协议版本仍为 1；v0.9.0 未增加新命令/字段，v0.9.1 多起始幕增加 `game_started` 并允许未进入时 `frame_id/frame_name=null`，v0.10.0 只把 `engine_version` 推进到 0.10.0；v0.10.1 继续把 `engine_version` 推进到 0.10.1；v0.11.0/0.11.1 分别把 `engine_version` 推进到 0.11.0/0.11.1，未增加调试命令或字段。
 
 ## 1. 启动
 

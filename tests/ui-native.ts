@@ -21,11 +21,10 @@ export async function verifyUiEditor(tools: { player: string; packer: string }, 
   let next = splitUiFixture(sources);
   next = new Map([...next, ...patchGameTitle(next, 'UI 编辑器真实校验')]);
   const apply = (operation: unknown) => { const result = editUi(next, operation); next = new Map([...next, ...result.changes]); return result; };
-  /** v0.11.0: create the control, bind a fixed callback on its own target, then wire the XML event. */
+  /** v0.11.1: define the independent event, then attach it through the control's XML event. */
   const control = (screen: string, kind: 'button' | 'toggle', event: string, command: string, extra: Record<string, unknown> = {}) => {
     const id = apply({ action: 'addNode', screen, kind }).selected!;
     apply({ action: 'event', name: event, target: id, command, ...extra });
-    apply({ action: 'patchNode', id, patch: { event } });
     return id;
   };
   apply({ action: 'patchNode', id: 'text', patch: { x: '32', y: '48', width: '1100', 'font-size': '26' } });
@@ -51,22 +50,22 @@ export async function verifyUiEditor(tools: { player: string; packer: string }, 
   control(page, 'button', 'editor.resume', 'resume', { targetValue: 'opening', page: 'hud' });
   assert.ok(next.get('scripts/ui.js')!.includes('ctx.open("hud"); ctx.resume("opening")'));
   const temp = control(page, 'button', 'editor.temp', 'close');
-  apply({action:'event',original:'editor.temp',target:temp,name:'editor.temp.next',command:'advance'});
-  assert.ok(next.get('scripts/ui.js')!.includes(`ui(${JSON.stringify(temp)}).bind("editor.temp.next"`));
+  apply({ action: 'event', original: 'editor.temp', name: 'editor.temp.next', command: 'advance' });
+  assert.ok(next.get('ui/pages.xml')!.includes('event="editor.temp.next"'));
   apply({action:'patchNode',id:temp,patch:{event:'',route:'close'}});
-  apply({action:'deleteEvent',target:temp,name:'editor.temp.next'});
+  apply({action:'deleteEvent',name:'editor.temp.next'});
   assert.ok(!next.get('scripts/ui.js')!.includes('editor.temp.next'));
   // v0.10.0 authoring surface: palette/color-bind/HSL picker, shortcut commands and a quick modal popup.
   apply({ action: 'variable', file: 'ui/state.xml', name: 'dialogueBgDraft', type: 'string', initial: '#10253BFF' });
   apply({ action: 'variable', file: 'ui/state.xml', name: 'shortcutDraft', type: 'string', initial: '' });
   apply({ action: 'palette', file: 'ui/state.xml', id: 'dialogue_background', initial: '#10253BFF' });
   apply({ action: 'palette', file: 'ui/state.xml', id: 'dialogue_text', initial: '#F4EAD8FF' });
-  apply({ action: 'event', target: '$host', name: 'editor.shortcutCaptured', command: 'setUi', targetValue: 'shortcutDraft' });
+  apply({ action: 'event', name: 'editor.shortcutCaptured', command: 'setUi', targetValue: 'shortcutDraft' });
   const picker = apply({ action: 'addNode', screen: page, kind: 'color-picker', value: 'ui.dialogueBgDraft', alpha: 'true' }).selected!;
   const autoPicker = apply({ action: 'addNode', screen: page, kind: 'color-picker', value: 'ui.dialogueBgDraft' }).selected!;
   const autoDesign = readUiDesign(next);
   const autoPickerNode = autoDesign.screens.find(screen => screen.id === page)!.children.find(node => node.id === autoPicker)!;
-  const autoEvent = autoDesign.events.find(event => event.target === autoPicker && event.name === autoPickerNode.attrs.event)!;
+  const autoEvent = autoDesign.events.find(event => event.name === autoPickerNode.attrs.event)!;
   assert.equal(autoEvent.command, 'setUi'); assert.equal(autoEvent.commandTarget, 'dialogueBgDraft');
   assert.ok(next.get('scripts/ui.js')!.includes('ctx.setUi("dialogueBgDraft", ctx.value);'));
   const freshPicker = apply({ action: 'addNode', screen: page, kind: 'color-picker' }).selected!;
@@ -74,7 +73,7 @@ export async function verifyUiEditor(tools: { player: string; packer: string }, 
   const freshDraft = freshNode.attrs.value.slice(3);
   assert.match(freshDraft, /^color[0-9a-f]+$/);
   assert.equal(freshDesign.variables.find(variable => variable.id === freshDraft)!.initial, '#FFFFFFFF');
-  assert.equal(freshDesign.events.find(event => event.target === freshPicker && event.name === freshNode.attrs.event)!.command, 'setUi');
+  assert.equal(freshDesign.events.find(event => event.name === freshNode.attrs.event)!.command, 'setUi');
   const compactAlpha = apply({ action: 'addNode', screen: page, kind: 'color-picker', value: 'ui.dialogueBgDraft', alpha: 'true' }).selected!;
   apply({ action: 'patchNode', id: compactAlpha, patch: { width: '128', height: '154' } });
   const compactPlain = apply({ action: 'addNode', screen: page, kind: 'color-picker', value: 'ui.dialogueBgDraft', alpha: 'false' }).selected!;
@@ -144,5 +143,5 @@ export async function verifyUiEditor(tools: { player: string; packer: string }, 
   }
   for (const [file, text] of before) assert.equal(await fs.readFile(path.join(content, file), 'utf8'), text);
   assert.ok(next.get('ui/pages/hud.xml')!.includes(button));
-  console.log('UI EDITOR NATIVE PASS: nested includes, cross-file title/control edits, target-scoped events, per-control callbacks, pages/buttons/toggle/UI i64 variables, CG asset/visual/gallery/progress/unlock bindings, UI sequences/sound groups/sound-only buttons, present/resume events, frame/screen lifecycle registrations, palette/color-bind/color-picker with generated ctx.setUi handlers, shortcut capture/keybinding/reset/color-preference/quit commands, quick modal popup, invalid fade target rejection, audio preference and hidden-checkpoint exclusion, real engine validation, KPAK 1/2 merge, independent package check and original source preservation.');
+  console.log('UI EDITOR NATIVE PASS: nested includes, cross-file title/control edits, independent events with XML/script bindings, pages/buttons/toggle/UI i64 variables, CG asset/visual/gallery/progress/unlock bindings, UI sequences/sound groups/sound-only buttons, present/resume events, frame/screen lifecycle registrations, palette/color-bind/color-picker with generated ctx.setUi handlers, shortcut capture/keybinding/reset/color-preference/quit commands, quick modal popup, invalid fade target rejection, audio preference and hidden-checkpoint exclusion, real engine validation, KPAK 1/2 merge, independent package check and original source preservation.');
 }

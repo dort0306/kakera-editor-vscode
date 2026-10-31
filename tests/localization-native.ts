@@ -8,7 +8,7 @@ import { emitRoutes, readStory } from '../packages/source/src/index';
 type Tools = Awaited<ReturnType<typeof toolchain>>;
 
 /** Generate a minimal author-selected localization project and prove that the
- * matching v0.11.0 engine accepts it through both the source and KPAK paths. */
+ * matching v0.11.1 engine accepts it through both the source and KPAK paths. */
 export async function verifyLocalization(tools: Tools, root: string): Promise<void> {
   const content = path.join(root, 'localization-content');
   await fs.cp('templates/minimal/content', content, { recursive: true });
@@ -56,5 +56,5 @@ export async function verifyLocalization(tools: Tools, root: string): Promise<vo
     }
     await launch(tools.player, ['--package', pack, '--check', '--no-audio', '--no-live2d'], output).done;
   }
-  console.log('LOCALIZATION NATIVE PASS: Unicode 转义/负数/反斜杠与语言清单被 v0.11.0 引擎接受；KPAK 1/2 包含全部声明语言，language.json 排除。');
+  console.log('LOCALIZATION NATIVE PASS: Unicode 转义/负数/反斜杠与语言清单被 v0.11.1 引擎接受；KPAK 1/2 包含全部声明语言，language.json 排除。');
 }

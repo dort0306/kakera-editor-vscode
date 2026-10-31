@@ -109,7 +109,7 @@ UI 页面的“页面属性”底部提供“页面结束后（关闭时）”�
 </screen>
 ```
 
-确认动作有三种：`route="close"`、调用已注册普通事件、或生成 `ctx.quit()` 事件（自动选择不冲突的事件名）。遮罩、面板、按钮尺寸按画布居中计算，全部使用现有控件属性和短 ID。标题留空时不生成标题 label；取消始终 `route="close"`。工具不自动创建打开弹窗的按钮/事件，也不把正文改为绑定；作者可继续用属性检查器改成 `bind`/`visible` 或添加入口。`ctx.quit()` 只在普通 `ui("目标").bind(...)` 中合法，不写剧情、存档或玩家偏好；真实退出补写由播放器负责。
+确认动作有三种：`route="close"`、调用已注册普通事件、或生成 `ctx.quit()` 事件（自动选择不冲突的事件名）。遮罩、面板、按钮尺寸按画布居中计算，全部使用现有控件属性和短 ID。标题留空时不生成标题 label；取消始终 `route="close"`。工具不自动创建打开弹窗的按钮/事件，也不把正文改为绑定；作者可继续用属性检查器改成 `bind`/`visible` 或添加入口。`ctx.quit()` 只在普通事件回调（`event.register` 定义的固定动作）中合法，不写剧情、存档或玩家偏好；真实退出补写由播放器负责。
 
 ### 玩家快捷键
 
@@ -124,7 +124,7 @@ UI 页面的“页面属性”底部提供“页面结束后（关闭时）”�
 
 “动作”只列 `advance` / `fast_forward` / `skip_sequence`。绑定输入接受作者大小写并规范化：修饰键固定 Ctrl、Alt、Shift 顺序，主键为文档 token 表，最多 64 字节 ASCII；拒绝 Escape、Meta/Windows、Ctrl+Alt、系统保留组合、重复 token、空白和裸 `+`。留空绑定写 `null` 表示禁用该键盘动作；编辑器逐条校验 token 和保留组合，跨动作的按住前缀冲突、整批交换和最终偏好写入由匹配播放器事务校验。
 
-捕获结果事件通过 `ctx.value` 收到规范绑定，`ctx.item.action` 收到动作 ID；v0.11.0 起结果事件必须注册在 `$host`（`ui("$host").bind(结果事件, …)`），编辑器只在表单中关联该目标，不实现捕获状态机，也不自动写文件。作者通常用 UI string 保存草稿，再由“应用”按钮生成 `keybinding` 事件。设计画布把 `shortcuts.advanceLabel`、`fastForwardLabel`、`skipSequenceLabel`、`captureText`、`captureActive` 和 `shortcuts.bindings.*` 作为默认示例值预览；显示 Label 只用于界面，不能当存储格式回解析。
+捕获结果事件通过 `ctx.value` 收到规范绑定，`ctx.item.action` 收到动作 ID；v0.11.1 起结果事件是普通 `event.register(结果事件, …)` 定义，不需要 `$host` 或控件引用，`captureShortcut` 只按事件 ID 查找。编辑器在表单中从已定义事件选择结果事件，不实现捕获状态机，也不自动写文件。作者通常用 UI string 保存草稿，再由“应用”按钮生成 `keybinding` 事件。设计画布把 `shortcuts.advanceLabel`、`fastForwardLabel`、`skipSequenceLabel`、`captureText`、`captureActive` 和 `shortcuts.bindings.*` 作为默认示例值预览；显示 Label 只用于界面，不能当存储格式回解析。
 
 ### HSL 方形、配色槽位与 color-bind
 
@@ -135,7 +135,7 @@ palette 与 UI string 分开是匹配引擎的设计，不是编辑器另造模�
 `color-picker` 的编辑约束与引擎一致：
 
 - 必需 `value`，且只能指向已声明 UI string；该变量初始值必须能解析为 `#RRGGBB` 或 `#RRGGBBAA`。
-- 必需 `event`，必须是绑定到该控件自身的普通注册（`ui("控件ID").bind(...)`）。该事件只有在直接调用 `ctx.setUi("草稿变量", ctx.value)` 时才会提交候选；否则播放器在松开后回到绑定变量的已提交值。添加控件时“更新事件”留空会自动创建这个回调；事件向导也有“设置 UI 变量（使用控件当前值）”动作可手动创建或修复。
+- 可选 `event`：v0.11.1 起可以省略或为空，此时控件仍占据交互区域但不会提交颜色，只显示 `value` 初始值。非空时必须引用一个已定义事件（XML `event` 或该控件上的单参数 `ui(...).bind(事件ID)`），该事件只有在直接调用 `ctx.setUi("草稿变量", ctx.value)` 时才会提交候选；否则播放器在松开后回到绑定变量的已提交值。添加控件时“更新事件”留空会自动创建独立的 `event.register` 定义并写入 XML `event`；事件向导也有“设置 UI 变量（使用控件当前值）”动作可手动创建或修复。
 - 编辑器会显示两类解析注意事项：事件写入的 UI 变量与 `value` 不一致，或事件是 `open`/`colorPreference` 等不会调用 `ctx.setUi` 的固定动作。手写共享函数或动态提交无法证明时不误判，仍以匹配播放器为准。
 - 可选 `alpha="true|false"`，默认显示透明条；隐藏 alpha 条不强制改写原颜色的 alpha。
 - `alpha=false` 时宽高至少 128×128；`alpha` 默认/true 时色盘直径至少 128，即高度至少 154（推荐 256×256 / 256×282）；整个 UI 最多 8 个；不能放入 repeat；不接受子控件、图片、region、route、color 或未知属性。
@@ -168,13 +168,13 @@ UI 编辑器保留页面/层级树、设计画布和检查器三栏，但新增�
 
 ## 从 UI 显式开始/恢复剧情（0.8.2，播放器 v0.9.1）
 
-“新建事件”的动作“开始 / 恢复剧情（可指定起始幕）”写入普通 `ui("目标").bind(...)`：
+“新建事件”的动作“开始 / 恢复剧情（可指定起始幕）”写入普通事件定义 `event.register(事件ID, 回调)`，再由控件 XML `event` 或 `ui(...).bind(事件ID)` 引用：
 
 ```javascript
 // 可选先打开主界面，再从指定幕开始；也可省略页面。
-on.ui("start-story", ctx => { ctx.open("hud"); ctx.resume("opening"); });
-on.ui("hidden-story", ctx => { ctx.open("hud"); ctx.resume("secret-entry"); });
-on.ui("continue-story", ctx => { ctx.open("hud"); ctx.resume(); });
+event.register("start-story", ctx => { ctx.open("hud"); ctx.resume("opening"); });
+event.register("hidden-story", ctx => { ctx.open("hud"); ctx.resume("secret-entry"); });
+event.register("continue-story", ctx => { ctx.open("hud"); ctx.resume(); });
 ```
 
 起始幕下拉只列实际幕，不列待连接占位；可选“先打开页面”只列已加载 UI 页面。留空起始幕时生成 `ctx.resume()`，播放器读取隐藏槽 continuation；首次没有隐藏槽会拒绝，编辑器不写隐藏槽也不伪造目标。指定幕沿用隐藏槽变量与历史，不是 `ctx.restart`，不会清空变量。相同页面可在运行期按 modal 规则压栈；编辑器只校验目标页面存在。
@@ -183,9 +183,9 @@ on.ui("continue-story", ctx => { ctx.open("hud"); ctx.resume(); });
 
 本次只新增控件事件/生命周期写入，不新增 XML 属性或 JS API；宿主仍以匹配 v0.9.1 引擎的验证、隐藏槽原子写和运行结果显示为准。
 
-## 事件编辑/删除与幕 ID（0.8.3 / v0.11.0 目标作用域）
+## 事件编辑/删除与幕 ID（0.8.3 / v0.11.1 独立事件）
 
-“交互事件”列表中的固定注册有 **编辑/删除**，v0.11.0 起列表显示“目标 · 事件名”。编辑会预填注册目标、事件名、动作、命令目标和起始幕，保存时替换该 `ui("目标").bind(...)` 注册；改名只同步该目标自己的控件 `event` 或页面 `background-click/background-right-click`，不批量改其他目标上的同名事件。删除前必须解除该目标的引用；手写、带注释、重复目标/事件或非固定回调保持源码维护，不能可视化改写或删除。事件源范围、目标校验与动作白名单见 [18 使用说明](18-visual-editor-guide.zh-cn.md) 和 [13 实时映射](13-live-logic-mapping.zh-cn.md)。
+“交互事件”列表中的固定事件定义有 **编辑/删除**，v0.11.1 起每行显示事件 ID 与已证明的绑定目标。编辑会预填事件 ID、动作、命令目标和起始幕，保存时替换该 `event.register(事件ID, 回调)` 定义；改名同步可证明的 XML `event`/页面 `background-click`/`background-right-click` 与单参数 `ui(...).bind(事件ID)` 引用，不触碰其他事件。删除前必须解除全部 XML/脚本/`captureShortcut` 结果引用；手写回调、带注释回调、重复定义或非固定动作保持源码维护，不能可视化改写或删除。事件源范围、绑定校验与动作白名单见 [18 使用说明](18-visual-editor-guide.zh-cn.md) 和 [13 实时映射](13-live-logic-mapping.zh-cn.md)。
 
 幕 ID 重命名在故事工作台完成，不在 UI 编辑器；它更新 `<frame>` ID/name、入口和已识别剧情目标，遇到动态路线或生命周期/`ctx.resume` 引用会拒绝。UI 事件中的“先打开页面/起始幕”仍由同一工作台保存链写入。
 
@@ -217,9 +217,9 @@ UI 编辑器读取全部已声明文本语言/语音语言和 FTL，并在 `工�
 
 本地化不会改变 story 8/UI 3/save 9 或 UI 页面/include 规则；`language.json` 不进入冻结代次和发行包。详细接口、预算、语音映射与限制见 [19 游戏本地化](19-localization.zh-cn.md)。
 
-## v0.11.0 目标作用域事件（引擎 v0.11.0）
+## v0.11.1 独立事件与控件绑定（引擎 v0.11.1）
 
-- UI 回调注册从全局 `on.ui("事件", 回调)` 改为 `ui("控件模板ID或页面ID").bind("事件", 回调)`。引擎按（目标、事件名）校验：每个 XML 事件必须恰好有一个注册，注册目标必须真实存在且事件与 XML 完全一致；两个控件可以保留同一个 `event` 并各自绑定不同回调。编辑器不再按事件名去重或批量改名。
-- 事件列表显示“目标 · 事件名”，新建事件必须先选择目标。`$game` 只接受 `game.enter`，`$host` 只接受非保留的捕获结果事件；`screen.open`/`screen.close` 由页面生命周期编辑维护，不出现在普通控件事件列表。目标为页面时，普通事件对应 `background-click`/`background-right-click`。
-- 新增控件的事件不能引用另一个控件上的同名注册：编辑器从可证明的固定回调复制到新控件自己的 `ui("新ID").bind(...)`，并在同一事务写入 `event`。`color-picker` 自动生成的事件也绑定自身控件；没有可复制回调时拒绝新增该事件，而不是生成孤立注册。
-- 旧 `on.*` 注册已被引擎移除且无别名；编辑器只显示迁移诊断，不把旧注册当作可编辑路线，也不自动整文件迁移。命名、删除与 `captureShortcut` 结果事件的校验均按新目标模型执行；真实装配由匹配 v0.11.0 播放器 `--check` 最终验证。
+- 普通 UI 回调从 v0.11.0 的 `ui("目标").bind("事件", 回调)` 改为独立定义 `event.register("事件ID", 回调)`，同级事件 ID 只能定义一次；控件 XML `event`、页面 `background-click`/`background-right-click` 或单参数 `ui("控件或页面").bind("事件ID")` 只是引用。控件事件可省略或为空，未被引用的事件定义合法；多个控件可引用同一 ID 共享回调。
+- 事件列表显示事件 ID 与已证明的绑定目标（`targets`）。新建事件可选绑定目标（控件/页面、`$game` 或不绑定）；`$game` 仍只接受 `game.enter` 并使用 `ui("$game").bind("game.enter", …)`。`captureShortcut` 结果事件从已定义事件中选择，不再需要 `$host`。`screen.open`/`screen.close` 由页面生命周期编辑维护，不出现在普通控件事件列表。
+- 新增控件、复制控件、`color-picker` 自动事件和快捷弹窗只引用已有定义（`color-picker`/`ctx.quit` 在缺少定义时创建新 ID），不再复制其他目标的回调。`route` 按钮、只读控件、重复 bind、同控件 XML 与脚本指向不同事件、未知引用和保留名称都在编辑器诊断或引擎装配时拒绝。
+- 旧 `on.*` 与 v0.11.0 两参数普通 bind 已被引擎移除且无别名；编辑器只显示迁移诊断并暂停事件可视化改写，不把旧注册当作可编辑事件，也不自动整文件迁移。命名、删除与结果事件校验按独立事件模型执行；真实装配由匹配 v0.11.1 播放器 `--check` 最终验证。
