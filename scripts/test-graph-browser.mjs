@@ -98,14 +98,49 @@ try {
   await click('[data-ui-node="picker"] .ui-node-hit');
   assert.equal(await evaluate('document.querySelector(\'select[aria-label="UI color-picker value"]\').value'), 'ui.bgDraft');
   assert.equal(await evaluate('document.querySelector(\'select[aria-label="UI alpha"]\').value'), 'true');
+  assert.equal(await evaluate('document.querySelector(".ui-color-picker-preview").getAttribute("viewBox")'), '0 0 256 320');
+  assert.equal(await evaluate('document.querySelectorAll(".ui-color-picker-preview text").length'), 0);
+  assert.equal(await evaluate('document.querySelectorAll(".ui-color-picker-preview [data-color-marker]").length'), 3);
   await evaluate("[...document.querySelectorAll('.ui-tree-node')].find(b => b.textContent.includes('panel'))?.click()"); await flush();
   assert.equal(await evaluate('document.querySelector(\'[data-ui-node="panel"]\')?.getAttribute("aria-pressed")'), 'true');
   assert.equal(await evaluate('document.querySelector(\'[aria-label="颜色 #RRGGBB / #RRGGBBAA"]\')?.value'), '#243950');
-  await evaluate('document.querySelector(\'[aria-label="颜色 #RRGGBB / #RRGGBBAA：打开 HSV 选色器"]\').scrollIntoView({block:"nearest"})'); await flush();
-  await click('[aria-label="颜色 #RRGGBB / #RRGGBBAA：打开 HSV 选色器"]');
-  const pickerRect = await evaluate('(() => { const r=document.querySelector(\'svg[aria-label="HSV 三角选色器"]\').getBoundingClientRect(); return {x:r.x,y:r.y,w:r.width,h:r.height}; })()');
+  await evaluate('document.querySelector(\'[aria-label="颜色 #RRGGBB / #RRGGBBAA：打开 HSL 选色器"]\').scrollIntoView({block:"nearest"})'); await flush();
+  await click('[aria-label="颜色 #RRGGBB / #RRGGBBAA：打开 HSL 选色器"]');
+  let pickerRect = await evaluate('(() => { const r=document.querySelector(\'svg[aria-label="HSL 正方形选色器"]\').getBoundingClientRect(); return {x:r.x,y:r.y,w:r.width,h:r.height}; })()');
   const ringPoint = { x: pickerRect.x + pickerRect.w * .5, y: pickerRect.y + pickerRect.h * (19 / 300) };
   await mouse('mouseMoved', ringPoint); await mouse('mousePressed', ringPoint); await mouse('mouseReleased', ringPoint); await flush();
+  pickerRect = await evaluate('(() => { const r=document.querySelector(\'.hsl-picker svg\').getBoundingClientRect(); return {x:r.x,y:r.y,w:r.width,h:r.height}; })()');
+  const square = await evaluate('(() => { const q=document.querySelector(\'.hsl-picker [data-hsl-square]\'); return {x:+q.getAttribute("x"),y:+q.getAttribute("y"),w:+q.getAttribute("width"),h:+q.getAttribute("height")}; })()');
+  const pickerMatrix = await evaluate('(() => { const m=document.querySelector(\'.hsl-picker svg\').getScreenCTM(); return {a:m.a,d:m.d,e:m.e,f:m.f}; })()');
+  const squarePoint = (s, l) => ({ x: pickerMatrix.e + (square.x + square.w * s) * pickerMatrix.a, y: pickerMatrix.f + (square.y + square.h * (1 - l)) * pickerMatrix.d });
+  const markerAt = async (s, l) => {
+    const marker = await evaluate('(() => { const m=document.querySelector(\'.hsl-picker [data-color-marker="square"] circle\'); return {x:+m.getAttribute("cx"),y:+m.getAttribute("cy")}; })()');
+    assert.ok(Math.abs(marker.x - (square.x + square.w * s)) < .01, `HSL marker S=${s}: ${JSON.stringify(marker)}`);
+    assert.ok(Math.abs(marker.y - (square.y + square.h * (1 - l))) < .01, `HSL marker L=${l}: ${JSON.stringify(marker)}`);
+  };
+  const fieldColor = () => evaluate('document.querySelector(\'[aria-label="颜色 #RRGGBB / #RRGGBBAA"]\').value');
+  // Real inspector DOM: all edges/corners are hittable, including identical white/black echoes.
+  for (const l of [1, .75, .5, .25, 0]) for (const s of [0, .25, .5, .75, 1]) {
+    const p = squarePoint(s, l); await mouse('mouseMoved', p); await mouse('mousePressed', p); await mouse('mouseReleased', p); await flush();
+    await markerAt(s, l);
+    if (l === 1) assert.equal(await fieldColor(), '#FFFFFFFF');
+    if (l === 0) assert.equal(await fieldColor(), '#000000FF');
+    if (l === .5 && s === 1) assert.equal(await fieldColor(), '#FF0000FF');
+  }
+  // Lock square gesture outside its bounds; release position must be applied even after capture loss.
+  await mouse('mouseMoved', squarePoint(.5, .5)); await mouse('mousePressed', squarePoint(.5, .5));
+  await mouse('mouseMoved', { x: pickerRect.x + pickerRect.w * 217 / 260, y: pickerRect.y + pickerRect.h * 106 / 300 });
+  await evaluate('(() => { const s=document.querySelector(\'.hsl-picker svg\'); for(let id=1;id<8;id++) if(s.hasPointerCapture(id)) s.releasePointerCapture(id); })()');
+  await mouse('mouseReleased', squarePoint(1, .5)); await flush();
+  await markerAt(1, .5); assert.equal(await fieldColor(), '#FF0000FF');
+  // Release at a new coordinate without an intervening move, then keyboard adjustment.
+  await mouse('mousePressed', squarePoint(.5, .5)); await mouse('mouseReleased', squarePoint(.25, .75)); await flush(); await markerAt(.25, .75);
+  await command('Input.dispatchKeyEvent', { type: 'keyDown', key: 'ArrowRight', code: 'ArrowRight', windowsVirtualKeyCode: 39 });
+  await command('Input.dispatchKeyEvent', { type: 'keyUp', key: 'ArrowRight', code: 'ArrowRight', windowsVirtualKeyCode: 39 }); await flush(); await markerAt(.26, .75);
+  const alphaPoint = { x: pickerRect.x + pickerRect.w * 130 / 260, y: pickerRect.y + pickerRect.h * 245 / 300 };
+  const beforeAlpha = await fieldColor(); await mouse('mouseMoved', alphaPoint); await mouse('mousePressed', alphaPoint); await mouse('mouseReleased', alphaPoint); await flush();
+  assert.equal((await fieldColor()).slice(0, 7), beforeAlpha.slice(0, 7)); assert.equal((await fieldColor()).slice(7), '80');
+  await writeFile(path.join(directory, 'hsl-picker.png'), Buffer.from((await command('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false })).data, 'base64'));
   assert.equal(await evaluate('document.querySelector(\'[aria-label="颜色 #RRGGBB / #RRGGBBAA"]\')?.value !== "#243950"'), true);
   assert.equal(await evaluate("[...document.querySelectorAll('button')].find(b => b.textContent === '保存属性')?.disabled"), false);
   await evaluate('document.querySelector(\'button.primary\').scrollIntoView({block:"nearest"})'); await flush();
@@ -128,7 +163,7 @@ try {
   await evaluate("[...document.querySelectorAll('button')].find(b => b.textContent === '保存设置')?.click()"); await flush();
   const keybindingOp = await evaluate('uiTest.operations.at(-1)');
   assert.equal(keybindingOp.action, 'event'); assert.equal(keybindingOp.command, 'keybinding'); assert.equal(keybindingOp.actionValue, 'advance'); assert.equal(keybindingOp.binding, 'Enter');
-  console.log('BROWSER UI V0100 PASS: HSV ring edit saves canonical color, color-picker inspector, quick popup and keybinding event forms.');
+  console.log('BROWSER UI V0100 PASS: HSL 5x5 square/edges, white/black marker memory, gesture lock/capture loss/release endpoint, keyboard/alpha, saved canonical color, quick popup and keybinding forms.');
   await evaluate("[...document.querySelectorAll('.tree-section > summary')].find(s => s.textContent.includes('交互事件'))?.click()"); await flush();
   await evaluate("[...document.querySelectorAll('.tree-section > summary')].find(s => s.textContent.includes('交互事件'))?.click()"); await flush();
   await evaluate("[...document.querySelectorAll('button')].find(b => b.textContent === '＋新建事件')?.click()"); await flush();
@@ -137,7 +172,7 @@ try {
   await setValue('[aria-label="UI 表单 target"]', 'a', 'change');
   await setValue('[aria-label="UI 表单 page"]', 'help', 'change');
   await evaluate("[...document.querySelectorAll('button')].find(b => b.textContent === '保存设置')?.click()"); await flush();
-  assert.deepEqual(await evaluate('uiTest.operations.at(-1)'), { action: 'event', name: 'browser.start', command: 'resume', target: 'a', page: 'help' });
+  assert.deepEqual(await evaluate('uiTest.operations.at(-1)'), { action: 'event', name: 'browser.start', command: 'resume', target: 'hud', targetValue: 'a', page: 'help' });
   console.log('BROWSER LIFECYCLE PASS: native page-close action/target selection and save request; explicit start frame plus pre-open page form save.');
   console.log('BROWSER UI PASS: native control selection, zoomed parent-relative drag, resize, Escape, stale/readonly drag cancellation, click jitter and read-only selection. Screenshot:', path.join(directory, 'ui-editor.png'));
 

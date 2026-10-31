@@ -10,7 +10,7 @@ export function uiEntry(sources: Sources): string {
 }
 function inspect(source: string, file: string, entry: boolean): XmlNode {
   const root = parseXml(source);
-  const attrs = entry ? ['schema', 'width', 'height', 'initial', 'title', 'title-bind'] : ['schema'];
+  const attrs = entry ? ['schema', 'width', 'height', 'initial', 'title', 'title-bind', 'title-key', 'title-key-bind'] : ['schema'];
   if (root.tag !== 'ui' || root.attrs.schema !== '3' || Object.keys(root.attrs).some(k => !attrs.includes(k)) || root.text.trim()) throw new Error(`${file}：UI 3 根属性不合法；子文件仅允许 schema`);
   const groups = new Set<string>();
   for (const node of root.children) {
@@ -53,4 +53,9 @@ export function uiFragments(sources: Sources): UiFragment[] {
   const first = fragments[0]; merged += new TextEncoder().encode(first.source.slice(first.root.start, first.root.openEnd)).length + 6;
   if (merged > 1024 * 1024) throw new Error('合并 UI XML 超过 1MiB');
   return fragments;
+}
+/** UI file list for navigation. Structural include errors fall back to the declared entry. */
+export function uiFileList(sources: Sources): string[] {
+  try { return uiFragments(sources).map(fragment => fragment.file); }
+  catch { try { return [uiEntry(sources)]; } catch { return []; } }
 }

@@ -1,10 +1,16 @@
 import { randomBytes, randomUUID } from 'node:crypto';
 import type { Asset, Frame, Story } from '../../domain/src/index';
+import { formatFtlValue } from '../../domain/src/localization';
 import { child, escapeXml, group, parseXml, setAttribute, type XmlNode } from './xml';
+import { readLocalization, type LocalizationUsage } from './localization';
 export { emitRoutes, readManagedRoutes } from './routes';
 export { analyzeLogic, patchLogicRoutes, protectedLogicTargets, type LogicAnalysis, type LogicSummary } from './logic';
 export { parseXml, escapeXml } from './xml';
 export type Sources = Map<string, string>;
+function localizedText(catalog: Story['localization'], key: string): string {
+  if (!catalog?.enabled) return '';
+  try { return formatFtlValue(catalog, undefined, key, {}); } catch { return ''; }
+}
 export function readStory(sources: Sources): Story {
   const files: string[] = [], nodes: { file: string; root: XmlNode; source: string }[] = [];
   let file: string | undefined = 'story.xml';
@@ -19,20 +25,47 @@ export function readStory(sources: Sources): Story {
     file = next?.attrs.src;
   }
   const first = nodes[0].root;
-  const story: Story = { id: first.attrs.id ?? '', entry: first.attrs.entry ?? '', entries: [], contentVersion: first.attrs['content-version'] ?? '', frames: [], assets: [], visuals: [], variables: [], characters: [], scripts: [], files };
-  for (const { file, root, source } of nodes) {
+  const localization = readLocalization(sources);
+  const story: Story = { id: first.attrs.id ?? '', entry: first.attrs.entry ?? '', entries: [], contentVersion: first.attrs['content-version'] ?? '', frames: [], assets: [], visuals: [], variables: [], characters: [], scripts: [], files, localization };
+  for (const [chapter, { file, root, source }] of nodes.entries()) {
+    if (chapter > 0 && child(root, 'localization')) throw new Error(`${file}：只有入口 story.xml 可以声明 localization`);
     for (const n of group(root, 'frames')) {
       if (n.tag !== 'frame') throw new Error('frames 中包含未知元素');
       const text = child(n, 'text');
-      if (!text || text.children.length || n.children.filter(x => x.tag === 'text').length !== 1) throw new Error('每幕需要一个纯文本 text');
+      if (!text || n.children.filter(x => x.tag === 'text').length !== 1) throw new Error('每幕需要一个 text');
+      const textKey = text.attrs.key;
+      if (textKey !== undefined) {
+        if (!textKey || textKey.length > 128 || Object.keys(text.attrs).length !== 1 || text.children.length || text.text.trim()) throw new Error(`${file}：key 文本必须是只带 key 属性的空 text 元素`);
+      } else if (text.children.length || !text.text.trim()) throw new Error('每幕文字 text 需要纯文本或 key');
       const pending = !!n.attrs.id && !!n.attrs.name?.startsWith('kakera.pending.') && n.children.length === 1 && text.text === '后续剧情尚未连接。' && source.slice(n.openEnd, text.start).includes('<!-- Kakera pending route v1 -->');
       const legacyVideo = n.children.some(x => x.tag === 'video');
-      story.frames.push({ ref: n.attrs.name || n.attrs.id || '', id: n.attrs.id, name: n.attrs.name, speaker: n.attrs.speaker ?? '', visual: n.attrs.visual ?? '', text: text.text, audio: child(n, 'audio')?.attrs ?? {}, options: group(n, 'options').map(o => ({ id: o.attrs.id, text: o.text })), file, line: source.slice(0, n.start).split('\n').length, ...(pending ? { pending: true } : {}), ...(legacyVideo ? { legacyVideo: true } : {}) });
+      const options = group(n, 'options').map(o => {
+        if (o.tag !== 'option') throw new Error('options 中包含未知元素');
+        const key = o.attrs['text-key'];
+        if (key !== undefined) {
+          if (!key || o.children.length || o.text.trim() || Object.keys(o.attrs).some(name => !['id', 'text-key'].includes(name))) throw new Error(`${file}：选项 text-key 与正文/未知属性不能同时出现`);
+          return { id: o.attrs.id, text: localizedText(localization, key), textKey: key };
+        }
+        if (o.children.length || !o.text.trim()) throw new Error('选项目前需要纯文本或 text-key');
+        return { id: o.attrs.id, text: o.text };
+      });
+      story.frames.push({ ref: n.attrs.name || n.attrs.id || '', id: n.attrs.id, name: n.attrs.name, speaker: n.attrs.speaker ?? '', visual: n.attrs.visual ?? '', text: textKey === undefined ? text.text : localizedText(localization, textKey), ...(textKey === undefined ? {} : { textKey }), audio: child(n, 'audio')?.attrs ?? {}, options, file, line: source.slice(0, n.start).split('\n').length, ...(pending ? { pending: true } : {}), ...(legacyVideo ? { legacyVideo: true } : {}) });
     }
     story.assets.push(...group(root, 'assets').map(n => ({ id: n.attrs.id, kind: n.tag, src: n.attrs.src, file })));
-    story.characters.push(...group(root, 'characters').map(n => ({ id: n.attrs.id, name: n.attrs.name })));
+    story.characters.push(...group(root, 'characters').map(n => {
+      if (n.tag !== 'character') throw new Error('characters 中包含未知元素');
+      const nameKey = n.attrs['name-key'];
+      if (n.attrs.name !== undefined && nameKey !== undefined) throw new Error(`${file}：人物 name 与 name-key 不能同时出现`);
+      if (nameKey !== undefined) return { id: n.attrs.id, name: localizedText(localization, nameKey), nameKey };
+      return { id: n.attrs.id, name: n.attrs.name ?? '' };
+    }));
     story.visuals.push(...group(root, 'visuals').map(n => ({ id: n.attrs.id, background: n.attrs.background ?? '', portraits: n.children.filter(p => p.tag === 'portrait').map(p => ({ image: p.attrs.image, character: p.attrs.character, slot: p.attrs.slot, ...(child(p, 'live2d') ? { live2d: child(p, 'live2d')!.attrs.asset } : {}) })), ...(n.attrs.cg ? { cg: n.attrs.cg } : {}) })));
-    story.variables.push(...group(root, 'variables').map(n => { if (!['int', 'bool', 'string'].includes(n.tag)) throw new Error('未知变量类型'); return { id: n.attrs.id, type: n.tag as 'int' | 'bool' | 'string', initial: n.attrs.initial, min: n.attrs.min, max: n.attrs.max }; }));
+    story.variables.push(...group(root, 'variables').map(n => {
+      if (!['int', 'bool', 'string'].includes(n.tag)) throw new Error('未知变量类型');
+      const labelKey = n.attrs['label-key'];
+      if (n.attrs.label !== undefined && labelKey !== undefined) throw new Error(`${file}：变量 label 与 label-key 不能同时出现`);
+      return { id: n.attrs.id, type: n.tag as 'int' | 'bool' | 'string', initial: n.attrs.initial, min: n.attrs.min, max: n.attrs.max, ...(n.attrs.label === undefined ? {} : { label: n.attrs.label }), ...(labelKey === undefined ? {} : { labelKey, label: localizedText(localization, labelKey) }) };
+    }));
     story.scripts.push(...group(root, 'scripts').map(n => n.attrs.src));
   }
   if (story.frames.some(f => !f.ref)) throw new Error('幕必须有 id 或 name');
@@ -44,6 +77,18 @@ export function readStory(sources: Sources): Story {
   story.entries = entries; story.entry = entries[0];
   return story;
 }
+/** All static story text targets used by the localization coverage checks. */
+export function storyLocalizationUsages(story: Story): LocalizationUsage[] {
+  const usages: LocalizationUsage[] = [];
+  for (const frame of story.frames) {
+    if (frame.textKey) usages.push({ key: frame.textKey, file: frame.file, line: frame.line, label: `幕 ${frame.ref} 台词` });
+    for (const option of frame.options) if (option.textKey) usages.push({ key: option.textKey, file: frame.file, line: frame.line, label: `幕 ${frame.ref} 选项 ${option.id}` });
+  }
+  for (const character of story.characters) if (character.nameKey) usages.push({ key: character.nameKey, file: 'story.xml', line: 1, label: `人物 ${character.id} 名称` });
+  for (const variable of story.variables) if (variable.labelKey) usages.push({ key: variable.labelKey, file: 'story.xml', line: 1, label: `变量 ${variable.id} 标签` });
+  return usages;
+}
+export { readLocalization, localizationIssues, localizationFiles, readLocalizationConfig, editFtlMessage, deleteFtlMessage, editLocalizationManifest, localeMessages, formatForPreview, type LocalizationUsage, type LocalizationManifestEdit } from './localization';
 export { readGameTitle, patchGameTitle, editCharacter, addCharacterLooks, characterLooks, assignCharacterLook, setFrameVisual } from './project';
 export { reconcilePendingRoutes, insertConnectedFrame, deleteConnectedFrame, deleteConnectedFrames, duplicateConnectedFrames, setStoryEntry, setStoryEntries, addStoryVariable, editStoryVariable, deleteStoryVariable, deleteCharacter, renameFrame } from './editing';
 function frameNode(source: string, ref: string): XmlNode {
@@ -51,12 +96,29 @@ function frameNode(source: string, ref: string): XmlNode {
   if (!node) throw new Error('幕已改变，请刷新');
   return node;
 }
-export function patchFrame(source: string, ref: string, patch: { text?: string; speaker?: string; visual?: string; audio?: Record<string, string>; options?: { id: string; text: string }[] }): string {
+export function patchFrame(source: string, ref: string, patch: { text?: string; textKey?: string | null; speaker?: string; visual?: string; audio?: Record<string, string>; options?: { id: string; text: string; textKey?: string }[] }): string {
   let next = source;
-  if (patch.text !== undefined) {
-    if (!patch.text.trim()) throw new Error('台词不能为空');
-    const text = child(frameNode(next, ref), 'text')!;
-    if (text.text !== patch.text) next = next.slice(0, text.openEnd) + escapeXml(patch.text) + next.slice(text.closeStart);
+  const current = frameNode(next, ref), currentText = child(current, 'text')!;
+  if (patch.textKey !== undefined) {
+    const key = (patch.textKey ?? '').trim();
+    if (key) {
+      if (!/^[A-Za-z][A-Za-z0-9_-]{0,127}$/.test(key)) throw new Error('本地化 key 必须以英文字母开头，且只包含英文、数字、下划线或连字符');
+      const markup = `<text key="${escapeXml(key)}" />`;
+      if (source.slice(currentText.start, currentText.end) !== markup) next = next.slice(0, currentText.start) + markup + next.slice(currentText.end);
+    } else {
+      const text = patch.text ?? '';
+      if (!text.trim()) throw new Error('台词不能为空');
+      const markup = `<text>${escapeXml(text)}</text>`;
+      if (source.slice(currentText.start, currentText.end) !== markup) next = next.slice(0, currentText.start) + markup + next.slice(currentText.end);
+    }
+  } else if (patch.text !== undefined) {
+    if (currentText.attrs.key !== undefined) {
+      if (patch.text !== currentText.text) throw new Error('此幕使用本地化 key，请在本地化面板编辑消息，或切换为固定文字');
+    } else {
+      if (!patch.text.trim()) throw new Error('台词不能为空');
+      const text = child(frameNode(next, ref), 'text')!;
+      if (text.text !== patch.text) next = next.slice(0, text.openEnd) + escapeXml(patch.text) + next.slice(text.closeStart);
+    }
   }
   for (const name of ['speaker', 'visual'] as const) if (patch[name] !== undefined && (frameNode(next, ref).attrs[name] ?? '') !== patch[name]) next = setAttribute(next, frameNode(next, ref), name, patch[name]!);
   if (patch.audio !== undefined) {
@@ -66,11 +128,19 @@ export function patchFrame(source: string, ref: string, patch: { text?: string; 
     if (['bgm', 'voice', 'se'].some(k => (audio?.attrs[k] ?? '') !== (patch.audio![k] ?? ''))) next = audio ? next.slice(0, audio.start) + markup + next.slice(audio.end) : next.slice(0, node.closeStart) + markup + next.slice(node.closeStart);
   }
   if (patch.options !== undefined) {
-    if (patch.options.length > 100 || new Set(patch.options.map(o => o.id)).size !== patch.options.length || patch.options.some(o => !o.id || !o.text.trim())) throw new Error('选项必须有唯一 ID 和非空文字');
-    const node = frameNode(next, ref), options = child(node, 'options');
-    const markup = patch.options.length ? `<options>${patch.options.map(o => `<option id="${escapeXml(o.id)}">${escapeXml(o.text)}</option>`).join('')}</options>` : '';
-    const current = (options?.children ?? []).map(n => ({ id: n.attrs.id, text: n.text }));
-    if (JSON.stringify(current) !== JSON.stringify(patch.options)) next = options ? next.slice(0, options.start) + markup + next.slice(options.end) : next.slice(0, node.closeStart) + markup + next.slice(node.closeStart);
+    if (patch.options.length > 100 || new Set(patch.options.map(o => o.id)).size !== patch.options.length || patch.options.some(o => !o.id || (!o.textKey && !o.text.trim()))) throw new Error('选项必须有唯一 ID 和非空文字或 key');
+    const options = patch.options.map(option => {
+      if (option.textKey) {
+        if (!/^[A-Za-z][A-Za-z0-9_-]{0,127}$/.test(option.textKey)) throw new Error('选项本地化 key 必须以英文字母开头，且只包含英文、数字、下划线或连字符');
+        return { node: `<option id="${escapeXml(option.id)}" text-key="${escapeXml(option.textKey)}" />`, textKey: option.textKey };
+      }
+      return { node: `<option id="${escapeXml(option.id)}">${escapeXml(option.text)}</option>`, textKey: undefined };
+    });
+    const node = frameNode(next, ref), optionsNode = child(node, 'options');
+    const markup = patch.options.length ? `<options>${options.map(option => option.node).join('')}</options>` : '';
+    const currentOptions = (optionsNode?.children ?? []).map(n => ({ id: n.attrs.id, text: n.attrs['text-key'] ? '' : n.text, textKey: n.attrs['text-key'] }));
+    const desired = patch.options.map(option => option.textKey ? { id: option.id, text: '', textKey: option.textKey } : { id: option.id, text: option.text, textKey: undefined });
+    if (JSON.stringify(currentOptions) !== JSON.stringify(desired)) next = optionsNode ? next.slice(0, optionsNode.start) + markup + next.slice(optionsNode.end) : next.slice(0, node.closeStart) + markup + next.slice(node.closeStart);
   }
   parseXml(next); return next;
 }

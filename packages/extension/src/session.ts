@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import * as path from 'node:path';
 import * as fs from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
-import { readStory, readManagedRoutes, analyzeLogic, type LogicAnalysis, type Sources } from '../../source/src/index';
+import { readStory, readManagedRoutes, analyzeLogic, readLocalizationConfig, localizationFiles, localizationIssues, storyLocalizationUsages, type LogicAnalysis, type Sources } from '../../source/src/index';
 import { child, parseXml } from '../../source/src/xml';
 import { validateRoutes, validateStory, type Story, type Route } from '../../domain/src/index';
 import { contentPath, safePath, hashText, freezeContent, ensureDirectory, type Frozen } from './files';
@@ -28,6 +28,11 @@ export class Session {
       if (seen.has(next) || seen.size >= 128) throw new Error('章节链循环或超限');
       seen.add(next); await read(next);
       const root = parseXml(sources.get(next)!); next = child(root, 'next')?.attrs.src;
+    }
+    const localizationConfig = readLocalizationConfig(sources);
+    if (localizationConfig.enabled && localizationConfig.src) {
+      await read(localizationConfig.src);
+      for (const message of localizationFiles(sources).messages) await read(message);
     }
     const story = readStory(sources);
     for (const script of story.scripts) await read(script);
@@ -88,6 +93,7 @@ export class Session {
     if (changes.has(WORKBENCH_FILE)) readWorkbench(changes.get(WORKBENCH_FILE));
     const story = readStory(candidate);
     const issues = validateStory(story).filter(i => i.severity === 'error');
+    issues.push(...localizationIssues(story, storyLocalizationUsages(story)).filter(i => i.severity === 'error'));
     if (issues.length) throw new Error(issues.map(i => i.message).join('\n'));
     const logic = analyzeLogic(candidate, story);
     for (const [ref, frame] of Object.entries(base.logic.frames)) if (frame.editable && logic.frames[ref] && !logic.frames[ref].editable) throw new Error(`此修改使路线无法映射：${logic.frames[ref].reason}`);
@@ -144,7 +150,7 @@ export async function findRoot(uri: vscode.Uri): Promise<string> {
   while (true) {
     try {
       const manifest = JSON.parse(await fs.readFile(path.join(directory, 'project.kakera-editor.json'), 'utf8'));
-      if (manifest.editorSchema !== 1 || !['0.8.3', '0.8.4', '0.9.0', '0.9.1', '0.10.0'].includes(manifest.engineContract)) throw new Error('工程清单版本不支持');
+      if (manifest.editorSchema !== 1 || !['0.8.3', '0.8.4', '0.9.0', '0.9.1', '0.10.0', '0.10.1', '0.11.0'].includes(manifest.engineContract)) throw new Error('工程清单版本不支持');
       return await safePath(directory, manifest.contentRoot);
     } catch (e) { if ((e as NodeJS.ErrnoException).code !== 'ENOENT') throw e; }
     try { await fs.access(path.join(directory, 'story.xml')); return directory; } catch { /* ascend */ }

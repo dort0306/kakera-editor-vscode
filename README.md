@@ -2,7 +2,7 @@
 
 面向 Kakera AVG 的可视创作插件：以“一格一幕”的分镜工作台编辑剧情，保留普通 XML/JS 源码，使用真实播放器验证和试玩。
 
-**当前版本：0.10.0，Windows x64 本地桌面开发预览版。** Webview 重构为现代游戏编辑器/IDE 工作区：顶部应用栏、工程侧栏、舞台与分镜主区、属性检查器、底部状态栏，以及抽屉式工程设置/图片工具；UI 编辑器改为页面层级、设计画布和分组属性三栏。功能上继续适配 Kakera v0.10.0（story 8 / UI 3 / save 9）：支持专用 `<cg>` 资源、CG 完整画面、画廊中文标题/初始解锁、`game.cgId` 与 `cg.total/unlocked/progress` 绑定、`ctx.unlock` 解锁事件，以及多起始幕、UI 显式起始幕、变量编辑/删除、生命周期、末幕 frameExit、演出/音效和隐藏槽；新增快捷确认弹窗、玩家可配置快捷键的 UI 事件、三角 HSV `color-picker`、`color-bind` 和 `palette` 配色槽位。支持幕拖动/重连线、事件编辑/删除、幕 ID 重命名、点九/图集、JS/XML 实时映射、UI 变量、标题/人物/立绘/Live2D 管理及真实试玩/调试/构建。实际验证与限制见[实现记录](doc/12-implementation-status.zh-cn.md)，日常操作见[可视化编辑器使用说明](doc/18-visual-editor-guide.zh-cn.md)。
+**当前版本：0.11.0，Windows x64 本地桌面开发预览版。** 本版同步 Kakera v0.11.0 新版 JS 注册 API：剧情使用 `frame("幕ID").advance/choice/end`，生命周期使用 `frame(id).enter/exit` 与 `ui("页面").bind("screen.open"/"screen.close")`，界面使用 `ui("控件或页面").bind("事件", 回调)`，全局进入钩子与捕获结果固定绑定虚拟目标 `ui("$game")`/`ui("$host")`。旧 `on.*` 入口已从匹配播放器移除，编辑器遇到旧注册只显示迁移诊断并暂停相关可视化改写；事件注册改为（目标、事件名）作用域，两个控件可以共享事件名而各自绑定回调，新建控件时从可证明的固定回调复制到新控件。其余能力保持：HSL 方形 `color-picker`/`color-bind`/`palette`、游戏文本/语音国际化与 FTL、快捷确认弹窗、玩家快捷键、专用 `<cg>`、多起始幕、UI 显式起始幕、故事/UI 变量、生命周期、演出/音效、点九/图集、JS/XML 实时映射、分镜拖动/重连线、标题/人物/立绘/Live2D、真实试玩/调试/构建。实际验证与限制见[实现记录](doc/12-implementation-status.zh-cn.md)，日常操作见[可视化编辑器使用说明](doc/18-visual-editor-guide.zh-cn.md)，本地化细节见[本地化说明](doc/19-localization.zh-cn.md)。
 
 ## 项目目标
 
@@ -16,22 +16,26 @@
 
 ## 能力与状态
 
+当前同版本增量已将选色器同步为 HSL 色相环与正方形：横向饱和度、纵向亮度，黑白边缘保留标记；属性色盘和只读画布均已更新。XML/JS、`#RRGGBBAA` 和偏好格式不变，随附工具由包含该改动的 v0.11.0 源码重新构建；旧三角 HSV 说明仅为历史。0.10.2 起 Activity Bar“界面”分类按 include 列出全部 UI XML，左键打开对应可视化编辑器，右键打开源码。0.10.3 起按上游职责拆分：控件只绘制环/正方形/可选 alpha，无内置预览或 HEX；`alpha=false` 至少 128×128，默认/`true` 至少 128×154，色盘组按 `D=min(W,H−R)` 居中，画布预览同步。
+
+2026-10-31 同步检查：相邻 `kakera-avg-rust` 工作区版本 0.11.0，新增 `frame()`/`ui()` 注册 API、结构化（目标、事件名）回调、`$game`/`$host` 虚拟目标和旧 `on.*` 硬拒绝；story 8 / UI 3 / save 9 / KPAK 1/2 与 demo content-version=11 不变。编辑器只写新语法，模板、工具哈希与版本检查同步，具体检查见[实现记录](doc/12-implementation-status.zh-cn.md)。
+
 | 范围 | 基线或计划 | 本仓库状态 |
 | --- | --- | --- |
-| 游戏格式 | v0.10.0 story 8 / UI 3 / save 9 | 模板与候选通过真实 v0.10.0 引擎检查；支持专用 CG 资源、palette/color-bind/color-picker；旧 frame.video 显示错误诊断 |
+| 游戏格式 | v0.11.0 story 8 / UI 3 / save 9 | 模板与候选通过真实 v0.11.0 引擎检查；JS 注册为 `frame()`/`ui()`，支持 game localization、FTL、text-key/text-arg、locale 绑定与独立 language.json；保留专用 CG、palette/color-bind/color-picker；旧 `on.*` 显示迁移诊断 |
 | 标题与人物 | 游戏标题、人物创建/改名、批量立绘、Live2D 模型/依赖与回退图、外观编辑和放入当前幕 | 已实现；标题/人物名称均写入实际 XML，保持稳定引用 |
 | 分支分镜 | 选项分叉、目标汇合、循环和未知目标 | 分支分色、普通续接同行；拖动布局保存，拖线/点击连接；新建/删除明确调整连接 |
 | 手动创作 | 新建/打开、分镜、台词/人物/音频、独立三槽画面、选择/条件分流/有序更新、稳定 ID | 已实现；生成脚本和可逆固定注册均可编辑，按幕确定可写范围 |
 | 源码与资源 | 多章节、局部 XML 补丁、Opaque JS 保留、资源导入/已知引用、恢复记录 | 已实现基础能力、人物模型关联、点九/图集工具；复杂模型参数和合并待补 |
-| UI 编辑器 | UI 3 多文件页面、控件树/画布、属性与交互，快捷弹窗、玩家快捷键事件、HSV 选色器与配色槽位 | 已实现基础可视编辑、父级/绘制顺序、变量与常用事件创建、palette/color-bind/color-picker、快捷键捕获/绑定/重置事件和快捷确认弹窗；静态示例预览，精确效果需试玩 |
+| UI 编辑器 | UI 3 多文件页面、控件树/画布、属性与交互，快捷弹窗、玩家快捷键事件、HSL 选色器与配色槽位 | 已实现基础可视编辑、父级/绘制顺序、变量创建/编辑/删除、palette/color-bind/color-picker、快捷键捕获/绑定/重置事件、颜色覆盖读取 UI string 和快捷确认弹窗；侧栏按 include 列出 UI XML 并支持可视化/源码打开；静态示例预览，精确效果需试玩 |
 | AI 辅助 | 用户配置、SecretStorage、纯文本拆幕、JSON/SSE、原文保真与审阅 | 已实现受限提案；真实服务与图片/资源关联尚未验收 |
-| IDE 调试 | DAP、XML frame 断点、当前/候选只读变量、推进、选项选择 | 已接入真实 v0.10.0 播放器；不提供 JS 行级调试 |
+| IDE 调试 | DAP、XML frame 断点、当前/候选只读变量、推进、选项选择 | 已接入真实 v0.11.0 播放器；不提供 JS 行级调试 |
 | 游戏发行 | 依赖选择、实际包内文件审阅、KPAK 2、独立目录和报告 | 已实现；底层工具 KPAK 1/2 均已测试 |
 | 插件发行 | 构建与离线 VSIX，匹配工具、模板和字体许可 | 已生成内部预览包；尚未公开发布 |
 
 ## 安装与开始使用
 
-在 VS Code 命令面板执行 **Extensions: Install from VSIX...**，选择生成的 `artifacts/kakera-editor-vscode-0.10.0.vsix`。当前预览包包含经过 SHA-256 核验的 v0.10.0 播放器、打包器和 Noto CJK 字体，不需要 Rust 或 AI 服务。
+在 VS Code 命令面板执行 **Extensions: Install from VSIX...**，选择生成的 `artifacts/kakera-editor-vscode-0.11.0.vsix`。当前预览包包含经过 SHA-256 核验的 v0.11.0 播放器、打包器和 Noto CJK 字体，不需要 Rust 或 AI 服务；安装后扩展 ID 为 `dort0306.kakera-editor-vscode@0.11.0`。
 
 1. 执行 **Kakera：打开创作首页**，新建工程或打开已有内容根。
 2. 在分镜中选择一幕，编辑台词、说话人、画面、音频与路由。
@@ -52,13 +56,13 @@
 
 **UI 编辑器**：点击工作台顶部“UI 编辑器”，或执行 **Kakera：打开 UI 编辑器**。左侧选择页面和控件，中间添加控件并拖动位置，右下角手柄调整大小；支持 8px 吸附、缩放、隐藏控件显示与方向键微调。右侧编辑文字/字号/颜色、尺寸、图片/点九/图集、数据绑定、事件及列表模板；“层级与顺序”可改父级、绘制顺序或移动到其他页面。属性点击保存，拖动/缩放松手后直接验证并保存，支持宿主撤销/重做。
 
-可新增页面（选择已加载的 UI 文件）、UI 变量、CG 画廊条目，以及打开/关闭页面、推进/重开、选项、设置、演出/音效、CG 解锁、v0.9.1 的显式起始幕和 `present`/`resume` 交接事件；已有手写回调保留原文。入口和子文件均读取当前缓冲，标题绑定、纹理应用会写到实际声明文件。画布使用初始值和示例列表，不执行游戏脚本；剧情画面为占位，动画/滤镜、演出媒体和运行交互请试玩。详见 [UI 编辑器说明](doc/16-ui-editor.zh-cn.md)。
+可新增/删除页面、UI 变量与 CG 画廊条目，以及打开/关闭页面、推进/重开、选项、设置、演出/音效、CG 解锁、v0.9.1 的显式起始幕和 `present`/`resume` 交接事件；已有手写回调保留原文。UI 变量删除前检查控件绑定、窗口标题、已识别事件和脚本引用。入口和子文件均读取当前缓冲，标题绑定、纹理应用会写到实际声明文件。画布使用初始值和示例列表，不执行游戏脚本；剧情画面为占位，动画/滤镜、演出媒体和运行交互请试玩。详见 [UI 编辑器说明](doc/16-ui-editor.zh-cn.md)。
 
-**快捷弹窗、玩家快捷键与 HSV 配色（0.10.0）**：UI 编辑器左侧的“＋快捷弹窗”可在所选 UI 文件生成一页模态确认弹窗，填写标题、正文和确认/取消文字；确认动作可关闭页面、调用已有事件或自动生成 `ctx.quit()` 事件。事件向导新增“捕获键盘快捷键 / 取消捕获 / 修改快捷键绑定 / 恢复默认快捷键 / 保存颜色覆盖 / 恢复作者默认配色 / 退出游戏”，写入普通 `on.ui` 固定调用；绑定按 Ctrl、Alt、Shift 规范校验，留空写 `null`，`shortcuts.*` 可直接作为文本/布尔绑定并在画布预览默认标签。“配色槽位”声明根级 `palette`，控件可用 `color-bind` 绑定 `colors.槽位` 或 UI string；HSV 选色器要求颜色值绑定 UI string、最小 128×224、最多 8 个、不能放入 repeat，事件值使用规范 `#RRGGBBAA`。颜色属性使用文本加 HSV 色盘编辑；编辑器只写 XML/JS，`keybindings.json`、`ui-colors.json` 由匹配播放器维护，冻结代次和发行包也会排除这两个玩家偏好文件，静态画布不执行游戏脚本。
+**快捷弹窗、玩家快捷键与 HSL 配色（0.10.0）**：UI 编辑器左侧的“＋快捷弹窗”可在所选 UI 文件生成一页模态确认弹窗，填写标题、正文和确认/取消文字；确认动作可关闭页面、调用已有事件或自动生成 `ctx.quit()` 事件。事件向导新增“捕获键盘快捷键 / 取消捕获 / 修改快捷键绑定 / 恢复默认快捷键 / 保存颜色覆盖 / 恢复作者默认配色 / 退出游戏”，写入普通 `on.ui` 固定调用；绑定按 Ctrl、Alt、Shift 规范校验，留空写 `null`，`shortcuts.*` 可直接作为文本/布尔绑定并在画布预览默认标签。“配色槽位”声明根级 `palette`，控件可用 `color-bind` 绑定 `colors.槽位` 或 UI string；HSL 选色器要求颜色值绑定 UI string；`alpha=false` 时至少 128×128，默认/`true` 至少 128×154（推荐 256×256 / 256×282），最多 8 个、不能放入 repeat；控件只绘制环/正方形/可选 alpha，没有内置预览或 HEX，预览与十六进制由 `color-bind`/`bind` 读取同一草稿独立组合；事件值使用规范 `#RRGGBBAA`。添加选色器时留空更新事件会自动生成 `ctx.setUi("草稿", ctx.value)`；也可用新增的“设置 UI 变量”事件手动创建。palette 与 UI string 是引擎的两层设计：选色器只改草稿，正式控件用 `color-bind` 读取槽位，应用事件可选择固定颜色或读取 UI string 草稿（`ctx.colorPreference(槽位, ctx.ui.变量)`）。颜色属性使用文本加 HSL 色盘编辑；编辑器只写 XML/JS，`keybindings.json`、`ui-colors.json` 由匹配播放器维护，冻结代次和发行包也会排除这两个玩家偏好文件，静态画布不执行游戏脚本。
 
 **侧栏定位、文件分组与短 ID（0.8.9）**：点击侧栏实际幕会打开/聚焦可视化编辑器并定位该幕；“剧本”改为“XML 文件 → 幕”两级，同一文件聚在同组。编辑器自动生成的幕、人物、立绘/模型资源、导入资源、visual/外观、UI 页面/控件、点九/图集和示例控件 ID 统一为 8 字节随机数的 16 位十六进制字符串（如 `9f2c...`），在对应命名空间冲突重试 64 次后才回退 UUID；已有手写/历史 ID 不批量改写。流程图多选与快捷键见上方“选择与快捷键”。
 
-**VS Code 原生工程侧栏（0.8.8）**：Activity Bar 的 Kakera 视图改用原生 TreeView，按人物、美术资源、音频与字体、剧本、变量、JS 程序、界面分类；使用 VS Code ThemeIcon、计数描述、条目提示和原生右键菜单。分类支持新建人物/变量、导入立绘/Live2D/资源；条目支持人物重命名/删除、变量编辑/删除、幕新建后续/删除、资源引用、脚本/分镜/UI 打开。侧栏在工程激活时加载，并在文档或文件变化后刷新。
+**VS Code 原生工程侧栏（0.8.8）**：Activity Bar 的 Kakera 视图改用原生 TreeView，按人物、美术资源、音频与字体、剧本、变量、JS 程序、界面分类；使用 VS Code ThemeIcon、计数描述、条目提示和原生右键菜单。分类支持新建人物/变量、导入立绘/Live2D/资源；条目支持人物重命名/删除、变量编辑/删除、幕新建后续/删除、资源引用、脚本/分镜/UI 打开。“界面”分类列出入口及全部 include 的 UI XML 文件：左键用可视化编辑器打开对应文件，右键“打开 UI 源码”打开原 XML。侧栏在工程激活时加载，并在文档或文件变化后刷新。
 
 **变量与入口修复（0.8.7）**：工作台变量列表可编辑初始值/i64 下限上限并删除变量；变量 ID/类型创建后固定，删除仍被路线条件或更新引用的变量会拒绝。“加入起始幕”不再错误地要求当前幕引用，只按提交的起点列表校验。
 
@@ -74,9 +78,11 @@
 
 **工作区界面（0.8.0）**：顶部应用栏集中工程操作，左侧为工程概览、变量、注意事项与操作提示；中间是舞台和分镜图，右侧是可滚动的当前幕属性检查器，底部状态栏显示编辑状态、幕/变量/提示和当前路线。工程设置与图片工具改为右侧抽屉，可通过顶部“工程/图片”或侧栏按钮打开，Esc、遮罩或关闭按钮收起；未保存草稿仍保留。UI 编辑器使用页面/层级树、可缩放设计画布和按“布局/内容/交互”分组的属性面板；窄窗口会改为单列并保留全部入口。界面只改变布局与呈现，不改 XML/JS 内容或保存事务。流程图与 UI 设计画布保留真实指针拖动；宿主重绘丢失 pointer capture 时仍继续手势并在窗口级 pointerup 提交，避免幕布拖动卡住或回弹。
 
+**工程图标与视觉色调（0.10.4）**：仓库根目录的 `kakera.svg` 是唯一图形来源。`resources/kakera.svg` 由它拆成 24×24 单色标记，继续作为 Activity Bar 图标——VS Code 会把扩展图标当成 alpha 掩膜再用主题前景色着色，所以该文件只用一种灰填充、碎块之间保持透明缝隙；`resources/kakera.png`（256×256，透明背景）由同一图形渲染，作为清单 `icon` 出现在 VSIX 与市场页。工作台、UI 编辑器和创作首页的品牌位使用内联 `KakeraMark`；创作首页 Webview 面板通过 `iconPath` 在编辑器标签显示该 PNG。分镜/UI 自定义编辑器的标签图标由宿主文件图标主题决定，`contributes.customEditors` 没有图标字段，本次不接管。界面色调改为图形本色（深蓝 `#0058E0`、天蓝 `#008AFF`、钢蓝 `#0060A8`、粉 `#FF6FE3`），深色/浅色主题分别配平表面、边框、按钮与画布；面板标题、抽屉标题、检查器分段、页签、保存按钮和提示卡片补齐内联 SVG 图标（`currentColor` 单色，不引入外部字体或网络图标）。这些改动只影响呈现层，按钮文字、无障碍名称和测试选择器保持不变。
+
 按钮页面导航：在按钮属性的“按钮导航”选择“打开页面”并指定目标，或选择“关闭当前页面”，保存后写入原生 UI route；与交互事件互斥。已有 JS 保留。画布点击仍用于选中，“编辑目标页面”只切换设计页面；运行效果请试玩。
 
-**幕与页面生命周期（0.7.0）**：已声明脚本中的 `on.frameEnter/Exit`、`on.screenOpen/Close` 会作为源码事实参与静态映射与源码导航，但不会变成剧情连线；动态或缺失目标会给出诊断。手写 `on.screenOpen/Close` 与 `ctx.present` 的页面引用按入口及 include 当前缓冲检查，在分镜工作台和 UI 编辑器提示脚本文件/行号；动态页面目标标为不确定，修正源码后重新检查。删除仍被生命周期回调或 `ctx.resume` 目标引用的幕、或被 `on.screenOpen/Close`/`ctx.present` 引用的页面会被阻止。事件向导可追加 `ctx.present(页面)` 和 `ctx.resume()`/`ctx.resume(幕)`；画布不执行交接、隐藏槽或演出，运行效果以真实播放器为准。
+**幕与页面生命周期（0.7.0）**：已声明脚本中的 `frame(id).enter/exit`、`ui("页面").bind("screen.open"/"screen.close", …)` 会作为源码事实参与静态映射与源码导航，但不会变成剧情连线；动态或缺失目标会给出诊断。`ctx.present` 的页面引用按入口及 include 当前缓冲检查，在分镜工作台和 UI 编辑器提示脚本文件/行号；动态页面目标标为不确定，修正源码后重新检查。删除仍被生命周期回调或 `ctx.resume` 目标引用的幕、或被 `ui(页面).bind`/`ctx.present` 引用的页面会被阻止。事件向导可追加 `ctx.present(页面)` 和 `ctx.resume()`/`ctx.resume(幕)`；画布不执行交接、隐藏槽或演出，运行效果以真实播放器为准。
 
 **可视编辑结束后动作**：选中幕，在属性底部的“幕结束后（离开时）”选择“打开页面”和目标；选择 UI 页面的“页面属性”，在“页面结束后（关闭时）”选择“续接指定幕”“恢复待续剧情”或“打开页面”。点击“保存结束后动作”后台校验并保存；改为“不添加动作”可移除已识别的简单动作，支持撤销/重做。复杂手写生命周期保持源码控制。幕侧保留原正常后续，不修改剧情路由；结束幕不会凭空触发离幕。演出自动结束要执行关页动作时，将演出结束行为设为 `close`；普通页面可用关闭按钮结束。
 
@@ -116,8 +122,9 @@ AI 是可选功能：执行 **Kakera：配置 AI 服务**，在普通原稿编�
 - [AGENTS.md](AGENTS.md)：本仓库的开发协作规范。
 - [实现与验证记录](doc/12-implementation-status.zh-cn.md)：当前可用范围、实测环境与尚未验证的功能。
 - [UI 编辑器](doc/16-ui-editor.zh-cn.md)、[JS/XML 实时映射](doc/13-live-logic-mapping.zh-cn.md)：控件写入、事件/生命周期与源码边界。
+- [游戏本地化](doc/19-localization.zh-cn.md)：v0.10.1 清单/FTL、文本来源、参数、预览与限制。
 
-原始资料中的部分相对链接指向上游引擎源码、版本验收或归档，这些文件未复制进本仓库。本轮根据开发机上的实际 v0.10.0 源码核对模板、UI 扩展与 CLI，并通过准备脚本复制工具；没有运行上游全部测试。
+原始资料中的部分相对链接指向上游引擎源码、版本验收或归档，这些文件未复制进本仓库。本轮根据开发机上的实际 v0.11.0 源码核对模板、JS 注册、UI 扩展、国际化与 CLI，并通过准备脚本复制工具；没有运行上游全部测试。
 
 ## 后续目标
 
@@ -138,13 +145,14 @@ XML/JS 始终是游戏内容的事实来源；打开文档时以当前 `TextDocu
 
 ```text
 kakera-editor-vscode/
+  kakera.svg    工程标识原始图形；resources/ 下的图标由它派生
   doc/          产品、引擎契约与插件落地方案
   packages/     extension、webview、domain、source、protocol、AI、DAP
   templates/    已经引擎校验的最小 story/UI 与授权字体
   schemas/      工程清单与受限提案 schema
   scripts/      构建、工具准备与集成测试
   tests/        源码、文件、协议和宿主测试
-  resources/    图标、依赖许可；本地准备的工具不提交 Git
+  resources/    Activity Bar/市场图标（kakera.svg、kakera.png）与依赖许可；本地准备的工具不提交 Git
   AGENTS.md     开发协作规范
   LICENSE       MIT 许可证
   README.md     项目说明
@@ -156,7 +164,7 @@ kakera-editor-vscode/
 npm ci
 npm run check                 # 类型、单元/协议测试与构建
 npm run test:browser          # Edge/Chromium：工作台/首页、流程图与 UI 控件原生交互及截图
-# 准备匹配工具，参数为实际 v0.10.0 release 二进制目录
+# 准备匹配工具，参数为实际 v0.11.0 release 二进制目录
 node scripts/prepare-tools.mjs D:\path\to\kakera\target\release
 npm run test:integration      # 真实模板、快照、KPAK 1/2 与独立宿主检查
 npm run test:host             # 本机 VS Code：未保存缓冲、undo/redo、多视图、DAP
@@ -167,7 +175,7 @@ npm run package              # 生成 artifacts/ 下的离线 VSIX
 
 浏览器交互回归使用已安装的 Edge/Chromium，创建独立临时配置，通过原生输入验证点击、拖动和键盘选中。可用 `KAKERA_TEST_BROWSER` 指定浏览器可执行文件；不会下载浏览器或操作日常浏览器会话。
 
-源码仓库不提交工具二进制，干净克隆需要执行准备脚本；现成 VSIX 已附工具。历史 UI 拆分补丁曾沿用 v0.8.3 版本号；按钮原生导航及 UI 演出增量沿用 v0.8.4 版本号；v0.9.0 增加生命周期、隐藏交接槽与 save 9，v0.9.1 增加末幕退出和 UI 显式起始幕；v0.10.0 增加快捷弹窗、玩家快捷键、三角 HSV/配色槽位与动态图片查看组合。请从当前 v0.10.0 源码编译 release 后重新准备工具。自定义工具目录必须含 `tools.json` 哈希清单，通过 **Kakera：配置播放器工具目录** 设置。当前不包含 Live2D Core。
+源码仓库不提交工具二进制，干净克隆需要执行准备脚本；现成 VSIX 已附工具。历史 UI 拆分补丁曾沿用 v0.8.3 版本号；按钮原生导航及 UI 演出增量沿用 v0.8.4 版本号；v0.9.0 增加生命周期、隐藏交接槽与 save 9，v0.9.1 增加末幕退出和 UI 显式起始幕；v0.10.0 增加快捷弹窗、玩家快捷键、HSL 方形/配色槽位与动态图片查看组合；v0.10.1 增加默认关闭的游戏文本/语音国际化、Fluent 词条、独立语言偏好与 `ctx.locale`；v0.11.0 把 JS 注册改为 `frame()`/`ui()`、按目标绑定事件并移除旧 `on.*`。请从当前 v0.11.0 源码编译 release 后重新准备工具。自定义工具目录必须含 `tools.json` 哈希清单，通过 **Kakera：配置播放器工具目录** 设置。当前不包含 Live2D Core。
 
 已采用 TypeScript Extension Host、React Webview 与独立领域/源码模块；当前通过匹配 CLI 复用 Rust 引擎，未另造运行时。独立结构化 Rust wrapper 尚未交付，诊断保留真实 CLI 文本。具体依赖边界见[落地方案](doc/11-vscode-extension-implementation-plan.zh-cn.md#3-代码组织与依赖方向)。
 
@@ -186,7 +194,7 @@ npm run package              # 生成 artifacts/ 下的离线 VSIX
 
 ## 许可证
 
-本仓库代码采用 [MIT 许可证](LICENSE)。React、Acorn、Saxes 等运行依赖的声明由构建脚本汇总至 `THIRD_PARTY_NOTICES.txt`；saxes npm 包遗漏的许可来自[官方 v6.0.0 LICENSE](https://raw.githubusercontent.com/lddubeau/saxes/v6.0.0/LICENSE)。模板字体遵循 [SIL OFL 1.1](templates/minimal/content/assets/licenses/OFL.txt)。播放器及其他素材保留各自授权，当前内部预览包不包含 Live2D Core 或模型。
+本仓库代码采用 [MIT 许可证](LICENSE)。React、Acorn、Saxes 等运行依赖的声明由构建脚本汇总至 `THIRD_PARTY_NOTICES.txt`；saxes npm 包遗漏的许可来自[官方 v6.0.0 LICENSE](https://raw.githubusercontent.com/lddubeau/saxes/v6.0.0/LICENSE)。v0.11.0 播放器内嵌的 Fluent/unic-langid 双许可选择与全文随离线包放在 `resources/licenses/engine-i18n/`，并汇总进同一通知文件。模板字体遵循 [SIL OFL 1.1](templates/minimal/content/assets/licenses/OFL.txt)。播放器及其他素材保留各自授权，当前内部预览包不包含 Live2D Core 或模型。
 
 ### UI 演出与音效（0.6.2）
 
@@ -206,14 +214,33 @@ npm run package              # 生成 artifacts/ 下的离线 VSIX
 
 ### 幕/页面生命周期与隐藏交接（0.7.0）
 
-同步 Kakera v0.9.0：`on.frameEnter/Exit`、`on.screenOpen/Close` 被识别为独立的源码生命周期注册，不混入 `on.advance/choice/end` 或按钮事件；静态目标参与删除保护，动态/缺失目标显示约束。`ctx.present` 和 `ctx.resume` 可由事件向导追加，帧/页面目标在写入前校验。视频只在 UI `ui-media.sequence` 中创建；frame 级 `<video>`、`ctx.skipVideo` 和 `game.videoPlaying/game.videoSkippable` 等旧契约会显示诊断或不再出现在绑定建议中。隐藏 `flow-checkpoint.json` 与 `ui-audio.json` 等玩家文件一样排除出冻结代次和发行包；save 9 由真实播放器负责，编辑器不写玩家槽位。
+同步 Kakera v0.9.0：`frame(id).enter/exit`、`ui(page).bind("screen.open"/"screen.close")` 被识别为独立的源码生命周期注册，不混入 `frame(id).advance/choice/end` 或按钮事件；静态目标参与删除保护，动态/缺失目标显示约束。`ctx.present` 和 `ctx.resume` 可由事件向导追加，帧/页面目标在写入前校验。视频只在 UI `ui-media.sequence` 中创建；frame 级 `<video>`、`ctx.skipVideo` 和 `game.videoPlaying/game.videoSkippable` 等旧契约会显示诊断或不再出现在绑定建议中。隐藏 `flow-checkpoint.json` 与 `ui-audio.json` 等玩家文件一样排除出冻结代次和发行包；save 9 由真实播放器负责，编辑器不写玩家槽位。
 
-### 快捷弹窗、玩家快捷键与 HSV 配色（0.10.0）
+### 新版 JS 注册 API 与目标作用域事件（0.11.0）
+
+同步 Kakera v0.11.0，剧情和界面注册不再使用全局 `on.*`：
+
+- **剧情与生命周期**：`frame("幕ID").advance(targetOrRun)`、`.choice("选项ID", targetOrRun, when?)`、`.end()`；离幕/进入用 `frame(id).exit/enter(...)`，页面关闭/进入用 `ui("页面").bind("screen.close"/"screen.open", ...)`。全局进入钩子和快捷键捕获结果分别固定为 `ui("$game").bind("game.enter", ...)`、`ui("$host").bind(结果事件, ...)`。
+- **界面事件按目标绑定**：每个 XML 事件必须恰好一个 `ui("控件或页面").bind("事件", 回调)`，两个控件可共享 `event` 名而各自绑定回调。可视化事件列表显示“目标 · 事件名”，改名/删除只处理该目标的 XML 引用；新增控件时编辑器从可证明的固定回调复制到新控件自己的注册，`color-picker` 自动事件也绑定自身控件。`screen.open/close` 由生命周期编辑维护，不混入普通事件列表。
+- **旧脚本迁移**：`on.*` 已从播放器删除且无别名；旧工程在启动、`--check` 和打包时会被拒绝。编辑器遇到旧注册只给带上游 API 第 37.5 节指引的诊断，不自动整文件迁移，也不把旧注册猜成可编辑路线。
+- **工具与版本**：模板、受管路线文件头（`Kakera Managed Routes v2`）、真实引擎检查、KPAK 1/2 和宿主测试同步到 v0.11.0；插件版本按“x.y 与上游一致”的规则升至 0.11.0，已在 AGENTS §8 记录。
+
+### 游戏国际化与独立语言偏好（0.10.1）
+
+同步 Kakera v0.10.1 的默认关闭游戏本地化：
+
+- **清单与消息**：入口 `story.xml` 可声明 `<localization enabled="true" src="languages.xml"/>`；清单 schema 1 分别声明文本语言（messages 与 font）和可选语音语言（clip 映射）。编辑器读取全部已声明语言和 FTL，严格校验语言标识、默认值、字体/音频引用、重复、预算与参数引用；结构错误阻止加载，覆盖/参数问题显示为定位诊断。
+- **文本来源**：frame `<text>` 的 `key`、option `text-key`、character `name-key`、剧情变量 `label-key`、UI label/button/toggle 的 `text-key`/`text-key-bind`、画廊 `title-key` 和 UI 根 `title-key`/`title-key-bind`。UI 另有最多 16 个 `text-arg`，只允许 UI 标量、`cg.total/unlocked`、`saves.page/pages`、`locale.text/voice`；动态 key 只绑定 UI string。编辑器在幕、选项、人物、UI 控件、画廊和标题属性中提供来源切换与 key 选择；无 key 的字面量保持原样。
+- **本地化面板**：工程设置新增“本地化”，可编辑默认文本/语音、文本语言显示名、消息新增/编辑/删除，以及语音语言显示名和 clip 映射；消息正文保留 Fluent 参数/术语/select 语法，不支持属性、函数或带参数术语。面板不自动创建新清单/FTL 文件；新增语言文件仍需在源码建立后再编辑。
+- **玩家选择**：事件向导可写 `ctx.locale("text"|"voice", 已声明 ID 或 null)`；UI 绑定建议加入 `locale.enabled/text/voice/textRequested/voiceRequested/textSource/voiceSource`，repeat 数据源加入 `textLocales`/`voiceLocales`。编辑器只写 XML/JS，`language.json` 是匹配播放器的独立偏好，不属于 KPAK 内容、冻结代次或发行包；静态画布按默认语言和初始值格式化预览，不执行 `ctx.locale`、系统语言探测或偏好写入。
+- **版本与工具**：播放器/打包器升级 v0.10.1，`tools.json` 哈希、工程清单、调试版本和发行检查接受并默认生成 0.10.1；story 8 / UI 3 / save 9 / profile 1 / read 1 / KPAK 1/2 与 demo content-version=11 不变。实际引擎 `--check`、KPAK 1/2 和全语言依赖检查见[实现记录](doc/12-implementation-status.zh-cn.md)。
+
+### 快捷弹窗、玩家快捷键与 HSL 配色（0.10.0）
 
 同步 Kakera v0.10.0 的三个 UI 扩展工作包：
 
 - **快捷弹窗**：使用普通 XML 模态 `screen`，不新增原生对话框样式。UI 编辑器的“＋快捷弹窗”写入遮罩、面板、可选标题、正文和确认/取消按钮；确认动作可为 `route="close"`、调用已有事件，或自动追加 `ctx.quit()` 事件。生成页面不修改剧情路由；取消按钮始终关闭当前页。
-- **玩家快捷键**：作者用 UI 控件和普通 `on.ui` 组合设置页。事件向导写入 `ctx.captureShortcut(动作, 结果事件)`、`ctx.cancelShortcutCapture()`、`ctx.keybinding(动作, 绑定或 null)`、`ctx.resetKeybindings()`；绑定只接受文档列出的 ASCII token，按 Ctrl、Alt、Shift 规范排序，拒绝 Escape、Meta、Ctrl+Alt 和系统保留组合。捕获结果通过结果事件的 `ctx.value` 交给作者草稿，不自动写文件；编辑器不创建 `keybindings.json`。XML 可绑定 `shortcuts.advanceLabel/fastForwardLabel/skipSequenceLabel/captureText/captureActive/bindings.*`，画布按默认绑定显示示例文本。
-- **三角 HSV 与配色**：根级 `<palette><color id="..." initial="#RRGGBBAA"/></palette>` 声明作者配色槽位（`[a-z][a-z0-9_]{0,63}`，最多 32 个，可在 include 中声明）；`color-bind` 可把 panel/image/nine-patch/label/button/toggle 绑定到 `ui.<string>` 或 `colors.<槽位>`，与静态 `color` 互斥。`color-picker` 必需 `value`（UI string）和 `event`，`alpha` 可隐藏透明条；控件最小 128×224、最多 8 个、不能放入 repeat。事件值为规范 `#RRGGBBAA`，拖拽只产生候选，作者用 `ctx.setUi` 决定是否提交。编辑器提供色相环 + 固定方向 SV 三角 + alpha 条的属性色盘和画布预览；玩家 `ui-colors.json` 由匹配播放器维护，编辑器不写该文件。
+- **玩家快捷键**：作者用 UI 控件和普通 `ui("目标").bind("事件", …)` 组合设置页。事件向导写入 `ctx.captureShortcut(动作, 结果事件)`、`ctx.cancelShortcutCapture()`、`ctx.keybinding(动作, 绑定或 null)`、`ctx.resetKeybindings()`；绑定只接受文档列出的 ASCII token，按 Ctrl、Alt、Shift 规范排序，拒绝 Escape、Meta、Ctrl+Alt 和系统保留组合。捕获结果通过 `$host` 结果事件的 `ctx.value` 交给作者草稿，不自动写文件；编辑器不创建 `keybindings.json`。XML 可绑定 `shortcuts.advanceLabel/fastForwardLabel/skipSequenceLabel/captureText/captureActive/bindings.*`，画布按默认绑定显示示例文本。
+- **HSL 方形 与配色**：根级 `<palette><color id="..." initial="#RRGGBBAA"/></palette>` 声明作者配色槽位（`[a-z][a-z0-9_]{0,63}`，最多 32 个，可在 include 中声明）；`color-bind` 可把 panel/image/nine-patch/label/button/toggle 绑定到 `ui.<string>` 或 `colors.<槽位>`，与静态 `color` 互斥。`color-picker` 必需 `value`（UI string）和 `event`，`alpha` 可隐藏透明条；`alpha=false` 至少 128×128，默认/`true` 至少 128×154（推荐 256×256 / 256×282），最多 8 个、不能放入 repeat。控件只绘制环、正方形和可选 alpha 条；没有内置色块预览或 HEX，需用 `color-bind` 面板/图片和 `bind` label 读取同一草稿组合。色盘直径 `D=min(W,H−R)`、`R=alpha?26:0`，整组居中，矩形内留白点击不改色。事件值为规范 `#RRGGBBAA`，拖拽只产生候选，作者用 `ctx.setUi` 决定是否提交。这不是编辑器随意拆分，而是引擎设计：`color-picker` 只接受 UI string 草稿，`palette` 是作者默认/玩家覆盖层，`color-bind` 只读槽位，持久化由 `ctx.colorPreference` 完成。添加选色器时更新事件留空会自动生成 `ctx.setUi("草稿", ctx.value)`，避免松开后回到旧值；也可在事件向导选择“设置 UI 变量（使用控件当前值）”。编辑器提供色相环 + S/L 正方形 + alpha 条的属性色盘和画布预览；玩家 `ui-colors.json` 由匹配播放器维护，编辑器不写该文件。
 
 静态画布只显示初值和默认绑定示例，不执行脚本、不模拟捕获/拖拽/焦点、不执行页面交接或玩家偏好写入。真实按键、冲突、焦点清理、偏好的原子保存和回滚由匹配 v0.10.0 播放器验收；详见 [UI 编辑器说明](doc/16-ui-editor.zh-cn.md)、[可视化编辑器使用说明](doc/18-visual-editor-guide.zh-cn.md) 和 [实现记录](doc/12-implementation-status.zh-cn.md)。

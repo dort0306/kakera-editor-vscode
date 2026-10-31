@@ -53,7 +53,7 @@ export function renameFrame(input: Sources, logic: LogicAnalysis, ref: string, n
   changes.set(frame.file, xml);
   for (const record of logic.records) {
     if (!record.route) continue;
-    if (record.frame === frame.ref) add(record.file, record.call.arguments[0], JSON.stringify(id));
+    if (record.frame === frame.ref) add(record.file, record.frameArg, JSON.stringify(id));
     if (record.route.target === frame.ref && record.target) add(record.file, record.target, JSON.stringify(id));
     record.route.branches?.forEach((branch, index) => { if (branch.target === frame.ref && record.branchNodes?.[index]) add(record.file, record.branchNodes[index].target, JSON.stringify(id)); });
   }
@@ -199,8 +199,8 @@ export function deleteConnectedFrame(input: Sources, routes: Route[], managedFil
   if (logic && !logic.complete) throw new Error('仍有动态路线无法确定入边，暂不能安全删除幕；台词和可识别路线仍可编辑');
   const story = readStory(input), frame = resolve(story, ref), authors = story.frames.filter(f => !f.pending);
   if (!frame || frame.pending) throw new Error('请选择要删除的幕');
-  if (logic?.references?.dynamicFrames) throw new Error('仍有动态 on.frameEnter/Exit 或 ctx.resume 目标，暂不能安全删除幕；请先在源码中明确目标');
-  if (logic?.references?.frames.has(frame.ref)) throw new Error('该幕仍被 on.frameEnter/on.frameExit 或 ctx.resume 目标引用，请先在已声明脚本中移除相关注册');
+  if (logic?.references?.dynamicFrames) throw new Error('仍有动态 frame(id).enter/exit 或 ctx.resume 目标，暂不能安全删除幕；请先在源码中明确目标');
+  if (logic?.references?.frames.has(frame.ref)) throw new Error('该幕仍被 frame(id).enter/exit 或 ctx.resume 目标引用，请先在已声明脚本中移除相关注册');
   if (authors.length <= 1) throw new Error('故事至少需要保留一幕');
   const owned = routes.filter(r => resolve(story, r.frame)?.ref === frame.ref);
   const forward = owned.length === 1 && owned[0].kind === 'advance' && !owned[0].branches?.length ? resolve(story, owned[0].target) : undefined;
@@ -237,10 +237,10 @@ export function deleteConnectedFrames(input: Sources, routes: Route[], managedFi
     seen.add(frame.ref); selected.push(frame);
   }
   if (authors.length <= selected.length) throw new Error('故事至少需要保留一幕');
-  if (logic?.references?.dynamicFrames) throw new Error('仍有动态 on.frameEnter/Exit 或 ctx.resume 目标，暂不能安全删除幕；请先在源码中明确目标');
+  if (logic?.references?.dynamicFrames) throw new Error('仍有动态 frame(id).enter/exit 或 ctx.resume 目标，暂不能安全删除幕；请先在源码中明确目标');
   for (const frame of selected) {
     if (logic && !logic.frames[frame.ref]?.editable) throw new Error(logic.frames[frame.ref]?.reason ?? `幕 ${frame.ref} 的路线尚不能安全删除`);
-    if (logic?.references?.frames.has(frame.ref)) throw new Error(`幕 ${frame.ref} 仍被 on.frameEnter/on.frameExit 或 ctx.resume 目标引用，请先在已声明脚本中移除相关注册`);
+    if (logic?.references?.frames.has(frame.ref)) throw new Error(`幕 ${frame.ref} 仍被 frame(id).enter/exit 或 ctx.resume 目标引用，请先在已声明脚本中移除相关注册`);
   }
   const selectedRefs = new Set(selected.map(frame => frame.ref));
   const exitOf = (frame: Frame, trail = new Set<string>()): Frame | undefined => {

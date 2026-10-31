@@ -140,13 +140,13 @@ test('幕 ID 重命名同步入口、注册与静态目标，名称/ID 对齐，
   const input = source(xml, routes), logic = analyzeLogic(input, readStory(input)), renamed = renameFrame(input, logic, 'a', 'start'), next = merged(input, renamed.changes);
   assert.equal(next.story.entry, 'start'); assert.deepEqual(next.story.frames.map(f => f.ref), ['start', 'b', 'c']);
   assert.equal(next.routes.find(r => r.frame === 'start')!.target, 'b'); assert.equal(next.routes.find(r => r.frame === 'b')!.target, 'start');
-  assert.ok(next.sources.get(managed)!.includes('on.advance("start"'));
+  assert.ok(next.sources.get(managed)!.includes('frame("start")'));
   assert.throws(() => renameFrame(input, logic, 'a', 'b'), /已存在/);
   assert.throws(() => renameFrame(input, logic, 'a', 'bad/id'), /只能包含/);
   const named = source(xml.replace('<frame id="a">', '<frame id="a-old" name="a">'), routes), namedLogic = analyzeLogic(named, readStory(named));
   const namedNext = merged(named, renameFrame(named, namedLogic, 'a', 'start').changes).story.frames.find(f => f.ref === 'start')!;
   assert.equal(namedNext.id, 'start'); assert.equal(namedNext.name, 'start');
-  const withLifecycle = new Map(input); withLifecycle.set(managed, input.get(managed)! + '\non.frameExit("a", ctx => {});\n');
+  const withLifecycle = new Map(input); withLifecycle.set(managed, input.get(managed)! + '\nframe("a").exit(ctx => {});\n');
   const lifecycleLogic = analyzeLogic(withLifecycle, readStory(withLifecycle));
   assert.throws(() => renameFrame(withLifecycle, lifecycleLogic, 'a', 'start'), /生命周期|resume/);
 });

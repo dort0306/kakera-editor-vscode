@@ -12,9 +12,15 @@ function command(source: string, start: number, end: number): Node | undefined {
   if (!full.body.some((n: Node) => n.type === 'ExpressionStatement' && n.start === start && n.end === end)) return;
   const ast = parse(source.slice(start, end), { ecmaVersion: 2022 }) as Node;
   const statement = ast.body[0], registration = statement?.expression;
-  if (ast.body.length !== 1 || statement.type !== 'ExpressionStatement' || registration?.type !== 'CallExpression') return;
-  const callback = registration.arguments[1];
-  if (registration.arguments.length !== 2 || !['ArrowFunctionExpression', 'FunctionExpression'].includes(callback?.type) || callback.async || callback.generator || callback.params.length !== 1 || callback.params[0].type !== 'Identifier') return;
+  if (ast.body.length !== 1 || statement.type !== 'ExpressionStatement' || registration?.type !== 'CallExpression' || registration.optional) return;
+  // Only the canonical v0.11.0 registration forms are editable here:
+  // frame("id").exit(cb) and ui("page").bind("screen.close", cb).
+  const method = member(registration.callee), selector = registration.callee?.object;
+  const selectorCall = selector?.type === 'CallExpression' && selector.callee?.type === 'Identifier' && selector.arguments.length === 1 ? selector.callee.name : undefined;
+  let callback: Node | undefined;
+  if (selectorCall === 'frame' && method === 'exit' && registration.arguments.length === 1) callback = registration.arguments[0];
+  else if (selectorCall === 'ui' && method === 'bind' && registration.arguments.length === 2 && registration.arguments[0]?.type === 'Literal' && registration.arguments[0].value === 'screen.close') callback = registration.arguments[1];
+  if (!callback || !['ArrowFunctionExpression', 'FunctionExpression'].includes(callback.type) || callback.async || callback.generator || callback.params.length !== 1 || callback.params[0].type !== 'Identifier') return;
   const body = callback.body.type === 'BlockStatement' ? callback.body.body : undefined;
   const call = body ? body.length === 1 && body[0].type === 'ExpressionStatement' ? body[0].expression : undefined : callback.body;
   if (call?.type !== 'CallExpression' || call.optional || call.callee?.object?.name !== callback.params[0].name) return;
@@ -70,7 +76,10 @@ export function editLifecycle(sources: Sources, op: LifecycleEdit): Sources {
   const method = op.mode === 'page' ? 'open' : 'resume', argument = op.mode === 'continue' ? '' : JSON.stringify(target);
   if (!entry) {
     const newline = source.includes('\r\n') ? '\r\n' : '\n';
-    return new Map([[file, source + `${newline}on.${op.kind}(${JSON.stringify(op.owner)}, ctx => { ctx.${method}(${argument}); });${newline}`]]);
+    const registration = op.kind === 'frameExit'
+      ? `frame(${JSON.stringify(op.owner)}).exit(ctx => { ctx.${method}(${argument}); });`
+      : `ui(${JSON.stringify(op.owner)}).bind("screen.close", ctx => { ctx.${method}(${argument}); });`;
+    return new Map([[file, source + `${newline}${registration}${newline}`]]);
   }
   const call = command(source, entry.start, entry.end)!;
   const edits = [{ start: call.callee.property.start, end: call.callee.property.end, text: call.callee.computed ? JSON.stringify(method) : method }];

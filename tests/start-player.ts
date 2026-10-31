@@ -2,6 +2,20 @@ import { execFileSync } from 'node:child_process';
 import { readStory, type Sources } from '../packages/source/src/index';
 import { parseXml } from '../packages/source/src/xml';
 
+/** Test diagnostics only: no foreground activation or simulated input. */
+export function playerWindowFocus(pid: number | undefined): { foreground: boolean; foregroundPid: number; minimized: boolean } {
+  if (!pid || !Number.isSafeInteger(pid)) throw new Error('测试播放器没有 PID');
+  const script = String.raw`
+Add-Type -MemberDefinition '[DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow(); [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr hwnd, out uint pid); [DllImport("user32.dll")] public static extern bool IsIconic(IntPtr hwnd);' -Name FocusInfo -Namespace KakeraTest
+$h = (Get-Process -Id ${pid}).MainWindowHandle
+$fg = [KakeraTest.FocusInfo]::GetForegroundWindow()
+[uint32]$foregroundPid = 0
+[KakeraTest.FocusInfo]::GetWindowThreadProcessId($fg, [ref]$foregroundPid) | Out-Null
+@{ foreground = ($h -ne 0 -and $h -eq $fg); foregroundPid = $foregroundPid; minimized = [KakeraTest.FocusInfo]::IsIconic($h) } | ConvertTo-Json -Compress
+`;
+  return JSON.parse(execFileSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], { timeout: 10000, windowsHide: true, encoding: 'utf8' }));
+}
+
 /**
  * Test-only full-screen start button. Multi-entry players intentionally wait for
  * an explicit UI resume/restart, so integration tests need a deterministic input
@@ -22,7 +36,7 @@ export function addStartOverlay(input: Sources, entry?: string): Sources {
   const script = story.scripts.find(file => file.endsWith('ui.js')) ?? story.scripts[0];
   if (!script) throw new Error('测试工程没有声明脚本');
   const js = next.get(script) ?? '';
-  if (!js.includes('on.ui("kakera.test.start"')) next.set(script, `${js}\non.ui("kakera.test.start", ctx => { ctx.open(${JSON.stringify(initial.attrs.id)}); ctx.restart(${JSON.stringify(start)}); });\n`);
+  if (!js.includes('ui("kakera.test.start").bind')) next.set(script, `${js}\nui("kakera.test.start").bind("kakera.test.start", ctx => { ctx.open(${JSON.stringify(initial.attrs.id)}); ctx.restart(${JSON.stringify(start)}); });\n`);
   return next;
 }
 

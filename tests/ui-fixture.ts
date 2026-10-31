@@ -14,8 +14,8 @@ export function splitUiFixture(input: Sources): Sources {
 export function uiFixture(): Sources {
   return splitUiFixture(new Map([
     ['story.xml', '<story schema="8" id="s" content-version="1" entry="a"><interface src="ui.xml"/><assets><image id="picture" src="picture.png"/><nine-patch id="nine" src="nine.9.png"/></assets><scripts><script src="routes.js"/><script src="ui.js"/></scripts><frames><frame id="a"><text>台词 🐈</text><options><option id="yes">好的</option><option id="no">再想想</option></options></frame></frames><next end="true"/></story>'],
-    ['routes.js', 'on.choice("a","yes",()=>"a");on.choice("a","no",()=>"a");'],
-    ['ui.js', '// 作者 JS，保持原文\r\non.ui("advance", function (ctx) { ctx.advance(); });\r\nconst helper = () => "不要改写";\r\n'],
+    ['routes.js', 'frame("a").choice("yes",()=>"a");frame("a").choice("no",()=>"a");'],
+    ['ui.js', '// 作者 JS，保持原文\r\nui("choice").bind("advance", function (ctx) { ctx.advance(); });\r\nconst helper = () => "不要改写";\r\n'],
     ['ui.xml', `<ui schema="3" width="1280" height="720" initial="hud" title="标题"><screen id="hud" modal="false" pause="false"><!-- 作者布局 🐈 -->\r\n<panel id='panel' x='40' y='50' width='600' height='300' color='#182A3D'><label id='caption' x='10' y='20' width='400' height='40' text='原文 &amp; 备注'/></panel>\r\n<repeat id="list" x="700" y="100" width="400" height="300" source="choices" item-width="380" item-height="50" gap="8"><button id="choice" width="380" height="50" bind="item.text" event="advance"/></repeat><image id="picture.node" x="40" y="400" width="100" height="100" image="picture" region="0,0,1,1"/></screen></ui>`]
   ]));
 }

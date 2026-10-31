@@ -16,7 +16,7 @@ test('生命周期可视编辑创建、修改与移除，只补丁固定白名�
   assert.equal(design.lifecycle!.screenClose.settings.mode, 'frame');
   assert.equal(sources.get('routes.js'), before.get('routes.js'));
   assert.equal(sources.get('story.xml'), before.get('story.xml'));
-  assert.throws(() => editUi(sources, { action: 'deleteScreen', id: 'settings' }), /生命周期/);
+  assert.throws(() => editUi(sources, { action: 'deleteScreen', id: 'settings' }), /生命周期|bind 注册/);
   const logic = analyzeLogic(sources, readStory(sources));
   assert.equal(logic.links.length, 2); assert.equal(logic.references.frames.has('a'), true);
   sources.set('ui.js', sources.get('ui.js')!.replace('ctx.resume("a")', 'ctx["resume"](/* 保留注释 */ "a" /* 尾注 */)'));
@@ -40,14 +40,14 @@ test('生命周期可视编辑创建、修改与移除，只补丁固定白名�
 
 test('复杂、重复、动态、间接和非顶层生命周期注册保持只读，不接管作者脚本', () => {
   for (const js of [
-    'on.screenClose("settings", ctx => { ctx.message("保留"); ctx.resume("a"); });',
-    'on.screenClose("settings", sharedCallback);',
-    'on.screenClose("settings", ctx => ctx.resume(target()));',
-    'on.screenClose("settings", ctx => ctx.resume()); on.screenClose("settings", ctx => ctx.resume());',
-    'on.screenClose(target(), ctx => ctx.resume());',
-    'const alias = on; alias.screenClose("settings", ctx => ctx.resume());',
-    'function register() { on.screenClose("settings", ctx => ctx.resume()); }',
-    'on.screenClose(',
+    'ui("settings").bind("screen.close", ctx => { ctx.message("保留"); ctx.resume("a"); });',
+    'ui("settings").bind("screen.close", sharedCallback);',
+    'ui("settings").bind("screen.close", ctx => ctx.resume(target()));',
+    'ui("settings").bind("screen.close", ctx => ctx.resume()); ui("settings").bind("screen.close", ctx => ctx.resume());',
+    'ui(target()).bind("screen.close", ctx => ctx.resume());',
+    'const alias = ui; alias.bind("screen.close", ctx => ctx.resume());',
+    'function register() { ui("settings").bind("screen.close", ctx => ctx.resume()); }',
+    'ui("settings").bind("screen.close",',
   ]) {
     const sources = uiFixture(); sources.set('ui.js', js);
     assert.equal(readUiDesign(sources).lifecycle!.screenClose.settings.editable, false, js);

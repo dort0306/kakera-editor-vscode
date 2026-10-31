@@ -1,12 +1,12 @@
 # 13 JS/XML 实时同步映射
 
-0.4.0 使用静态语法树关联 XML 剧情与 JS 注册，取代“只有生成器逐字输出才可编辑”的整工程判定。不会在扩展宿主执行游戏脚本。
+0.4.0 使用静态语法树关联 XML 剧情与 JS 注册，取代“只有生成器逐字输出才可编辑”的整工程判定。v0.11.0 起识别 `frame()`/`ui()` 注册，旧 `on.*` 只给迁移诊断。不会在扩展宿主执行游戏脚本。
 
 ## 同步流程
 
 1. 监听 TextDocument 与工程文件变化，150ms 合并刷新；读取当前缓冲，包括未保存的 XML/JS。
 2. 从 XML 章节链取得幕、ID/name、选项、变量和已声明脚本。
-3. Acorn 解析全部声明脚本，关联 `on.advance/choice/end` 的幕引用、选项、目标、更新、条件和源码位置。ID 与名称统一映射到同一幕。
+3. Acorn 解析全部声明脚本，关联 `frame("幕").advance/choice/end` 的幕引用、选项、目标、更新、条件和源码位置。ID 与名称统一映射到同一幕。
 4. 每幕独立检查路由完整性、选项对应关系、引用和类型。可逆固定注册开放编辑，自定义回调保留原文并分析候选目标。
 5. 图中显示已知目标、条件候选和动态目标；工作台显示可编辑范围及具体原因。语法暂时不完整时不使用旧源码范围，修复后重新分析。
 6. 可视操作生成范围补丁。后台冻结验证并复查 revision 后用 WorkspaceEdit 提交，只保存本次文件；并发修改拒绝覆盖。
@@ -16,25 +16,25 @@
 ```js
 // 不需要 Managed 文件头；注释、引号和排版不影响识别。
 const NEXT = 'question';
-on.advance('opening', () => NEXT);
-on.choice('question', 'accept', function (state) {
+frame('opening').advance(() => NEXT);
+frame('question').choice('accept', function (state) {
   state.add('trust', 1);
   return 'ending';
 }, state => state.vars.trust >= 2n);
-on.end('ending');
+frame('ending').end();
 ```
 
-支持固定字符串、无插值模板、可静态拼接的字符串常量；固定注册可分散在多个声明脚本中。回调可以使用零/一个上下文参数、箭头表达式或语句块、普通函数。可视变量更新为有序 set/add，条件为类型化比较/布尔组合，变量既可点号也可方括号访问。引擎允许的安全整数 Number 更新可识别，但严格相等比较不会将 Number 偷换成 BigInt；i64 不经 Number 近似转换。
+也支持固定字符串目标：`frame('opening').advance('question')`、`frame('question').choice('accept', 'ending', when)`。支持固定字符串、无插值模板、可静态拼接的字符串常量；固定注册可分散在多个声明脚本中。回调可以使用零/一个上下文参数、箭头表达式或语句块、普通函数。可视变量更新为有序 set/add，条件为类型化比较/布尔组合，变量既可点号也可方括号访问。引擎允许的安全整数 Number 更新可识别，但严格相等比较不会将 Number 偷换成 BigInt；i64 不经 Number 近似转换。
 
-目标变化仅替换目标表达式，已有更新/条件按对应节点修改；增加更新必要时补上下文参数，避免遮蔽原变量。新增注册追加到关联脚本，删除只移除对应注册。未改动的注册、辅助函数、UI 回调和其他文件保持原文；不把 Recognized 文件整体重新生成。
+目标变化仅替换目标表达式，已有更新/条件按对应节点修改；增加更新必要时补上下文参数，避免遮蔽原变量。静态字符串目标需要加入更新/条件时只把该参数转成内联回调。新增注册追加到关联脚本，删除只移除对应注册。未改动的注册、辅助函数、UI 回调和其他文件保持原文；不把 Recognized 文件整体重新生成。
 
-## v0.9.0 生命周期与交接引用（0.7.0）
+## 生命周期、UI 目标与交接引用（0.7.0 / v0.11.0）
 
-静态分析同时读取 `on.frameEnter(frame, fn)`、`on.frameExit(frame, fn)`、`on.screenOpen(screen, fn)`、`on.screenClose(screen, fn)`。它们不是剧情路由，不进入分支图连线，也不改变某幕的可写判定；frame 参数按实际 ID/name 归一到同一幕，并把源码位置加入“查看此幕逻辑”。缺失静态幕目标、动态目标和 `ctx.resume("未知幕")` 会进入诊断，但不把无关的已知路线降级为只读。
+静态分析同时读取 `frame(id).enter/exit` 与 `ui("页面").bind("screen.open"/"screen.close", fn)`。它们不是剧情路由，不进入分支图连线，也不改变某幕的可写判定；frame 参数按实际 ID/name 归一到同一幕，并把源码位置加入“查看此幕逻辑”。缺失静态幕/页面目标、动态目标和 `ctx.resume("未知幕")` 会进入诊断，但不把无关的已知路线降级为只读。
 
-已声明脚本中的静态 `ctx.resume("幕")` 与 `ctx.present("页面")` 也作为引用收集。删除幕时，若它被 `on.frameEnter/Exit` 或 `ctx.resume` 引用，会明确拒绝；只要存在动态 `on.frameEnter/Exit` 或带参数但无法静态求值的 `ctx.resume`，也保留诊断并暂不允许删除幕。删除页面时，若它被 `on.screenOpen/Close`、`ctx.present` 或 `ctx.open` 引用，或引用目标无法静态确定，也会拒绝。这里只读取语法树，不执行回调、不建立隐藏槽、不重放生命周期。
+已声明脚本中的静态 `ctx.resume("幕")` 与 `ctx.present("页面")` 也作为引用收集。删除幕时，若它被 `frame(id).enter/exit` 或 `ctx.resume` 引用，会明确拒绝；只要存在动态生命周期或带参数但无法静态求值的 `ctx.resume`，也保留诊断并暂不允许删除幕。删除页面时，若它被 `ui("页面").bind(...)`、`ctx.present` 或 `ctx.open` 引用，或引用目标无法静态确定，也会拒绝。这里只读取语法树，不执行回调、不建立隐藏槽、不重放生命周期。
 
-普通 `on.ui` 仍只识别事件名；`on.frameEnter/Exit`、`on.screenOpen/Close` 不能被当作按钮 event，`on.ui("frame.enter:…")` 这类保留名会给出警告。v0.9.0 的 `ctx.present/resume` 可通过 UI 事件向导追加，但写入前由宿主校验页面/实际幕，最终语义仍由真实播放器确认。
+普通 UI 回调按（目标、事件名）识别；`frame.enter:`/`frame.exit:`/`screen.open:`/`screen.close:` 是保留编码，不能作为按钮 event。`$game` 只接受 `game.enter`，`$host` 只接受捕获结果事件；`screen.open/close` 由页面生命周期编辑维护。旧 `on.*` 注册不再解析，只给带上游 API 第 37.5 节指引的迁移诊断。v0.9.0 的 `ctx.present/resume` 可通过 UI 事件向导追加，但写入前由宿主校验页面/实际幕，最终语义仍由真实播放器确认。
 
 0.8.2/v0.9.1 起，UI 事件向导可为 `resume` 选择起始幕和可选的“先打开页面”，生成 `ctx.open("页面"); ctx.resume("幕")` 或 `ctx.resume()`。静态分析仍只读取这两条固定调用，把页面和幕分别计入删除保护；显式目标沿用隐藏槽变量/历史，不把 `ctx.resume` 解释成清空变量的 restart，也不在编辑器中建立或改写隐藏槽。
 

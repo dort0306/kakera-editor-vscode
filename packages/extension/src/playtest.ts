@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import { randomBytes, randomUUID } from 'node:crypto';
-import { launch } from './tools';
+import { launch, plainDiagnostic } from './tools';
 import { Session, type Loaded } from './session';
 import type { Frozen } from './files';
 import { DebugClient } from '../../debug-adapter/src/client';
@@ -28,7 +28,7 @@ export class Playtests {
       const portPromise = debug ? new Promise<number>((resolve, reject) => { portResolve = resolve; portReject = reject; }) : undefined;
       const process = launch(await session.getPlayer(), args, text => {
         accumulated = (accumulated + text).slice(-8192); session.output.append(text);
-        const match = /调试 API：127\.0\.0\.1:(\d+)/.exec(accumulated); if (match) portResolve(Number(match[1]));
+        const match = /调试 API：127\.0\.0\.1:(\d+)/.exec(plainDiagnostic(accumulated)); if (match) portResolve(Number(match[1]));
       }, signal);
       let stopping = false;
       const stop = async () => {

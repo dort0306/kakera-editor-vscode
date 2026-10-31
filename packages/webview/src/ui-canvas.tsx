@@ -4,7 +4,7 @@ import { previewUi, type UiPreviewNode } from '../../domain/src/ui-preview';
 import type { UiDesign, UiScreen, UiTextures } from '../../domain/src/ui';
 import { patchAxis } from '../../domain/src/textures';
 import { normalizeColor, parseColor } from '../../domain/src/colors';
-import { HsvPickerGraphic } from './color-picker';
+import { HslPickerGraphic, pickerGeometry } from './color-picker';
 const color = (s: string | undefined, fallback: string) => { try { return normalizeColor(s ?? ''); } catch { return fallback; } };
 const pickerColor = (s: string | undefined) => { try { return parseColor(s ?? '#FF0000FF'); } catch { return parseColor('#FF0000FF'); } };
 export function UiCanvas({ design, screen, story, frame, textures, selected, select, disabled, commit }: { design: UiDesign; screen: UiScreen; story?: Story; frame?: string; textures: UiTextures; selected: string; select: (id: string) => void; disabled: boolean; commit: (id: string, patch: Record<string, string>) => void }) {
@@ -63,15 +63,14 @@ export function UiCanvas({ design, screen, story, frame, textures, selected, sel
       <rect width={design.width} height={design.height} fill={`url(#${prefix}-grid)`} pointerEvents="none" opacity=".55"/>
       {items.map((item, i) => {
         const a = item.node.attrs, [x, y, w, h] = item.rect, clip = `${prefix}-clip-${i}`, font = Number(a['font-size'] ?? 20);
+        const pickerAlpha = a.alpha !== 'false', pickerLayout = item.node.kind === 'color-picker' ? pickerGeometry(w, h, pickerAlpha) : undefined;
         return <g key={item.instance} data-ui-node={item.node.id} data-ui-instance={item.instance} role="button" tabIndex={0} aria-label={`${item.node.kind}：${item.node.id}`} aria-pressed={selected === item.node.id} onPointerDown={e => begin(e, item)} onClick={e => { e.stopPropagation(); select(item.node.id); }} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); select(item.node.id); } }} opacity={!item.visible ? .35 : !item.enabled ? .6 : 1}>
           <title>{item.node.kind} · {item.node.id} · {item.node.file}:{item.node.line}{item.template ? ' · 模板实例' : ''}{a.effect ? ' · 效果请试玩确认' : ''}</title>
           <defs><clipPath id={clip}><rect x={item.clip[0]} y={item.clip[1]} width={item.clip[2]} height={item.clip[3]}/></clipPath></defs>
           <g clipPath={`url(#${clip})`}>
             <rect x={x} y={y} width={w} height={h} rx={Number(a.radius ?? 0)} fill={item.node.kind === 'label' || item.node.kind === 'image' || item.node.kind === 'repeat' || item.node.kind === 'color-picker' ? 'transparent' : color(item.colorValue ?? a.color, item.node.kind === 'button' ? '#29455f' : item.node.kind === 'panel' ? '#1b2c3e' : '#1a3044')} stroke={item.node.kind === 'repeat' || item.node.kind === 'scene' ? '#476983' : 'none'} strokeDasharray={item.node.kind === 'repeat' ? '6 4' : undefined}/>
-            {item.node.kind === 'color-picker' ? <svg x={x} y={y} width={w} height={h} viewBox="0 0 260 300" preserveAspectRatio="xMidYMid meet" className="ui-color-picker-preview" aria-label="color-picker 静态预览">
-              <rect width="260" height="300" rx="10" fill="#101c28" stroke="#476983"/>
-              <HsvPickerGraphic color={pickerColor(item.colorValue)} alpha={a.alpha !== 'false'} detail={6}/>
-              <text x="14" y="284" fontSize="13" fill="#9cb2c8">color-picker{typeof item.colorValue === 'string' ? ` · ${item.colorValue}` : ''}</text>
+            {pickerLayout ? <svg x={x} y={y} width={w} height={h} viewBox={`0 0 ${w} ${h}`} className="ui-color-picker-preview" aria-label="color-picker 静态预览">
+              <HslPickerGraphic color={pickerColor(item.colorValue)} alpha={pickerAlpha} geometry={pickerLayout}/>
             </svg> : null}
             {skin(item)}
             {item.colorValue && !['label', 'button', 'toggle', 'color-picker'].includes(item.node.kind) && <rect x={x} y={y} width={w} height={h} rx={Number(a.radius ?? 0)} fill={color(item.colorValue, '#00000000')} opacity=".45" pointerEvents="none"/>}

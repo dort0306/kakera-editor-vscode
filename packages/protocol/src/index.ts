@@ -13,10 +13,10 @@ export interface EditorState {
   layout?: Record<string, Point>;
   ui?: UiDesign; uiTextures?: UiTextures; view?: 'story' | 'ui'; uiScreen?: string; uiSelected?: string;
 }
-export interface Message { version: 1; requestId: string; revision: string; type: 'ready' | 'preview' | 'source' | 'patch' | 'rename' | 'insert' | 'delete' | 'entry' | 'duplicate' | 'reorder' | 'visual' | 'variable' | 'deleteVariable' | 'title' | 'character' | 'characterLooks' | 'appearance' | 'layout' | 'reconnect' | 'textureOpen' | 'textureSave' | 'texturePack' | 'graphExport' | 'uiEdit' | 'uiSource'; payload: Record<string, unknown> }
+export interface Message { version: 1; requestId: string; revision: string; type: 'ready' | 'preview' | 'source' | 'patch' | 'rename' | 'insert' | 'delete' | 'entry' | 'duplicate' | 'reorder' | 'visual' | 'variable' | 'deleteVariable' | 'title' | 'character' | 'characterLooks' | 'appearance' | 'layout' | 'reconnect' | 'textureOpen' | 'textureSave' | 'texturePack' | 'graphExport' | 'uiEdit' | 'uiSource' | 'localization' | 'localizationSource'; payload: Record<string, unknown> }
 export function readMessage(value: unknown): Message {
   if (!value || typeof value !== 'object' || JSON.stringify(value).length > 1024 * 1024) throw new Error('消息无效或超限');
   const m = value as Message;
-  if (m.version !== 1 || typeof m.requestId !== 'string' || m.requestId.length > 128 || typeof m.revision !== 'string' || !['ready', 'preview', 'source', 'patch', 'rename', 'insert', 'delete', 'entry', 'duplicate', 'reorder', 'visual', 'variable', 'deleteVariable', 'title', 'character', 'characterLooks', 'appearance', 'layout', 'reconnect', 'textureOpen', 'textureSave', 'texturePack', 'graphExport', 'uiEdit', 'uiSource'].includes(m.type) || !m.payload || typeof m.payload !== 'object' || Array.isArray(m.payload)) throw new Error('不支持的编辑消息');
+  if (m.version !== 1 || typeof m.requestId !== 'string' || m.requestId.length > 128 || typeof m.revision !== 'string' || !['ready', 'preview', 'source', 'patch', 'rename', 'insert', 'delete', 'entry', 'duplicate', 'reorder', 'visual', 'variable', 'deleteVariable', 'title', 'character', 'characterLooks', 'appearance', 'layout', 'reconnect', 'textureOpen', 'textureSave', 'texturePack', 'graphExport', 'uiEdit', 'uiSource', 'localization', 'localizationSource'].includes(m.type) || !m.payload || typeof m.payload !== 'object' || Array.isArray(m.payload)) throw new Error('不支持的编辑消息');
   return m;
 }

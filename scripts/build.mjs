@@ -1,5 +1,6 @@
 import { build } from 'esbuild';
-import { mkdir, copyFile, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, copyFile, readFile, writeFile, readdir } from 'node:fs/promises';
+import path from 'node:path';
 await mkdir('dist', { recursive: true });
 await mkdir('artifacts', { recursive: true });
 await build({ entryPoints: ['packages/extension/src/extension.ts'], outfile: 'dist/extension.cjs', bundle: true, platform: 'node', format: 'cjs', target: 'node22', external: ['vscode'], sourcemap: true });
@@ -15,4 +16,11 @@ for (const name of ['react', 'react-dom', 'scheduler', 'acorn', 'saxes', 'xmlcha
   if (!license) throw new Error(`缺少第三方许可：${name}`);
   notices.push(`${name} ${info.version}\n${license.split('\n').map(line => line.trimEnd()).join('\n')}`);
 }
+// The bundled v0.11.0 player embeds fluent/unic-langid. Their licenses and the
+// engine's own selection notice travel with the offline VSIX.
+const engineLicenseDirectory = 'resources/licenses/engine-i18n';
+let engineLicenseFiles = [];
+try { engineLicenseFiles = (await readdir(engineLicenseDirectory)).filter(file => file.endsWith('.txt')).sort(); } catch { throw new Error('缺少 Kakera v0.11.0 国际化依赖许可目录'); }
+for (const file of engineLicenseFiles) notices.push(`Kakera AVG v0.11.0 i18n dependency license: ${file}\n${(await readFile(path.join(engineLicenseDirectory, file), 'utf8')).split('\n').map(line => line.trimEnd()).join('\n')}`);
+notices.push(`Kakera AVG v0.11.0 i18n notices\n${(await readFile(path.join(engineLicenseDirectory, 'NOTICE.md'), 'utf8')).split('\n').map(line => line.trimEnd()).join('\n')}`);
 await writeFile('THIRD_PARTY_NOTICES.txt', notices.join('\n\n----------------------------------------\n\n'));

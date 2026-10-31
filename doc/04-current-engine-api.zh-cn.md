@@ -1,6 +1,6 @@
 # 04 当前引擎 API 参考
 
-状态：**现有能力**，核对日期 2026-10-30。用于开发编辑器适配器，不能替代完整 XML/JS 手册。以下 Rust 名称为当前源码接口，不承诺跨版本稳定 ABI；编辑器应与引擎发布版本锁定。当前基线 v0.10.0：story 8 / UI 3 / save 9。
+状态：**现有能力**，核对日期 2026-10-31。用于开发编辑器适配器，不能替代完整 XML/JS 手册。以下 Rust 名称为当前源码接口，不承诺跨版本稳定 ABI；编辑器应与引擎发布版本锁定。当前基线 v0.11.0：story 8 / UI 3 / save 9。
 
 ## 1. 格式与入口
 
@@ -44,7 +44,7 @@ story 根需要 id、content-version、entry 和 schema；包含 scripts、inter
 
 全部 frame 必须覆盖且路由种类与 XML options 一致。条件在更新前变量上计算；主回调收集有序更新；目标条件也通过后才提交变量、位置与历史。动态目标只能在执行边界验证，启动检查不穷举全部路径。
 
-v0.9.0 另有四个独立生命周期注册，不产生剧情路由：`on.frameEnter(frame, fn)`、`on.frameExit(frame, fn)`、`on.screenOpen(screen, fn)`、`on.screenClose(screen, fn)`。frame 可用实际 ID 或稳定 name，按实际幕去重；screen 必须是已声明页面。回调只收集 UI 命令，按候选计划整批提交。正常离幕在 Controller 目标/条件/更新验证后触发 exit 再 enter；自循环也触发，读档/隐藏槽恢复/历史重放不重放。`screenClose` 额外允许 `ctx.resume`；进入幕交接与 UI 页面在同一事务提交。编辑器静态分析只读取注册和目标，不执行回调。
+v0.9.0 另有四个独立生命周期注册，不产生剧情路由：v0.11.0 写法为 `frame(id).enter(fn)`、`frame(id).exit(fn)`、`ui("页面").bind("screen.open", fn)`、`ui("页面").bind("screen.close", fn)`（旧 `on.*` 入口已删除）。frame 可用实际 ID 或稳定 name，按实际幕去重；screen 必须是已声明页面。回调只收集 UI 命令，按候选计划整批提交。正常离幕在 Controller 目标/条件/更新验证后触发 exit 再 enter；自循环也触发，读档/隐藏槽恢复/历史重放不重放。`screen.close` 额外允许 `ctx.resume`；进入幕交接与 UI 页面在同一事务提交。编辑器静态分析只读取注册和目标，不执行回调。
 
 | 剧情 ctx | 类型/语义 |
 | --- | --- |
@@ -173,7 +173,7 @@ Windows 播放器为 GUI 子系统。自动化必须等待进程退出并捕获�
 
 - 应用版本 0.9.0；story 8 / UI 3 / save 9；KPAK 1/2 保留；demo content-version=9。v0.8 以前的存档、项目视频写法和旧字段补齐仍不迁移。
 - 视频只在 UI `ui-media.sequence`；frame 不接受 video，`ctx.skipVideo` 与 `game.videoPlaying/game.videoSkippable` 已删除。编辑器应把旧写法作为迁移诊断，不生成新副本。
-- `on.frameEnter/Exit`、`on.screenOpen/Close` 注册按实际幕/页面严格解析；同一实际幕不能按 ID/name 重复注册同类回调。XML 不能直接派发这些保留事件名。
+- `frame(id).enter/exit` 与 `ui("页面").bind("screen.open"/"screen.close", …)` 注册按实际幕/页面严格解析；同一实际幕不能按 ID/name 重复注册同类回调。XML 不能直接派发这些保留事件名。
 - 进入幕打开 UI 时该幕与 UI 同事务提交；离幕打开 UI 保存完整 source/continuation 隐藏槽，UI 返回后再提交待续剧情。恢复活动隐藏槽只重开 UI，演出从零播放，不重放 frameEnter/Exit/game.enter。
 - 隐藏槽固定为存档目录 `flow-checkpoint.json`，schema 1，内嵌两份 save 9 快照、UI 栈/变量/原栈与演出 ID；总大小 2MiB，先完整校验与准备再原子覆盖。成功返回写 `active=false` 墓碑。它独立于手动槽和 auto-1..10，不受 autosave 开关影响，排除监控和资源包。
 - 隐藏槽恢复时源与 continuation 必须分别可完整重放，且二者是同一状态或恰好一次合法 Controller 推进；UI 栈、变量、资源与来源再次校验。坏槽/原子写失败保留旧 UI/剧情/隐藏文件，不部分提交。
@@ -185,8 +185,8 @@ Windows 播放器为 GUI 子系统。自动化必须等待进程退出并捕获�
 ## 10. v0.9.1 末幕退出与 UI 显式起始幕
 
 - 应用版本 0.9.1；story 8 / UI 3 / save 9、content-version 9 与 KPAK 1/2 不变，没有 XML/JS 语法新增。
-- 末幕 `on.end` 在文字完成后的**手动继续**触发一次 `on.frameExit`；补全文字不触发，自动播放和 Ctrl 仍在结尾停止。末幕注册 frameExit 时 `game.canAdvance` 保留继续入口，成功后不再重复；普通读档/重开重置该状态。无退出回调的末幕保持结束显示。
-- UI 控件（普通 `on.ui`）和自动 `screenClose` 都可复用 `ctx.resume(frame?)`。无活动交接时读取并完整验证磁盘 `flow-checkpoint.json`（包括 inactive）；省略目标时恢复其 continuation，首次没有隐藏槽且没有目标时拒绝。显式目标以隐藏 continuation 为基础（首次无槽时以当前初始 Session 为基础），记录显式 UI 返回并沿用隐藏槽变量/历史，不是清空变量的 restart。
+- 末幕 `frame(id).end()` 在文字完成后的**手动继续**触发一次 `frame(id).exit`；补全文字不触发，自动播放和 Ctrl 仍在结尾停止。末幕注册 exit 时 `game.canAdvance` 保留继续入口，成功后不再重复；普通读档/重开重置该状态。无退出回调的末幕保持结束显示。
+- UI 控件（普通 `ui("目标").bind(...)`）和自动 `screen.close` 都可复用 `ctx.resume(frame?)`。无活动交接时读取并完整验证磁盘 `flow-checkpoint.json`（包括 inactive）；省略目标时恢复其 continuation，首次没有隐藏槽且没有目标时拒绝。显式目标以隐藏 continuation 为基础（首次无槽时以当前初始 Session 为基础），记录显式 UI 返回并沿用隐藏槽变量/历史，不是清空变量的 restart。
 - 显式目标与同批自动关闭回调的无参 resume 合并时保留显式目标；两个不同显式目标拒绝整批操作。所有进入回调和媒体验证成功、隐藏 source/continuation 原子同步后才提交剧情；失败保留旧剧情、UI 和隐藏文件。成功无下一交接时写 inactive，下一次无参 resume 仍可显式读取其 continuation；inactive 不会在启动时自动恢复。
 - 编辑器可写 `ctx.open("页面"); ctx.resume("幕")`、`ctx.resume("幕")` 或 `ctx.resume()`；目标必须是实际幕/页面，不伪造隐藏槽或待连接目标。真实运行、隐藏槽跨进程和末幕 GUI 行为由匹配播放器验收，编辑器静态检查不能替代。
 
@@ -210,6 +210,24 @@ Windows 播放器为 GUI 子系统。自动化必须等待进程退出并捕获�
 - 应用版本 0.10.0；story 8 / UI 3 / save 9 / profile 1 / read 1 / KPAK 1/2 与 demo content-version=11 不变。新增语法属于 UI 3 的受约束扩展，旧播放器应拒绝而不是猜测。
 - **动态图片查看**不新增 Rust 图片 API：同一页使用一个固定 image 控件和 `image-bind="ui.变量"`，切换时由 `ctx.setUi` 写入已声明 image/CG 资源 ID；`fit`、图集 region 和按钮工具栏仍走现有属性。编辑器只生成声明和普通绑定，不拼接文件路径或每图一页。
 - **玩家快捷键**：动作固定为 `advance`、`fast_forward`（按住）、`skip_sequence`，默认 Space/Ctrl/Space。绑定为规范 ASCII token 或 `null`，修饰键 Ctrl/Alt/Shift，最多 64 字节；拒绝 Escape、Meta、Ctrl+Alt 和系统保留组合，并检查快进按住前缀冲突。普通 `on.ui` 可用 `ctx.captureShortcut(action, resultEvent)`、`ctx.cancelShortcutCapture()`、`ctx.keybinding(action, bindingOrNull)`、`ctx.resetKeybindings()`；只读 `ctx.shortcuts` 暴露 bindings、显示 Label、captureActive/captureText。XML 可绑定 `shortcuts.advanceLabel/fastForwardLabel/skipSequenceLabel/captureText/captureActive/bindings.*`。偏好写固定 `keybindings.json`（schema 1/story_id/三个绑定），缺文件用默认、坏文件保留并提示、同目录原子替换；不进入剧情槽、隐藏槽、监控或 KPAK。
-- **三角 HSV 与玩家配色**：`color-picker` 必需 UI string 的 `value` 和普通 `event`，可选 `alpha`（默认 true）；至少 128×224、最多 8 个、不能放入 repeat，不接受子控件/图片/region/route/color。事件值为规范 `#RRGGBBAA`，拖拽只提交候选，由作者 `ctx.setUi` 决定是否更新。`color-bind` 可作用于 panel/image/nine-patch/label/button/toggle，来源限 `ui.<string>` 或 `colors.<槽位>`，与静态 `color` 互斥。根级 `<palette><color id="..." initial="#RRGGBBAA"/></palette>` 最多 32 个，ID 为 `[a-z][a-z0-9_]{0,63}`；`ctx.colors` 是只读快照，`ctx.colorPreference(slot, rgbaOrNull)`/`ctx.resetColors()` 写固定 `ui-colors.json`（schema 1/story_id/稀疏 overrides）。两个偏好文件都由匹配播放器原子维护，编辑器不读取或写入。
+- **HSL 方形 与玩家配色**：`color-picker` 必需 UI string 的 `value` 和普通 `event`，可选 `alpha`（默认 true）；`alpha=false` 至少 128×128，`alpha` 默认/true 时至少 128×154（推荐 256×256 / 256×282），最多 8 个、不能放入 repeat，不接受子控件/图片/region/route/color。色盘直径 `D=min(width,height−R)`，`R=alpha?26:0`；环、正方形与可选 alpha 条作为一组在控件外矩形内居中，alpha 条高 18、距色盘 8、左右各留 8、宽 `width−16`。控件自身只绘制环、正方形、可选 alpha 条和必要焦点/禁用反馈，**没有内置颜色预览或 HEX 文本**；作者用 `color-bind` 面板/图片和 `bind` label 读取同一草稿独立组合预览与十六进制。事件值为规范 `#RRGGBBAA`，拖拽只提交候选，由作者 `ctx.setUi` 决定是否更新；矩形内留白/间隙不改色、不启动抓取。`color-bind` 可作用于 panel/image/nine-patch/label/button/toggle，来源限 `ui.<string>` 或 `colors.<槽位>`，与静态 `color` 互斥。根级 `<palette><color id="..." initial="#RRGGBBAA"/></palette>` 最多 32 个，ID 为 `[a-z][a-z0-9_]{0,63}`；`ctx.colors` 是只读快照，`ctx.colorPreference(slot, rgbaOrNull)`/`ctx.resetColors()` 写固定 `ui-colors.json`（schema 1/story_id/稀疏 overrides）。两个偏好文件都由匹配播放器原子维护，编辑器不读取或写入。
 - **确认弹窗与退出**：确认页是普通模态 `screen`，可用 panel/图片/点九、绑定、RGBA、按钮皮肤和 `route="close"` 组合；`ctx.quit()` 仅在普通 `on.ui` 可用，整批验证成功后请求宿主正常关闭，不触发 frameExit/screenClose、不保存新槽、不消耗隐藏交接。退出补写由播放器负责，编辑器不伪造原生对话框。
 - 编辑器边界：新控件/属性通过范围补丁写实际 XML/JS，静态画布不执行捕获、焦点、偏好落盘或页面交接；最终冲突、按键所有权、颜色缓存与偏好回滚由匹配播放器验收。
+
+## 14. v0.10.1 国际化
+
+- 应用版本 0.10.1；story 8 / UI 3 / save 9 / profile 1 / read 1 / KPAK 1/2 与 demo content-version=11 不变。宿主提示内嵌 `locales/engine/zh-CN.ftl`，使用 Fluent 和稳定诊断 ID；当前正式宿主只有中文，游戏不能覆盖宿主词条。
+- 游戏本地化默认关闭。入口 `story.xml` 可声明 `<localization enabled="true" src="..."/>`；清单 schema 1 分开 `texts`（1–32 种，messages+font）和 `voices`（0–32 种，key→audio/silent）。默认文本/语音必须属于对应集合；系统语言与玩家选择按通道分别精确匹配，不做地区/脚本猜测。
+- 文本来源：frame text `key`、option `text-key`、character `name-key`、变量 `label-key`、UI label/button/toggle `text-key`/`text-key-bind`、UI 根 `title-key`/`title-key-bind`、画廊 `title-key`。UI 可带最多 16 个 `text-arg`，参数只从 UI 标量、`cg`/`saves` 只读标量和 `locale.text/voice` 取值；剧情静态位置没有外部参数。动态 key 只绑定 UI string。
+- 普通 `on.ui` 可调用 `ctx.locale(channel, idOrNull)`；只读 `ctx.localeInfo` 提供 enabled/textRequested/voiceRequested/text/voice/textSource/voiceSource；XML 对应 locale 标量以空串表示 null，repeat 数据源 `textLocales`/`voiceLocales` 只有 id/label/selected/default。语言选择写 SaveStore 下固定 `language.json`（schema 1/story_id/text/voice），不属于内容根或 KPAK；切换事务、字体/语音候选、截图 revision 与隐藏恢复由播放器负责。
+- 全部游戏 FTL 最多 128 个/16MiB、单文件 1MiB、50000 条消息/术语、单 bundle 100000 条引用；拒绝属性导出/引用、带参数术语和自定义函数。编辑器读取/校验清单、FTL、文本来源和参数契约，但不执行 Fluent 或语言事务。
+- KPAK 1/2 在开启时收集全部声明语言依赖；`language.json` 及大小写变体排除监控、冻结和打包。编辑器工具哈希、工程清单和调试版本接受 0.11.0，同时保留 0.8.3–0.10.1 打开兼容。
+
+## 15. v0.11.0 新版 JS 注册 API
+
+- 应用版本 0.11.0；story 8 / UI 3 / save 9 / profile 1 / read 1 / KPAK 1/2 与 demo content-version=11 不变。`ctx` 参数、命令白名单、事务与预算不变。旧 `on.advance/choice/end/ui/frameEnter/frameExit/screenOpen/screenClose` **已删除且没有别名**，启动、`--check` 与打包会带文件名和栈拒绝。
+- 剧情路由：`frame("幕ID").advance(targetOrRun)`、`frame("幕ID").choice("选项ID", targetOrRun, when?)`、`frame("幕ID").end()`。`targetOrRun` 只能是固定非空字符串或无副作用的同步回调；字符串等价于直接返回该字符串，函数可先 `ctx.set/add` 再返回。第三参数 `when` 只能是返回 boolean 的只读函数。同一幕只允许一种路由，选项集合必须与 XML 相等；重复 option、重复 advance/end、混合路由、ID/name 指向同一幕均拒绝。
+- 生命周期：`frame(id).enter(callback)` / `frame(id).exit(callback)` 只拿到 UI 命令上下文，不是剧情 set/add 上下文；页面用 `ui("页面").bind("screen.open"/"screen.close", callback)`。全局进入钩子固定为 `ui("$game").bind("game.enter", callback)`，快捷键等捕获结果固定为 `ui("$host").bind(结果事件, callback)`。`$game`/`$host` 是保留虚拟目标，不能作为真实 XML 页面/控件 ID，也不能新增其他虚拟目标。
+- 界面回调：`ui("控件模板ID或页面ID").bind("作者事件名", callback)`。注册键是结构化的（目标类别、目标 ID、事件名），同名事件不再全局共享；两个控件可保留同一个 XML `event` 并各自绑定不同回调，共享逻辑应把同一函数绑定到多个目标。每个 XML 事件（控件 `event`、页面 `background-click`/`background-right-click`）必须恰好有一个注册；每个注册必须指向真实目标且事件与 XML 完全一致。`ui()` 指向页面时只接受页面已声明事件与 `screen.open`/`screen.close`；`repeat` 只绑定模板子控件 ID。`button route="open:页面"/"close"` 与 `event` 互斥。XML 的 `bind="game.text"` 是数据绑定，与 JS `.bind(event, callback)` 无关。
+- 注册隔离：`frame`/`ui` 是不可写、不可配置的全局函数，选择器对象冻结；回调执行期间再注册或替换入口失败。选择器可以保存到变量或解构方法而不丢目标，单独的 `frame(id)` 不注册任何内容。静态字符串目标在完整装配后加载期校验存在，函数目标在执行边界校验；所有目标都走同一 Controller 条件/更新/历史事务。错误位置同时给出 JS 调用行与相关 XML 位置。
+- 编辑器规则：只读写上述规范形式；旧 `on.*` 只给迁移诊断（见上游 API 第 37.5 节），不自动整文件迁移；动态/别名/非顶层/共享回调保持 Opaque。受管路线文件使用 `// Kakera Managed Routes v2` 和 `frame(...)` 生成；UI 事件按（目标、事件名）管理，新增 XML 事件时必须在同一事务为目标创建注册。工具哈希、工程清单、调试与构建版本检查按 0.11.0 同步，最终装配由真实 `--check`/KPAK 验证。

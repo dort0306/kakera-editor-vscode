@@ -25,7 +25,7 @@ export async function run(): Promise<void> {
   ]));
   const extension = vscode.extensions.getExtension('dort0306.kakera-editor-vscode'); assert.ok(extension); await extension.activate();
   const commands = await vscode.commands.getCommands(true); assert.ok(commands.includes('kakera.storyboard.open'));
-  for (const id of ['kakera.tree.refresh', 'kakera.character.create', 'kakera.character.rename', 'kakera.character.delete', 'kakera.variable.create', 'kakera.variable.edit', 'kakera.variable.delete', 'kakera.frame.open', 'kakera.frame.create', 'kakera.frame.delete']) assert.ok(commands.includes(id), id);
+  for (const id of ['kakera.tree.refresh', 'kakera.character.create', 'kakera.character.rename', 'kakera.character.delete', 'kakera.variable.create', 'kakera.variable.edit', 'kakera.variable.delete', 'kakera.frame.open', 'kakera.frame.create', 'kakera.frame.delete', 'kakera.ui.source']) assert.ok(commands.includes(id), id);
   const session = new Session(content, path.join(root, 'private'), vscode.window.createOutputChannel('Kakera Test'), async () => toolInfo.player);
   const loaded = await session.load(); assert.ok(loaded.routes); assert.equal(loaded.story.frames.length, 3);
   const doc = loaded.documents.get('story.xml')!; await vscode.window.showTextDocument(doc);
@@ -117,7 +117,7 @@ export async function run(): Promise<void> {
   const previousXml = doc.getText(); await session.apply(project, new Map([['story.xml', patchFrame(previousXml, 'opening', { text: '条件路线仍可编辑台词。' })]]), undefined, { save: true });
   assert.ok(doc.getText().includes('条件路线仍可编辑台词。'));
   project = await session.load(); await session.apply(project, new Map([['story.xml', previousXml]]), undefined, { save: true });
-  await replaceJs('on.choice('); project = await session.load(); assert.equal(project.logic.complete, false); assert.ok(project.logic.issues.some(s => s.includes(routeFile)));
+  await replaceJs('frame('); project = await session.load(); assert.equal(project.logic.complete, false); assert.ok(project.logic.issues.some(s => s.includes(routeFile)));
   await replaceJs(originalJs); await routeDoc.save(); assert.equal((await session.load()).logic.complete, true);
   console.log('HOST LOGIC SYNC PASS: unsaved JS recognized, local insert/delete retained comments/helpers, conditional targets mapped, opaque-frame dialogue saved, syntax recovery remapped.');
   project = await session.load(); const layoutBase = project, layoutXml = doc.getText(), layoutJs = routeDoc.getText();

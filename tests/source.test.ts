@@ -31,7 +31,7 @@ test('DTD、未知实体、命名空间和坏 XML 拒绝', () => {
 test('Managed BigInt/条件/更新确定性往返，任意手写代码为 Opaque', () => {
   const routes: Route[] = [{ frame: 'a', kind: 'choice', option: 'x', target: 'b', updates: [{ op: 'add', variable: 'score', value: { kind: 'constant', type: 'int', value: '-9223372036854775808' } }], guard: { kind: 'compare', op: '>=', left: { kind: 'variable', id: 'score' }, right: { kind: 'constant', type: 'int', value: '9007199254740993' } } }, { frame: 'b', kind: 'end', updates: [] }];
   const js = emitRoutes(routes); assert.deepEqual(readManagedRoutes(js), routes); assert.equal(emitRoutes(readManagedRoutes(js)!), js);
-  for (const opaque of [js + '// 手写注释', js.replace('ctx.add', 'ctx.something'), js.replace('return "b"', 'return compute()'), 'on.advance("a", ctx => "b");']) assert.equal(readManagedRoutes(opaque), undefined);
+  for (const opaque of [js + '// 手写注释', js.replace('ctx.add', 'ctx.something'), js.replace('return "b"', 'return compute()'), 'frame("a").advance("b");']) assert.equal(readManagedRoutes(opaque), undefined);
 });
 test('i64 边界不经 Number 转换，越界与错误类型拒绝', () => {
   assert.equal(i64('9223372036854775807'), '9223372036854775807'); assert.equal(i64('-9223372036854775808'), '-9223372036854775808');

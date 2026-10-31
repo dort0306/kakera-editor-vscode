@@ -29,18 +29,22 @@
 
 ## 使用
 
-工作台顶部点击“UI 编辑器”，或命令面板执行“Kakera：打开 UI 编辑器”；后者以实际 UI 入口打开 Custom Editor。直接“打开方式 → Kakera 分镜”打开所属 UI 文件也会进入 UI 模式。
+工作台顶部点击“UI 编辑器”，在 Activity Bar 侧栏“界面”点击某个 UI XML，或命令面板执行“Kakera：打开 UI 编辑器”；侧栏左键按文件打开 Custom Editor，入口保持初始页面，子文件定位到该文件首个页面；右键“打开 UI 源码”打开原 XML。直接“打开方式 → Kakera 分镜”打开所属 UI 文件也会进入 UI 模式。
 
 1. 左侧选择页面，再从控件树或画布选择控件；树显示稳定 ID 与原文件位置。
-2. 中间选择控件类型、父容器及必要的图片/事件，点击“添加控件”。支持 scene、panel、image、nine-patch、label、button、slider、toggle、repeat 与 v0.10.0 的 color-picker。
+2. 中间选择控件类型、父容器及必要的图片/事件，点击“添加控件”。支持 scene、panel、image、nine-patch、label、button、slider、toggle、repeat、v0.10.0 的 color-picker 与 v0.10.1 的本地化文本来源。
 3. 拖动调整相对父级位置，右下角手柄调整宽高；移动超过 4 屏幕像素才开始拖动，支持 8px 吸附、缩放和 Escape 取消。方向键微调 1px，Shift+方向键 8px。
 4. 右侧填写尺寸、样式、文字/图片与绑定、事件、图集 region、点九 density、列表数据源及单元格等实际属性。“保存属性”后台验证后直接保存；拖动/缩放松手自动提交。
 5. “层级与顺序”可选择目标页面和父容器，移动到绘制最底层/最顶层。坐标继续相对新父级，不自动改写事件脚本。复制为整棵子树生成新 ID，复用既有资源和事件。
 6. “新增页面”选择一个已加载 UI 文件，可在创建时指定唯一标识；已有 ID 不自动改名。初始页面必须存在且非模态。被脚本明确或动态 `open` 引用的页面不能直接删除。
-7. “UI 变量”创建 int/bool/string 或编辑初始值和整数范围，既有类型/ID 保持；int 始终用十进制字符串传输。文字空初始值、换行/Tab 和 XML 实体正确保存。
+7. “UI 变量”创建 int/bool/string，编辑初始值和整数范围，或删除未被引用的变量；已有类型/ID 保持，int 始终用十进制字符串传输。删除前检查控件绑定、窗口标题、已识别事件和脚本中的 `ctx.ui`/`ctx.setUi` 引用；无法证明归属的动态脚本访问拒绝删除。文字空初始值、换行/Tab 和 XML 实体正确保存。
 8. “新建事件”支持打开/关闭页面、推进、重开、选择 choices 列表项及滑条/开关更新白名单设置。追加到已声明脚本；已有回调只供选择与源码定位，不自动重写自定义逻辑。
 
 新建或删除、跨页面移动都不要求作者审阅源码差异。修改仅涉及本次文件；源码并发变化时草稿保留，旧 revision 不覆盖新内容。宿主撤销/重做恢复缓冲，必要时用 VS Code 保存，不承诺磁盘多文件原子事务。
+
+### 侧栏 UI XML 导航（0.10.2）
+
+Activity Bar 的 Kakera“界面”分类按入口和 include 深度列出全部已加载 UI XML；文件条目使用稳定路径 id。左键调用 `kakera.ui.open` 打开该 XML 的可视化编辑器：入口保持声明的初始页面，include 子文件自动定位到该文件中声明的第一个页面。右键“打开 UI 源码”调用 `kakera.ui.source` 打开原 XML 文本编辑器。UI 结构损坏导致 include 无法遍历时只回退显示入口；不会为了导航猜测、复制或改写文件。
 
 ## 预览边界
 
@@ -75,9 +79,9 @@
 
 扫描相邻引擎 v0.9.0 的 `src/app/lifecycle.rs`、`src/interface/presentation.rs`、`src/app/ui_media.rs`、`src/controller.rs`、`src/save.rs`、demo 与 API 第 31–32 节。story 8/UI 3 保留，save 升到 9，demo content-version=9，KPAK 1/2 不变。frame 视频、`ctx.skipVideo` 和 `game.videoPlaying/game.videoSkippable` 已删除；视频只允许出现在 UI `ui-media.sequence` 中。
 
-当前幕属性底部提供“幕结束后（离开时）”：选择“打开页面”并选择目标，生成独立 `on.frameExit` 中的 `ctx.open`。保留原 Advance/Choice 后续与变量更新，只有正常路线验证成功、确实离开幕时才交接；结束幕不会凭空触发退出，自循环仍按引擎规则触发。
+当前幕属性底部提供“幕结束后（离开时）”：选择“打开页面”并选择目标，生成独立 `frame("幕").exit` 中的 `ctx.open`。保留原 Advance/Choice 后续与变量更新，只有正常路线验证成功、确实离开幕时才交接；结束幕不会凭空触发退出，自循环仍按引擎规则触发。
 
-UI 页面的“页面属性”底部提供“页面结束后（关闭时）”：选择“续接指定幕”生成 `on.screenClose` 的 `ctx.resume(幕)`，选择“恢复待续剧情”生成 `ctx.resume()`，选择“打开页面”生成 `ctx.open(另一页面)`。目标只能是当前已声明页面或实际幕，不能选待连接占位；关闭后重开自身在表单与宿主均拒绝。页面须真正关闭才触发，演出自然结束/跳过后自动续接时，把序列 finish 设为 `close`；finish=`return` 不关闭页面。普通页面可用 route=`close` 的按钮关闭。
+UI 页面的“页面属性”底部提供“页面结束后（关闭时）”：选择“续接指定幕”生成 `ui("页面").bind("screen.close", ...)` 的 `ctx.resume(幕)`，选择“恢复待续剧情”生成 `ctx.resume()`，选择“打开页面”生成 `ctx.open(另一页面)`。目标只能是当前已声明页面或实际幕，不能选待连接占位；关闭后重开自身在表单与宿主均拒绝。页面须真正关闭才触发，演出自然结束/跳过后自动续接时，把序列 finish 设为 `close`；finish=`return` 不关闭页面。普通页面可用 route=`close` 的按钮关闭。
 
 两处均点击“保存结束后动作”后台验证并直接保存，选择“不添加动作”移除已识别的简单注册。新动作追加到已有声明脚本；既有单条固定 open/resume 回调只补丁调用节点，保留其他源码和调用旁注释。自定义/多条语句/共享函数/动态/重复或归属不明的注册保持只读，显示源码位置或原因，不自动接管。源码缓冲变化时重读，过期草稿拒绝保存；支持宿主撤销/重做。这些注册不进入剧情连线或按钮事件列表，`frameEnter`/`screenOpen` 等其他回调仍由源码维护。
 
@@ -85,7 +89,7 @@ UI 页面的“页面属性”底部提供“页面结束后（关闭时）”�
 
 旧 `frame.video` 在故事工作台显示错误诊断，旧 `game.video*` 绑定在 UI 编辑器给出源码警告并从绑定建议移除；画布不模拟视频、演出、生命周期或隐藏槽。每次保存仍由真实 v0.9.0 引擎校验，`flow-checkpoint.json`、`ui-audio.json` 与玩家槽位不进入冻结代次或发行包。编辑器不写隐藏槽、不迁移 save 8、不执行 UI 返回。
 
-## 快捷弹窗、玩家快捷键与 HSV 配色（0.10.0，播放器 v0.10.0）
+## 快捷弹窗、玩家快捷键与 HSL 配色（0.10.0，播放器 v0.10.0）
 
 扫描依据为相邻 `kakera-avg-rust` v0.10.0（提交 `9924e85`）的 `src/color.rs`、`src/interface/palette.rs`、`src/app/colors.rs`、`src/shortcuts.rs`、`src/app/shortcuts.rs`、`src/interface.rs`、`src/interface/render.rs`、demo `ui/confirmation.xml`、`ui/shortcuts.xml`、`ui/colors.xml`，以及 API 第 33–35 节和 UI 扩展性验收。story 8 / UI 3 / save 9、KPAK 1/2 与 demo content-version=11 不变；`keybindings.json` 和 `ui-colors.json` 是玩家偏好，匹配播放器负责加载、校验和原子保存，编辑器既不读取也不写入它们，冻结代次和发行包按文件名大小写不敏感排除。
 
@@ -105,7 +109,7 @@ UI 页面的“页面属性”底部提供“页面结束后（关闭时）”�
 </screen>
 ```
 
-确认动作有三种：`route="close"`、调用已注册普通事件、或生成 `ctx.quit()` 事件（自动选择不冲突的事件名）。遮罩、面板、按钮尺寸按画布居中计算，全部使用现有控件属性和短 ID。标题留空时不生成标题 label；取消始终 `route="close"`。工具不自动创建打开弹窗的按钮/事件，也不把正文改为绑定；作者可继续用属性检查器改成 `bind`/`visible` 或添加入口。`ctx.quit()` 只在普通 `on.ui` 中合法，不写剧情、存档或玩家偏好；真实退出补写由播放器负责。
+确认动作有三种：`route="close"`、调用已注册普通事件、或生成 `ctx.quit()` 事件（自动选择不冲突的事件名）。遮罩、面板、按钮尺寸按画布居中计算，全部使用现有控件属性和短 ID。标题留空时不生成标题 label；取消始终 `route="close"`。工具不自动创建打开弹窗的按钮/事件，也不把正文改为绑定；作者可继续用属性检查器改成 `bind`/`visible` 或添加入口。`ctx.quit()` 只在普通 `ui("目标").bind(...)` 中合法，不写剧情、存档或玩家偏好；真实退出补写由播放器负责。
 
 ### 玩家快捷键
 
@@ -120,27 +124,37 @@ UI 页面的“页面属性”底部提供“页面结束后（关闭时）”�
 
 “动作”只列 `advance` / `fast_forward` / `skip_sequence`。绑定输入接受作者大小写并规范化：修饰键固定 Ctrl、Alt、Shift 顺序，主键为文档 token 表，最多 64 字节 ASCII；拒绝 Escape、Meta/Windows、Ctrl+Alt、系统保留组合、重复 token、空白和裸 `+`。留空绑定写 `null` 表示禁用该键盘动作；编辑器逐条校验 token 和保留组合，跨动作的按住前缀冲突、整批交换和最终偏好写入由匹配播放器事务校验。
 
-捕获结果事件通过 `ctx.value` 收到规范绑定，`ctx.item.action` 收到动作 ID；编辑器只在表单中关联已注册普通 `on.ui`，不实现捕获状态机，也不自动写文件。作者通常用 UI string 保存草稿，再由“应用”按钮生成 `keybinding` 事件。设计画布把 `shortcuts.advanceLabel`、`fastForwardLabel`、`skipSequenceLabel`、`captureText`、`captureActive` 和 `shortcuts.bindings.*` 作为默认示例值预览；显示 Label 只用于界面，不能当存储格式回解析。
+捕获结果事件通过 `ctx.value` 收到规范绑定，`ctx.item.action` 收到动作 ID；v0.11.0 起结果事件必须注册在 `$host`（`ui("$host").bind(结果事件, …)`），编辑器只在表单中关联该目标，不实现捕获状态机，也不自动写文件。作者通常用 UI string 保存草稿，再由“应用”按钮生成 `keybinding` 事件。设计画布把 `shortcuts.advanceLabel`、`fastForwardLabel`、`skipSequenceLabel`、`captureText`、`captureActive` 和 `shortcuts.bindings.*` 作为默认示例值预览；显示 Label 只用于界面，不能当存储格式回解析。
 
-### 三角 HSV、配色槽位与 color-bind
+### HSL 方形、配色槽位与 color-bind
 
 `palette` 只能声明在 UI 根级（入口或 include 子文件均可），槽位 ID 为 `[a-z][a-z0-9_]{0,63}`，每项必需 `initial`，装配后全局唯一、最多 32 个。编辑器的“配色槽位”区域可新增、改初值或删除；ID 创建后固定，删除会先检查控件 `color-bind` 与已识别 `colorPreference` 事件。未覆盖的动态 JS 引用交给真实引擎校验，编辑器不猜。
+
+palette 与 UI string 分开是匹配引擎的设计，不是编辑器另造模型：`color-picker` 的 `value` 只接受 `ui.<string>` 草稿，不能直接绑定 `colors.<槽位>`；`palette` 保存作者默认和玩家覆盖，`color-bind` 只读取槽位，持久化由作者的 `ctx.colorPreference(slot, draftOrNull)` 提交。常见写法是页面打开时把 `ctx.colors[slot]` 复制到草稿，选色器更新草稿，应用时再写回槽位。编辑器提供 `color-bind` 和 `colorPreference`，不把两个命名空间合并，也不在静态预览中写玩家偏好。事件向导的“保存颜色覆盖”可选择固定颜色、作者默认（`null`）或读取已声明的 UI string 变量，生成 `ctx.colorPreference("槽位", ctx.ui.变量)`；不能写成点号的 ID 使用 `ctx.ui["变量"]`。
 
 `color-picker` 的编辑约束与引擎一致：
 
 - 必需 `value`，且只能指向已声明 UI string；该变量初始值必须能解析为 `#RRGGBB` 或 `#RRGGBBAA`。
-- 必需 `event`，必须是已注册普通 `on.ui`。
+- 必需 `event`，必须是绑定到该控件自身的普通注册（`ui("控件ID").bind(...)`）。该事件只有在直接调用 `ctx.setUi("草稿变量", ctx.value)` 时才会提交候选；否则播放器在松开后回到绑定变量的已提交值。添加控件时“更新事件”留空会自动创建这个回调；事件向导也有“设置 UI 变量（使用控件当前值）”动作可手动创建或修复。
+- 编辑器会显示两类解析注意事项：事件写入的 UI 变量与 `value` 不一致，或事件是 `open`/`colorPreference` 等不会调用 `ctx.setUi` 的固定动作。手写共享函数或动态提交无法证明时不误判，仍以匹配播放器为准。
 - 可选 `alpha="true|false"`，默认显示透明条；隐藏 alpha 条不强制改写原颜色的 alpha。
-- 宽、高至少 128×224；整个 UI 最多 8 个；不能放入 repeat；不接受子控件、图片、region、route、color 或未知属性。
+- `alpha=false` 时宽高至少 128×128；`alpha` 默认/true 时色盘直径至少 128，即高度至少 154（推荐 256×256 / 256×282）；整个 UI 最多 8 个；不能放入 repeat；不接受子控件、图片、region、route、color 或未知属性。
+- 色盘直径 `D=min(width,height−R)`，`R=alpha?26:0`；环、正方形与可选 alpha 条作为一组在控件外矩形内居中，alpha 条高 18、距色盘 8、左右各留 8、宽 `width−16`。控件自身只绘制环、正方形、可选 alpha 条和焦点/禁用反馈，**没有内置颜色预览或 HEX 文本**；预览用 `color-bind` 面板/图片、HEX 用 `bind` label 读取同一草稿独立组合。控件矩形内留白不启动选色、不改色。
 - 拖动只产生候选颜色；事件值规范为九个 ASCII 字符的 `#RRGGBBAA`，由作者回调 `ctx.setUi` 决定是否更新绑定。外部 setUi、打开页面、读档和改布局不回发事件。
 
-颜色属性（`color`、palette 初值、`colorPreference` 事件）使用文本加 HSV 色盘编辑：色相环包围固定方向 SV 三角，三角 H 顶点为当前色相纯色、W 为白、B 为黑；可选 alpha 条。组件按编码 sRGB 的 HSV 计算，输出大写十六进制并保留 alpha=0 时的 RGB；这些数学只用于编辑/预览，最终显示由匹配播放器校验。画布上的 `color-picker` 是只读示意图，不能拖动指针或获取焦点。
+颜色属性（`color`、palette 初值、`colorPreference` 事件）使用文本加 HSL 色盘编辑：色相环包围正方形，横向 S 从 0 到 1，纵向 L 从上到下为 1 到 0；上白、下黑、左侧灰阶、右侧中点为当前纯色，可选 alpha 条。整个方形及边界均可点击，拖出后沿两轴夹取，释放时处理最终位置。黑白端点保留 H/S，灰色保留 H，自身 RGBA 回显不丢失浮点标记；外部更改颜色时重新定位。方向键可调色，Shift 加大步长，Esc/失焦/只读取消手势；隐藏 alpha 时仍保留原透明度。组件按编码 sRGB HSL 计算，输出大写十六进制并保留 alpha=0 时的 RGB；这些数学只用于编辑/预览，最终显示由匹配播放器校验。画布上的 `color-picker` 按同一 `D=min(W,H−R)` 几何居中绘制环/方形/可选 alpha，不绘制内置预览或 HEX；它是只读示意图，不能拖动指针或获取焦点。
 
 `color-bind` 可用于 panel、image、nine-patch、label、button、toggle，与静态 `color` 互斥，来源只能是 `ui.<string>` 或 `colors.<槽位>`；不支持 scene、repeat 容器、slider 或任意 JS 表达式。设计画布按当前 palette 初值/UI string 初值着色：panel/image 显示 tint 近似，label/toggle 显示文字颜色，button 只显示背景 tint 并把文字保持默认白色；nine-patch 用半透明覆盖近似整段 tint，精确分段结果需试玩。`colors` 本身只是 JS 只读快照，不作为普通 `bind` 的 XML 绑定源。
 
+### UI 变量删除与颜色覆盖来源（0.10.1 同版本增量）
+
+- **删除 UI 变量**：左侧“UI 变量”条目提供“编辑/删除”。删除只移除声明文件 `<variables>` 中的原标签；存在控件 `bind`/`value`/`visible`/`enabled`/`image-bind`/`region-bind`/`color-bind`/`text-key-bind`、`text-arg`、入口 `title-bind`/`title-key-bind` 或已识别 `setUi`/`colorPreference` 事件引用时拒绝并列出文件/行；脚本中直接 `ctx.ui.变量`、`ctx.setUi("变量", ...)` 以及无法证明名称的动态 `ctx.ui[...]`/`ctx.setUi(名称)` 也拒绝删除。扫描覆盖直接成员访问和调用，不解析先把 `ctx`/`ctx.setUi` 赋给其他名称的间接写法；匹配播放器的 `--check` 不执行事件回调，因此这不只是依赖引擎的静态检查。
+- **颜色覆盖来源**：事件向导的“保存颜色覆盖”新增“颜色来源”，可写固定颜色、作者默认（`null`）或读取已声明 UI string 变量；后者生成 `ctx.colorPreference("槽位", ctx.ui.变量)`，不能写成点号的 ID 使用 `ctx.ui["变量"]`。变量初值不是合法颜色时只显示解析注意事项，不阻止保存；实际应用仍由播放器解析并在失败时回滚。编辑器不合并 palette 与 UI string 两层，也不写 `ui-colors.json`。
+- **事件动作名称**：动作列表不再附带版本号后缀，只保留功能名称。
+
 ### 验证范围
 
-新增的源码/表单/浏览器回归覆盖 palette 解析与预算、color-picker 尺寸/重复/repeat/绑定限制、color-bind 互斥、快捷键规范化与保留组合、快捷弹窗生成、HSV 色盘交互和快捷键事件写入。真实 v0.10.0 `--check` 与 KPAK 1/2 集成工程包含 palette、color-bind、color-picker、快捷键捕获/绑定/重置、颜色偏好和 `ctx.quit` 弹窗，证明生成内容可被匹配引擎接受；实际按键捕获、焦点清理、跨动作冲突、偏好文件写入/回滚和 D3D11 原生窗口仍需在真实播放器中验收。静态画布不替代这些运行态检查。
+新增的源码/表单回归覆盖 palette 解析与预算、color-picker 尺寸/重复/repeat/绑定限制、color-bind 互斥、快捷键规范化与保留组合、快捷弹窗生成、自动/手动 `ctx.setUi` 更新事件、快捷键事件写入、UI 变量删除引用保护和颜色覆盖读取 UI string；浏览器回归覆盖 HSL 色盘交互以及画布/工作台交互。真实 v0.10.x `--check` 与 KPAK 1/2 集成工程包含 palette、color-bind、color-picker、自动生成的 setUi 事件、快捷键捕获/绑定/重置、颜色偏好（固定颜色与 `ctx.ui` 变量来源）和 `ctx.quit` 弹窗，证明生成内容可被匹配引擎接受；实际按键捕获、焦点清理、跨动作冲突、偏好文件写入/回滚、`ctx.ui` 运行态解析和 D3D11 原生窗口仍需在真实播放器中验收。静态画布不替代这些运行态检查。
 
 ## 界面重构（0.8.0）
 
@@ -154,7 +168,7 @@ UI 编辑器保留页面/层级树、设计画布和检查器三栏，但新增�
 
 ## 从 UI 显式开始/恢复剧情（0.8.2，播放器 v0.9.1）
 
-“新建事件”的动作“开始 / 恢复剧情（可指定起始幕）”写入普通 `on.ui`：
+“新建事件”的动作“开始 / 恢复剧情（可指定起始幕）”写入普通 `ui("目标").bind(...)`：
 
 ```javascript
 // 可选先打开主界面，再从指定幕开始；也可省略页面。
@@ -169,9 +183,9 @@ on.ui("continue-story", ctx => { ctx.open("hud"); ctx.resume(); });
 
 本次只新增控件事件/生命周期写入，不新增 XML 属性或 JS API；宿主仍以匹配 v0.9.1 引擎的验证、隐藏槽原子写和运行结果显示为准。
 
-## 事件编辑/删除与幕 ID（0.8.3）
+## 事件编辑/删除与幕 ID（0.8.3 / v0.11.0 目标作用域）
 
-“交互事件”列表中的简单 `on.ui` 注册现在有 **编辑/删除**。编辑会预填事件名、动作、目标和起始幕，保存时替换该注册；改名同步按钮 `event` 与页面 `background-click/background-right-click`。删除前必须解除这些引用；手写、带注释、重复事件名或非固定回调保持源码维护，不能可视化改写或删除。事件源范围、目标校验与动作白名单见 [18 使用说明](18-visual-editor-guide.zh-cn.md) 和 [13 实时映射](13-live-logic-mapping.zh-cn.md)。
+“交互事件”列表中的固定注册有 **编辑/删除**，v0.11.0 起列表显示“目标 · 事件名”。编辑会预填注册目标、事件名、动作、命令目标和起始幕，保存时替换该 `ui("目标").bind(...)` 注册；改名只同步该目标自己的控件 `event` 或页面 `background-click/background-right-click`，不批量改其他目标上的同名事件。删除前必须解除该目标的引用；手写、带注释、重复目标/事件或非固定回调保持源码维护，不能可视化改写或删除。事件源范围、目标校验与动作白名单见 [18 使用说明](18-visual-editor-guide.zh-cn.md) 和 [13 实时映射](13-live-logic-mapping.zh-cn.md)。
 
 幕 ID 重命名在故事工作台完成，不在 UI 编辑器；它更新 `<frame>` ID/name、入口和已识别剧情目标，遇到动态路线或生命周期/`ctx.resume` 引用会拒绝。UI 事件中的“先打开页面/起始幕”仍由同一工作台保存链写入。
 
@@ -190,3 +204,22 @@ on.ui("continue-story", ctx => { ctx.open("hud"); ctx.resume(); });
 - 单入口可留空生成 `ctx.restart()`，多入口留空会在保存前拒绝。
 
 播放器启动先显示 UI 初始页面，不自动进入剧情；`game_started=false` 时没有当前幕，调试面板显示空栈，直到 UI 事件显式 resume/restart 或读档。UI 编辑器的静态画布不执行该进入动作；真实条件/生命周期/调试验证必须从实际 UI 起点进入。详见 [18 使用说明](18-visual-editor-guide.zh-cn.md) 和上游 `multiple-entries-implementation-plan`。
+
+## 游戏本地化（0.10.1，播放器 v0.10.1）
+
+UI 编辑器读取全部已声明文本语言/语音语言和 FTL，并在 `工程设置 → 本地化` 提供默认语言、文本语言显示名、消息新增/编辑/删除、语音语言与 clip 映射编辑。清单、FTL、字体和音频仍以源码为事实来源；编辑器可以编辑既有文件，但不自动创建新的清单/FTL 或开启本地化。
+
+- **文字控件**：label/button/toggle 的 `text-key` 引用默认文本语言消息；`text-key-bind` 只接受已声明 UI string。二者与 `text`/`bind` 四选一，切换时写入空属性删除旧来源；`text`/`bind` 的字面量行为保持不变。
+- **参数**：key 控件可添加最多 16 个 `text-arg`，name 唯一，`value`/`bind` 二选一；bind 仅允许 UI 标量、`cg.total/unlocked`、`saves.page/pages`、`locale.text/voice`。检查器按默认及全部已声明语言的消息参数契约校验，保存时只写选中控件的参数子节点。
+- **画廊与窗口标题**：画廊条目可写 `title-key`；入口 UI 根可写 `title-key`/`title-key-bind`，标题设置提供来源切换。专用 CG 的 ID 约束、`profile.json` 解锁和玩家偏好仍由匹配播放器维护。
+- **locale 绑定/数据**：绑定建议和 repeat 示例加入 `locale.*`、`textLocales`、`voiceLocales`；事件向导“切换文本/语音语言”写 `ctx.locale` 固定调用，目标必须是该通道已声明规范 ID 或 null。
+- **预览**：画布按默认文本语言和初始 UI 变量格式化静态 key/参数；缺失消息显示 `⟦key⟧`。不执行系统语言探测、`ctx.locale` 事务、字体安装、音频停止/替换、偏好写盘或隐藏槽恢复。
+
+本地化不会改变 story 8/UI 3/save 9 或 UI 页面/include 规则；`language.json` 不进入冻结代次和发行包。详细接口、预算、语音映射与限制见 [19 游戏本地化](19-localization.zh-cn.md)。
+
+## v0.11.0 目标作用域事件（引擎 v0.11.0）
+
+- UI 回调注册从全局 `on.ui("事件", 回调)` 改为 `ui("控件模板ID或页面ID").bind("事件", 回调)`。引擎按（目标、事件名）校验：每个 XML 事件必须恰好有一个注册，注册目标必须真实存在且事件与 XML 完全一致；两个控件可以保留同一个 `event` 并各自绑定不同回调。编辑器不再按事件名去重或批量改名。
+- 事件列表显示“目标 · 事件名”，新建事件必须先选择目标。`$game` 只接受 `game.enter`，`$host` 只接受非保留的捕获结果事件；`screen.open`/`screen.close` 由页面生命周期编辑维护，不出现在普通控件事件列表。目标为页面时，普通事件对应 `background-click`/`background-right-click`。
+- 新增控件的事件不能引用另一个控件上的同名注册：编辑器从可证明的固定回调复制到新控件自己的 `ui("新ID").bind(...)`，并在同一事务写入 `event`。`color-picker` 自动生成的事件也绑定自身控件；没有可复制回调时拒绝新增该事件，而不是生成孤立注册。
+- 旧 `on.*` 注册已被引擎移除且无别名；编辑器只显示迁移诊断，不把旧注册当作可编辑路线，也不自动整文件迁移。命名、删除与 `captureShortcut` 结果事件的校验均按新目标模型执行；真实装配由匹配 v0.11.0 播放器 `--check` 最终验证。

@@ -1,5 +1,6 @@
+import type { LocalizationCatalog } from './localization';
 export type ValueType = 'int' | 'bool' | 'string';
-export interface Variable { id: string; type: ValueType; initial: string; min?: string; max?: string }
+export interface Variable { id: string; type: ValueType; initial: string; min?: string; max?: string; label?: string; labelKey?: string }
 export type Expr = { kind: 'constant'; type: ValueType; value: string } | { kind: 'variable'; id: string } | { kind: 'compare'; op: '===' | '!==' | '<' | '<=' | '>' | '>='; left: Expr; right: Expr } | { kind: 'and' | 'or'; left: Expr; right: Expr } | { kind: 'not'; value: Expr };
 export interface Update { op: 'set' | 'add'; variable: string; value: Expr }
 export interface RouteBranch { when: Expr; target: string }
@@ -17,18 +18,22 @@ export function describeExpression(expr: Expr): string {
 export interface Span { start: number; end: number }
 export interface Frame {
   ref: string; id?: string; name?: string; text: string; speaker: string; visual: string;
-  audio: Record<string, string>; options: { id: string; text: string }[]; file: string; line: number; pending?: boolean;
+  audio: Record<string, string>; options: { id: string; text: string; textKey?: string }[]; file: string; line: number; pending?: boolean;
+  /** v0.10.1 localization key; when present the displayed text comes from the default text locale. */
+  textKey?: string;
   /** Legacy frame-level video removed in Kakera v0.9.0; surfaced as an error, never generated. */
   legacyVideo?: boolean;
 }
 export interface Asset { id: string; kind: string; src: string; file: string }
 export interface Portrait { image: string; character: string; slot: string; live2d?: string }
 export interface Visual { id: string; background: string; portraits: Portrait[]; cg?: string }
-export interface GameTitle { file: string; text: string; binding?: string; variableFile?: string }
+export interface GameTitle { file: string; text: string; binding?: string; variableFile?: string; /** v0.10.1 static message key. */ textKey?: string; /** v0.10.1 UI string variable holding the message key. */ keyBinding?: string; keyVariableFile?: string }
 export interface CharacterLook { visualId: string; image: string; live2d?: string; file: string }
 export interface Story {
   id: string; entry: string; /** Canonical refs from the whitespace-separated story entry list. */ entries?: string[]; contentVersion: string; frames: Frame[]; assets: Asset[];
-  visuals: Visual[]; variables: Variable[]; characters: { id: string; name: string }[]; scripts: string[]; files: string[];
+  visuals: Visual[]; variables: Variable[]; characters: { id: string; name: string; nameKey?: string }[]; scripts: string[]; files: string[];
+  /** Read-only author localization catalog; absent when the game has no localization declaration. */
+  localization?: LocalizationCatalog;
 }
 export function storyEntries(story: Story): string[] { return story.entries?.length ? story.entries : story.entry ? [story.entry] : []; }
 export interface Issue { file: string; line: number; message: string; severity: 'error' | 'warning' }
@@ -94,7 +99,7 @@ export function validateStory(story: Story): Issue[] {
       if (seen.has(ref)) issues.push({ file: f.file, line: f.line, message: `重复幕引用：${ref}`, severity: 'error' });
       seen.add(ref);
     }
-    if (!f.text.trim()) issues.push({ file: f.file, line: f.line, message: '台词不能为空', severity: 'error' });
+    if (!f.text.trim() && !f.textKey) issues.push({ file: f.file, line: f.line, message: '台词不能为空', severity: 'error' });
     if (!f.id) issues.push({ file: f.file, line: f.line, message: '未固定幕 ID，重新打包可能影响旧存档', severity: 'warning' });
     if (f.legacyVideo) issues.push({ file: f.file, line: f.line, message: 'Kakera v0.9.0 已移除 frame.video；请把视频改为 UI 的 ui-media.sequence.video', severity: 'error' });
     if (f.visual && !story.visuals.some(v => v.id === f.visual)) issues.push({ file: f.file, line: f.line, message: `画面不存在：${f.visual}`, severity: 'error' });

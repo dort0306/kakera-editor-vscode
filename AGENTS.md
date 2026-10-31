@@ -4,7 +4,7 @@
 
 ## 1. 先确认事实与任务边界
 
-- 当前基线为 Kakera 播放器 v0.10.0：story 8、UI 3、save 9，调试协议 v1，demo content-version=11。插件已有 0.10.0 开发预览实现；实际能力和未完成项见 [实现记录](doc/12-implementation-status.zh-cn.md)，不要把全部规划当成交付。
+- 当前基线为 Kakera 播放器 v0.11.0：story 8、UI 3、save 9，调试协议 v1，demo content-version=11，JS 注册使用 `frame(id).advance/choice/end` 与 `ui(id).bind(event, callback)`。插件已有 0.11.0 开发预览实现；实际能力和未完成项见 [实现记录](doc/12-implementation-status.zh-cn.md)，不要把全部规划当成交付。
 - 本文件初次编写时仓库只有文档与许可证，没有插件源码、引擎源码、构建系统或测试。开始任务时重新检查实际文件，不把规划目录和命令当作已经存在。
 - 当前实际检查命令为 `npm run check`、`npm run test:browser`、`npm run test:integration`、`npm run test:host` 和 `npm run package`。浏览器测试需本机 Edge/Chromium；引擎/宿主检查需要已准备的匹配工具/本机 VS Code，详见 README。独立 Rust wrapper 仍未实现，当前通过真实 CLI 复用引擎。
 - 本仓库负责 VS Code 插件及其内容工具适配，不默认承担上游引擎改造、Code-OSS 分叉或独立桌面壳。
@@ -86,7 +86,7 @@
 - 断点停在候选提交前，区分当前幕与 `pending_frame`，包括自循环；`next` 不保证每次跨一幕。
 - 不提供引擎没有的任意 jump、setVariables、eval、条件断点、JS 行级步进或推送事件。变量面板只读。
 - 试玩从入口启动，使用独立 save-dir；只管理自己启动的播放器。既有会话不悄悄替换成新代次。
-- 使用匹配的 `kakera-pack` 及 v0.10.0 依赖选择，额外文件只走 `kakera.package.json` 显式文件清单，保留排除规则。
+- 使用匹配的 `kakera-pack` 及 v0.11.0 依赖选择，额外文件只走 `kakera.package.json` 显式文件清单，保留排除规则。
 - 包和发行候选位于内容根之外，失败保留旧产物；发布前全包检查、许可证/隐私清单检查及源码外运行验证。公开上传需另有任务授权。
 
 ## 8. 验证与交付
@@ -99,6 +99,8 @@
 - 构建验证 VSIX 安装、实际文件白名单、KPAK 全量自检、无源码/AI 服务的独立游戏运行；无工具或授权素材时明确未执行项。
 - 避免给低影响文档改动添加无关测试。实现测试覆盖可观察行为与风险，不只复述实现。
 - 交付说明包含改了什么、实际检查、未验证部分和剩余依赖；能力实现后同步相关文档，不把计划阈值标成实测值。
+- 打包 VSIX 时若用户未指定版本号，默认把当前 `package.json` 的 patch 位 +1（x.y.z → x.y.(z+1)），并同步 `package-lock.json`、`package` 脚本的制品名、README 当前版本与 CHANGELOG；匹配播放器/引擎版本（vX.Y.Z）不随插件 patch 自动变化。制品输出到 `artifacts/kakera-editor-vscode-x.y.z.vsix`，交付时记录实际文件数和 SHA-256。
+- 插件版本号 `x.y.z` 的 `x.y` 部分必须与匹配的上游引擎保持一致：上游引擎升级到 `vX.Y.*` 时，插件同步到 `X.Y`；`z` 只表示同一引擎兼容范围内的插件自身修复或增量。准备工具、工程清单/调试/构建版本检查和文档当前版本都要匹配该 `x.y`。
 
 ## UI 演出增量约束（0.6.2）
 
@@ -109,7 +111,7 @@
 ## 幕/页面生命周期与隐藏交接（0.7.0）
 
 - v0.9.0 起视频只在 UI `ui-media.sequence` 中；frame 级 `<video>`、`ctx.skipVideo`、`game.videoPlaying/game.videoSkippable` 已移除。编辑器不得重新生成，并应显示可定位的迁移诊断。
-- `on.frameEnter/Exit` 与 `on.screenOpen/Close` 是独立生命周期注册，不是 `on.advance/choice/end` 或按钮事件；静态映射可显示源码位置并保护被引用幕/页面，不得把它们伪造成剧情边。
+- `frame(id).enter/exit` 与 `ui(id).bind("screen.open"/"screen.close")` 是独立生命周期注册，不是 `frame(id).advance/choice/end` 或按钮事件；静态映射可显示源码位置并保护被引用幕/页面，不得把它们伪造成剧情边。
 - `ctx.present/resume` 受隐藏交接事务约束；事件向导只追加白名单调用并先校验页面/实际幕目标。编辑器不执行交接、不重放生命周期、不写隐藏槽。
 - 固定隐藏 `flow-checkpoint.json`（schema 1）和玩家 `ui-audio.json` 一样排除出冻结代次、监控和发行包；save 9 的 `resume_to`、UI 返回历史和条目校验由匹配播放器负责，编辑器不迁移旧档。
 - 删除幕/页面前检查生命周期与静态 `ctx.resume/present` 引用；动态目标无法证明时保守拒绝或保留诊断，不替作者猜测。
@@ -122,6 +124,14 @@
 - 界面重构不得改写 XML/JS 内容、命令 payload、保存事务、冻结代次或引擎契约；视觉截图和浏览器 DOM 回归不能替代真实 VS Code 宿主/播放器验收。
 - 图/画布拖动必须在真实工作台 DOM 中验证命中、移动和保存请求，不能只用独立组件或 jsdom 桩。开始拖动后即使宿主重绘导致 pointer capture 丢失，也应继续手势或用窗口级 pointerup 提交，不得静默回弹/卡住；拖动结束要清理状态，普通点击和连线不能被误判为拖动。
 
+## 工程图标与视觉色调（0.10.4）
+
+- 根目录 `kakera.svg` 是唯一图形来源，四个碎块与四个品牌色（`#0058E0`/`#008AFF`/`#0060A8`/`#FF6FE3`）不要自行改色或另画标识。`resources/kakera.svg` 是派生出的 24×24 单色标记，`resources/kakera.png` 是同一图形的 256×256 渲染，分别用于 Activity Bar 与清单 `icon`；更换图形时三处（含 Webview 内联 `KakeraMark`）一起改。
+- VS Code 把扩展 Activity Bar 图标当 alpha 掩膜着色。图标文件必须保持碎块之间的透明缝隙和单一填充色，不能改成位图、渐变、滤镜或大面积实心块，也不要假设文件里的颜色会显示出来。
+- 主题颜色走 `style.css` 的 `--k-*` 令牌（含 `--k-mark-*` 品牌色与 `--k-accent-2`）；深色与浅色主题各自配平，不要在组件里写死主题相关颜色。品牌色在两种主题下保持同一值。
+- 需要图标时优先复用 `icons.tsx` 的内联 SVG（`currentColor`、无外部字体/网络图标），面板/抽屉标题用 `.panel-icon` 图标块；新增图标要同步 `IconName` 与 `paths`。加图标不得改变按钮文字、`aria-label`、CSS 选择器和测试选择器（测试用 `textContent` 精确匹配按钮文案）。
+- 视觉改动只属于呈现层：不改 XML/JS 写回、命令 payload、保存事务、冻结代次和引擎契约。`contributes.customEditors` 没有图标字段，不要用文件图标主题接管或伪造自定义编辑器标签图标；浏览器截图与 DOM 回归不能替代真实 VS Code Activity Bar/标签页验收。
+
 ## UI 显式起始幕与末幕退出（0.8.2 / 引擎 v0.9.1）
 
 - 控件事件和自动 `screenClose` 复用 `ctx.resume(frame?)`；显式幕用于重新开始/进入隐藏剧情，省略时读取隐藏槽 continuation。首次没有隐藏槽且无目标由播放器拒绝，编辑器不伪造隐藏状态。
@@ -131,8 +141,8 @@
 
 ## 事件编辑与幕 ID 重命名（0.8.3）
 
-- 事件修改/删除只作用于可证明的单一 `on.ui("字面量", (ctx) => { 固定动作 })` 注册；带注释、自定义语句、重复名称或非字面量名称的注册保留源码。改名要同步所有控件 `event` 和页面 `background-click/background-right-click`；删除前必须确认无这些引用。
-- 幕 ID 重命名要同步 `<frame>` ID/name、入口、已识别推进/选项目标和连接。存在动态/未识别路线、`on.frameEnter/Exit`、`ctx.resume` 等引用时拒绝，不做猜测性替换；分镜手动位置迁移可以暂不处理，但不能改错源代码。
+- 事件修改/删除只作用于可证明的单一 `ui("目标").bind("字面量事件", (ctx) => { 固定动作 })` 注册；带注释、自定义语句、重复目标/事件或非字面量名称的注册保留源码。改名只同步该注册目标对应的控件 `event` 或页面 `background-click/background-right-click`，不批量改其他目标上的同名事件；删除前必须确认该目标无这些引用。
+- 幕 ID 重命名要同步 `<frame>` ID/name、入口、已识别推进/选项目标和连接。存在动态/未识别路线、`frame(id).enter/exit`、`ctx.resume` 等引用时拒绝，不做猜测性替换；分镜手动位置迁移可以暂不处理，但不能改错源代码。
 - 所有改写走已有 revision/WorkspaceEdit/撤销/保存链；新增说明文档必须与实际按钮、限制和验证结果一致，不能把规划能力写成已交付。
 
 ## CG 资源与共享解锁（0.8.4 / 引擎 v0.9.1）
@@ -155,6 +165,7 @@
 - Activity Bar 的 `kakera.project` 使用原生 `TreeView`，不得用 Webview 模拟侧栏。分类、图标、计数、描述、工具提示和右键菜单都使用 VS Code API/主题，保持与本体一致。
 - 条目必须携带稳定 `id`、`contextValue` 和明确的命令参数；分类/人物/变量/幕的新建、删除和编辑必须走 source/session 事务，不能在树里维护第二份内容。
 - 侧栏在激活时加载，并在文档/文件变化后刷新；命令修改后也必须更新树，失败保留旧树。真实宿主回归要检查贡献命令、菜单 when 条件和树激活加载。
+- “界面”分类按入口和 include 的实际 UI XML 列文件；左键以可视化编辑器打开对应文件，右键提供打开源码。不要用 Webview 或猜测文件列表代替 `uiFragments`/有界 UI 文件遍历；子文件定位只读取该文件已声明页面，不改写 XML。
 
 ## 变量编辑/删除（0.8.7）
 
@@ -165,7 +176,7 @@
 
 - `story.entry` 是至少一个空白分隔的 ID/name 列表；未知、空列表、重复或不同别名指向同幕都拒绝。列表顺序不代表默认进入；播放器首次只显示 XML 初始 UI，必须由 UI `ctx.resume("入口")`/`ctx.restart("入口")` 或读档显式选择。
 - 编辑器可增删起点、设为唯一入口；关系图所有起点都是根。删除/重命名入口幕只改列表中对应项，不覆盖其他起点。不得把列表第一项当自动入口。
-- `ctx.restart(frame)` 目标必须是已声明起点；多起始幕的无参 restart 拒绝。事件向导可先 `ctx.open(页面)` 再 restart/resume，但只有可证明的单个 `on.ui` 固定回调可重写。
+- `ctx.restart(frame)` 目标必须是已声明起点；多起始幕的无参 restart 拒绝。事件向导可先 `ctx.open(页面)` 再 restart/resume，但只有可证明的单个 `ui("目标").bind("事件", 固定回调)` 可重写。
 - 调试状态 `game_started=false` 时 `frame_id/frame_name` 为 null；未进入状态禁止推进/保存/自动播放。编辑器不伪造成已进入，也不写隐藏槽。
 - 真实播放器集成测试需要 UI 起始输入；测试辅助代码只能添加在测试工程/测试脚本中，不进入产品模板。静态 `--check` 不能替代真实起点选择后的 DAP/生命周期验证。
 
@@ -176,7 +187,32 @@
 
 ## UI 扩展：快捷弹窗、快捷键与 HSV（0.10.0 / 引擎 v0.10.0）
 
-- 快捷确认弹窗使用普通 XML 模态 `screen`、现有控件/颜色/绑定和 `route="close"`，不得新增固定原生对话框或动态执行字符串。`ctx.quit()` 只允许普通 `on.ui`；编辑器不触发 frameExit/screenClose、不写新手动槽或隐藏槽。
+- 快捷确认弹窗使用普通 XML 模态 `screen`、现有控件/颜色/绑定和 `route="close"`，不得新增固定原生对话框或动态执行字符串。`ctx.quit()` 只允许普通 `ui("目标").bind("事件", 回调)`；编辑器不触发 frameExit/screenClose、不写新手动槽或隐藏槽。
 - 玩家快捷键只写 `ctx.captureShortcut`、`ctx.cancelShortcutCapture`、`ctx.keybinding`、`ctx.resetKeybindings` 等普通 UI 命令；绑定须符合 v0.10.0 token/ASCII/保留组合/前缀冲突规则。`keybindings.json` 是玩家偏好，由匹配播放器加载和原子保存；编辑器不读取、不写入、不把显示 Label 当存储格式。冻结代次和发行包排除 `keybindings.json`/`ui-colors.json` 的大小写变体。
-- HSV/配色只使用 UI 3 扩展：`color-picker`（必需 UI string `value` 与普通 event，`alpha` 可选，≥128×224，最多 8 个，不能放入 repeat）、`color-bind`（panel/image/nine-patch/label/button/toggle，来源限 `ui.<string>`/`colors.<槽位>`，与 `color` 互斥）、根级 `palette`（`[a-z][a-z0-9_]{0,63}`，最多 32 个）。颜色值规范为未预乘大写 `#RRGGBBAA`；拖动只产生候选，由作者 `ctx.setUi` 决定提交。`ui-colors.json` 同样由匹配播放器维护，编辑器不创建或修改。
+- HSV/配色只使用 UI 3 扩展：`color-picker`（必需 UI string `value` 与普通 event，`alpha` 可选默认 true；`alpha=false` ≥128×128、默认/true ≥128×154，最多 8 个，不能放入 repeat）、`color-bind`（panel/image/nine-patch/label/button/toggle，来源限 `ui.<string>`/`colors.<槽位>`，与 `color` 互斥）、根级 `palette`（`[a-z][a-z0-9_]{0,63}`，最多 32 个）。颜色值规范为未预乘大写 `#RRGGBBAA`；拖动只产生候选，由作者 `ctx.setUi` 决定提交。色盘按 `D=min(width,height−R)`（`R=alpha?26:0`）居中，控件只绘制环/正方形/可选 alpha 条，不内置预览或 HEX；作者用 `color-bind`/`bind` 读取同一草稿组合展示，矩形内留白不启动选色。palette 与 UI string 是引擎的分层设计：选色器不能直接绑定槽位；新增/修复选色器时必须保证存在直接 `ctx.setUi(草稿, ctx.value)` 更新事件，不能把其它固定动作当成提交。`ui-colors.json` 由匹配播放器维护，编辑器不创建或修改。
 - 静态画布/预览只读初值与示例，不执行捕获、焦点、策略或偏好写入；真实按键所有权、冲突、回滚、DPI/指针与原生窗口必须由匹配播放器单独验收。工具升级时同步 `tools.json`、工程清单/调试/构建版本检查和真实 `--check`。
+
+## 游戏国际化与语言偏好（0.10.1 / 引擎 v0.10.1）
+
+- 游戏本地化默认关闭，仅由入口 `story.xml` 的 `<localization enabled="true" src="..."/>` 开启；关闭时禁止 src，章节不得重复声明。清单 schema 1、FTL、文本/语音语言、默认值和 key/参数契约属于实际内容源，不能另建 Webview 副本或自动启用。
+- 文本必须来自可证明的单一来源：frame `text key`、option `text-key`、character `name-key`、变量 `label-key`、UI `text-key`/`text-key-bind`/`text-arg`、画廊 `title-key`、根 `title-key`/`title-key-bind`。无 key 的字面量保持原样；不能同时写正文与 key，不能把动态 key 扩展到非 UI string 或 `item` 任意消息 ID。
+- 语言 ID 使用规范 Unicode language identifier，默认项必须属于对应集合；语音 key 必须被剧情 `audio.voice` 使用，默认语音覆盖全部使用项，字体/音频引用必须是已声明资源。编辑器读取/校验全部声明语言和 FTL，不执行 Fluent、系统语言探测或 `ctx.locale` 事务。
+- UI `text-arg` 最多 16 个且 name 唯一，只允许 UI 标量、`cg.total/unlocked`、`saves.page/pages`、`locale.text/voice`；参数集合需满足默认与全部已声明语言的实际消息。超 ±(2^53−1) 的 int 不作无损数值承诺，不隐式转浮点。
+- `language.json` 与 `keybindings.json`/`ui-colors.json` 等一样是匹配播放器维护的玩家偏好：不进入内容根监控、冻结代次、KPAK 或发布复制，不自动重写。编辑器只写清单/FTL/XML/JS，不写语言偏好、存档或隐藏槽。
+- 静态画布只按默认文本语言和初始 UI 变量格式化预览，显示缺失占位；真实系统匹配、字体字形、语音停止/切换、偏好原子写、截图 revision、隐藏恢复和跨进程读档必须由匹配播放器单独验收。工具升级同步 `tools.json`、工程清单/调试/构建版本检查、FTL/清单预算与真实 `--check`。
+
+## HSL 圆环与方形选色器（0.10.1 同版本增量）
+
+- 当前 `color-picker` 替换旧 HSV 三角形：采用编码 sRGB HSL，环调 H，方形横向 S=0…1、纵向上 L=1 下 L=0；整个方形含边界可点击，拖出按轴夹取且锁定手势区域，释放终点先处理再清理。
+- 黑/白保留 H/S，灰色保留 H；自身 RGBA 回显保留浮点标记，外部不同颜色重新定位，隐藏 alpha 不丢透明度或 RGB。编辑器属性色盘与只读画布示意同步，旧数学工具不参与当前选色器。
+- XML/JS、UI 3、RGBA、palette 和玩家偏好格式不变；不写玩家偏好，不新增旧形状开关。准备工具前重新构建含 HSL 的同版本源码并更新哈希；真实 DOM 点阵/拖动不替代播放器 DPI/键盘/偏好验收。
+- 0.10.3 起同步上游职责拆分：控件只绘制环/正方形/可选 alpha，不内置预览或 HEX；`alpha=false` 至少 128×128、默认/true 至少 128×154，色盘按 `D=min(W,H−R)`、`R=alpha?26:0` 居中。作者用 `color-bind` 面板/图片和 `bind` label 读取同一草稿组合预览/数值，矩形内留白不启动选色。静态画布应使用同一几何，不生成内置预览/HEX。
+
+## v0.11.0 新版 JS 注册 API（引擎 v0.11.0）
+
+- 剧情路由只写 `frame("幕ID").advance(targetOrRun)`、`frame("幕ID").choice("选项", targetOrRun, when?)`、`frame("幕ID").end()`；`targetOrRun` 是固定字符串或无副作用的同步回调。生命周期写 `frame(id).enter/exit` 与 `ui("页面").bind("screen.open"/"screen.close")`；全局进入钩子和捕获结果分别固定绑定 `ui("$game").bind("game.enter", …)`、`ui("$host").bind(结果事件, …)`。`frame.enter:`/`frame.exit:`/`screen.open:`/`screen.close:` 是保留事件编码，不得作为普通 XML 事件。
+- 事件注册键是结构化的（目标类别、目标 ID、事件名），不再是全局事件名：两个控件可以共享 `event` 名并各自绑定不同回调。编辑器读写必须保留目标，新增/改名/删除只作用于该目标 XML 控件 `event` 或页面 `background-click/background-right-click`，不得批量改其他目标上的同名事件。`$game`/`$host` 是保留虚拟目标，真实 UI 页面/控件不能使用这两个 ID。
+- 旧 `on.*` 已删除且没有别名；启动、`--check` 与打包都会带文件名和栈拒绝。静态分析遇到旧注册只给迁移诊断并暂停相关可视化改写，不把旧注册猜成新路由，也不自动整文件迁移；作者按上游 API 第 37.5 节迁移后重新加载。
+- 只接管可证明的顶层字面量注册：选择器保存到变量、动态目标、函数/循环/条件内注册、共享回调、注释混合、未知方法或非白名单动作都保留源码 Opaque。静态字符串目标需要加入更新或条件时，只把该参数替换为内联回调，其他语句和注释保持字节。
+- 引擎要求每个 XML 事件恰好一个注册。新建控件的事件不能在全局事件名上复用：编辑器必须从可证明的固定回调复制到新控件的 `ui("新ID").bind(...)`，`color-picker` 自动生成的 `ctx.setUi` 事件也必须绑定自身控件；没有可复制回调时拒绝，而不是生成孤立注册。普通事件列表不包含 `screen.open`/`screen.close`，它们由生命周期编辑负责。
+- 工具升级同步 `tools.json` 哈希、工程清单/调试/构建版本检查（0.11.0）、模板/测试新语法与真实 `--check`/KPAK 回归；静态源码测试不能替代匹配播放器的注册装配验证。玩家偏好（`keybindings.json`、`ui-colors.json`、`language.json` 等）仍由匹配播放器维护，编辑器不读写。

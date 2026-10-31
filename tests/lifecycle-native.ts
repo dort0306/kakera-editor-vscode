@@ -4,9 +4,9 @@ import assert from 'node:assert/strict';
 import { randomBytes } from 'node:crypto';
 import { emitRoutes } from '../packages/source/src/index';
 import { editUi } from '../packages/source/src/ui-source';
-import { launch } from '../packages/extension/src/tools';
+import { launch, plainDiagnostic } from '../packages/extension/src/tools';
 import { DebugClient } from '../packages/debug-adapter/src/client';
-import { addStartOverlay, clickStartOverlay, waitForStarted } from './start-player';
+import { addStartOverlay, clickStartOverlay, playerWindowFocus, waitForStarted } from './start-player';
 
 export async function verifyLifecycleEditor(player: string, root: string): Promise<void> {
   for (const mode of ['continue', 'frame', 'page'] as const) {
@@ -31,7 +31,7 @@ export async function verifyLifecycleEditor(player: string, root: string): Promi
     await fs.writeFile(tokenFile, token);
     let output = '', resolvePort!: (port: number) => void, rejectPort!: (e: Error) => void;
     const port = new Promise<number>((resolve, reject) => { resolvePort = resolve; rejectPort = reject; });
-    const running = launch(player, ['--project', content, '--save-dir', saveDir, '--debug-listen', '127.0.0.1:0', '--debug-token-file', tokenFile, '--no-audio', '--no-live2d'], text => { output = (output + text).slice(-16384); const match = /调试 API：127\.0\.0\.1:(\d+)/.exec(output); if (match) resolvePort(Number(match[1])); });
+    const running = launch(player, ['--project', content, '--save-dir', saveDir, '--debug-listen', '127.0.0.1:0', '--debug-token-file', tokenFile, '--no-audio', '--no-live2d'], text => { output = (output + text).slice(-16384); const match = /调试 API：127\.0\.0\.1:(\d+)/.exec(plainDiagnostic(output)); if (match) resolvePort(Number(match[1])); });
     const timer = setTimeout(() => rejectPort(new Error('生命周期测试未取得调试端口')), 15000);
     running.done.then(() => rejectPort(new Error('生命周期测试播放器提前退出')), rejectPort);
     let client: DebugClient | undefined;
@@ -46,10 +46,15 @@ export async function verifyLifecycleEditor(player: string, root: string): Promi
       assert.equal(handoff.variables.trust.value, '0');
       await fs.access(path.join(saveDir, 'flow-checkpoint.json'));
       await client.request({ type: 'resume' });
+      console.log(`LIFECYCLE RUN: ${mode}, player PID ${running.child.pid}`);
       const expected = mode === 'continue' ? 'journey' : 'ending', deadline = Date.now() + 10000;
       let state = await client.request({ type: 'status' });
       while (state.frame_id !== expected && Date.now() < deadline) { await new Promise(resolve => setTimeout(resolve, 50)); state = await client.request({ type: 'status' }); }
-      assert.equal(state.frame_id, expected, `${mode}: ${String(state.last_error)}`);
+      if (state.frame_id !== expected) {
+        let focus: unknown;
+        try { focus = playerWindowFocus(running.child.pid); } catch (error) { focus = { diagnosticError: String(error) }; }
+        assert.fail(`${mode}: ${JSON.stringify({ expectedFrame: expected, state, focus })}`);
+      }
       assert.equal(state.variables.trust.value, '1', '续接仅提交一次有序更新');
     } finally {
       clearTimeout(timer); client?.dispose(); if (running.child.exitCode === null) running.child.kill(); await running.done.catch(() => {}); await fs.rm(tokenFile, { force: true });

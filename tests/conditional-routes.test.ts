@@ -44,13 +44,13 @@ test('缺默认目标、错类型、越界整数、无条件或过多分支均�
 });
 
 test('Recognized if/else-if/三元式可编辑，分支内自定义副作用和不完整返回保留 Opaque', () => {
-  const endings = 'on.end("b");on.end("c");on.end("d");';
+  const endings = 'frame("b").end();frame("c").end();frame("d").end();';
   for (const callback of [
     `s => s.vars.flag ? 'b' : s.vars.score >= 5n ? 'c' : 'd'`,
     `function(s) { if(s.vars.flag) { return 'b'; } else if(s.vars.score >= 5n) return 'c'; else { return 'd'; } }`,
     `s => { if(s.vars.flag) return 'b'; if(s.vars.score >= 5n) return 'c'; return 'd'; }`
   ]) {
-    const sources = input(`// before\non.advance('a', ${callback}); // after\n${endings}`), logic = analyze(sources);
+    const sources = input(`// before\nframe('a').advance(${callback}); // after\n${endings}`), logic = analyze(sources);
     assert.equal(logic.complete, true, callback); assert.equal(logic.routes[0].branches!.length, 2);
     const updated = logic.routes.map(r => r.frame === 'a' ? { ...r, branches: r.branches!.map((b, i) => i === 1 ? { ...b, target: 'b' } : b) } : r);
     const changed = merge(sources, patchLogicRoutes(sources, logic, updated));
@@ -62,18 +62,18 @@ test('Recognized if/else-if/三元式可编辑，分支内自定义副作用和�
     `s => { if(s.vars.flag) return 'b'; }`,
     `s => s.vars.flag ? compute() : 'd'`,
     `s => { if (check(s)) return 'b'; return 'd'; }`
-  ]) assert.equal(analyze(input(`on.advance('a', ${callback}); ${endings}`)).frames.a.editable, false, callback);
+  ]) assert.equal(analyze(input(`frame('a').advance(${callback}); ${endings}`)).frames.a.editable, false, callback);
 });
 
 test('条件数量/更新变化保留作者注释，单条件编辑只改对应 AST 范围，零参数回调只绑定一次', () => {
-  const sources = input(`// begin\non.advance('a', function (state) { /* 台词旁注 */ if (/* 判断 */ state.vars.flag) return /* 真目标 */ 'b'; return /* 默认 */ 'd'; }); // end\non.end('b');on.end('c');on.end('d');`), logic = analyze(sources);
+  const sources = input(`// begin\nframe('a').advance(function (state) { /* 台词旁注 */ if (/* 判断 */ state.vars.flag) return /* 真目标 */ 'b'; return /* 默认 */ 'd'; }); // end\nframe('b').end();frame('c').end();frame('d').end();`), logic = analyze(sources);
   const changed = merge(sources, patchLogicRoutes(sources, logic, logic.routes.map(r => r.frame === 'a' ? { ...r, branches: [{ ...r.branches![0], target: 'c' }] } : r)));
   assert.equal(changed.get('routes.js'), sources.get('routes.js')!.replace("/* 真目标 */ 'b'", '/* 真目标 */ "c"'));
   const structured = merge(sources, patchLogicRoutes(sources, logic, logic.routes.map(r => r.frame === 'a' ? { ...r, branches: routes[0].branches, updates: [{ op: 'add', variable: 'score', value: { kind: 'constant', type: 'int', value: '1' } }] } : r)));
   assert.equal(analyze(structured).complete, true);
   for (const comment of ['/* 台词旁注 */', '/* 判断 */', '/* 真目标 */', '/* 默认 */', '// begin', '// end']) assert.ok(structured.get('routes.js')!.includes(comment));
   assert.ok(structured.get('routes.js')!.indexOf('state.add') < structured.get('routes.js')!.indexOf('if (('));
-  const zero = input(`on.advance('a', () => true ? 'b' : false ? 'c' : 'd'); on.end('b');on.end('c');on.end('d');`), z = analyze(zero);
+  const zero = input(`frame('a').advance(() => true ? 'b' : false ? 'c' : 'd'); frame('b').end();frame('c').end();frame('d').end();`), z = analyze(zero);
   const bound = merge(zero, patchLogicRoutes(zero, z, z.routes.map(r => r.frame === 'a' ? { ...r, branches: routes[0].branches } : r)));
   assert.equal(analyze(bound).complete, true); assert.equal(bound.get('routes.js')!.match(/_kakeraCtx\) =>/g)?.length, 1);
 });

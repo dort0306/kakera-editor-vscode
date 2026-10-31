@@ -1,6 +1,27 @@
 # 12 实现与验证记录
 
-日期：2026-10-30。插件 0.10.0，匹配播放器 0.10.0，story 8 / UI 3 / save 9（demo content-version=11）。
+日期：2026-10-31。插件 0.11.0，匹配播放器 0.11.0，story 8 / UI 3 / save 9（demo content-version=11）。
+
+2026-10-31 播放器 v0.11.0 新版 JS 注册 API：核对相邻 `kakera-avg-rust` 的 v0.11.0 工作区（`Cargo.toml` 0.11.0；上游 API 第 37 节、`doc/js-api-redesign-*` 方案/验收与 demo 脚本），把 `frame()`/`ui()` 注册接入阅读、校验、编辑与模板。story 8 / UI 3 / save 9 / profile 1 / read 1 / KPAK 1/2 与 demo content-version=11 不变。
+
+- 源码模型：剧情只识别 `frame("幕").advance/choice/end`；生命周期识别 `frame(id).enter/exit` 与 `ui(page).bind("screen.open"/"screen.close")`。静态字符串目标与内联回调统一映射到现有 Route/更新/条件模型；目标、选项、守卫、16 位短 ID 和注解规则沿用。旧 `on.*` 不再解析，只给带上游 API 第 37.5 节指引的迁移诊断；动态目标、选择器别名、非顶层、共享函数和未知方法保持 Opaque。受管路线文件头升为 `// Kakera Managed Routes v2`，添加新注册时仍只补丁对应语句/回调范围。
+- UI 事件：`UiEvent` 增加注册目标，注册键改为（目标、事件名），列表显示“目标 · 事件名”。事件向导新增目标选择（页面/控件/`$game`/`$host`）、`screen.open`/`screen.close` 留给生命周期、`captureShortcut` 结果只接受 `$host` 注册；改名/删除只处理该目标的 XML `event` 或页面 `background-*`，不批量改其他目标的同名事件。新增控件时从可证明的固定回调复制到新控件自己的 `ui("新ID").bind(...)`；`color-picker` 自动事件绑定自身控件，无可复制回调时拒绝。删除页面会检查包括 UI bind 在内的引用。
+- 模板与工具：模板 `scripts/ui.js` 改为按真实目标注册（hud/continue/choice/startStory/restart）；从相邻 v0.11.0 工作区 `cargo build --release --locked --bins` 重新构建播放器/打包器并重新准备 `resources/tools/win32-x64/tools.json`（播放器 SHA-256 `3bb69ffb6d3479995c5e4efa370a623cc65936196f39180d3856b417f94ae027`、打包器 `3d78b8c9a4e317b6c2b75a9c8ff24834b6175e29b30811add6e7f48928423ceb`）。工程清单、调试版本、构建/发行检查和 `prepare-tools` 默认生成/接受 0.11.0，仍接受 0.8.3–0.10.1 的已声明工程。
+- 版本与规则：按“插件 x.y 与上游引擎一致”的新规则升至 0.11.0（AGENTS §8），`package-lock.json`、`package` 制品名、README 当前版本、状态栏和文档同步；模板/测试与旧 `on.*` 迁移诊断一并更新。
+- 验证：`npm run typecheck`、`npm test`（131 项）、`npm run build`、`npm run test:browser`（Edge 156；工作台/流程图/UI 画布/事件表单/只读与拖动取消）通过。`npm run test:integration` 使用真实 v0.11.0 工具完整通过：模板 `--check`、本地化清单/FTL/KPAK 1/2、条件与 i64、幕 ID 重命名、目标作用域 UI 编辑器（含 `$host` 捕获事件、屏幕生命周期、逐控件回调、自动 `ctx.setUi`、CG/画廊/演出/音效）、生命周期交接、角色/立绘、未保存缓冲冻结、KPAK 1/2 和独立宿主全包检查。`npm run test:host` 在真实本机 VS Code 通过：激活、未保存缓冲、冻结 CLI、撤销/重做、多自定义编辑器、真实播放器 inline DAP、UI 子文件/私有冻结、生命周期、屏幕引用和只读工作区。`npm run package` 生成 `artifacts/kakera-editor-vscode-0.11.0.vsix`，41 个文件、21,684,092 字节（20.68 MB），SHA-256 `C7339ADD109EAE55B7C336DAA233906167A46D93A5BE89D6EBF55E2E1995C576`；构建内工具哈希、模板字体、引擎国际化许可与 VSIX 白名单检查通过。
+- 未执行/限制：本机 VS Code CLI 的隔离 VSIX 安装命令在 5 分钟内未返回，本轮没有据此声称安装成功；旧 v0.10 工程不会被编辑器自动迁移到新语法，真实播放器会拒绝旧脚本，需作者按上游迁移清单处理后重新检查。未运行上游 Rust 全量测试；UI 视觉/主题与真实窗口的 DPI/键盘细节仍以既有浏览器和宿主检查为上限。
+
+2026-10-31 工程图标与视觉色调（0.10.4）：以仓库根目录 `kakera.svg` 为唯一图形来源。`resources/kakera.svg` 重写为 24×24 单色标记（`viewBox` 四周留约 1.4px 内边距，四条碎块路径与原图一致、去掉 Inkscape 滤镜），继续供 `contributes.viewsContainers.activitybar[0].icon` 使用——VS Code 对扩展 Activity Bar 图标生成 `mask: url(...)` 规则并用 `activityBar.foreground` 着色，实际可见的是 alpha 轮廓，因此该文件只用一种灰色填充且碎块之间必须保持透明缝隙。`resources/kakera.png` 为 256×256 全彩图，用 Edge headless 直接渲染根目录 `kakera.svg`（透明背景），设为清单 `icon`。Webview 内联 `KakeraMark` 复刻同一几何，工作台应用栏、UI 编辑器应用栏和创作首页品牌位使用它，颜色为 `--k-mark-*` 常量。
+
+标签页图标：`kakera.home` 面板通过 `panel.iconPath` 显示该 PNG；`contributes.customEditors` 的 JSON schema 只有 `viewType`/`displayName`/`selector`/`priority`，没有图标字段，分镜与 UI 自定义编辑器的标签图标仍由宿主的文件图标主题决定，本次不做伪造或整主题接管。
+
+色调：`packages/webview/src/style.css` 的设计令牌换为图形本色（`#0058E0`/`#008AFF`/`#0060A8`/`#FF6FE3`），新增 `--k-accent-2` 与 `--k-mark-*`；深色与浅色主题分别配平 surface/border/input/button/流程图/舞台/棋盘格/首页光晕。图标补齐面板与抽屉标题块、检查器分段标题、保存幕按钮、TIP 卡片、工程设置页签、UI 编辑器小节、图片工具页签、前移/后移与本地化小节。按钮文字、`aria-label`、CSS 选择器和测试选择器未改。
+
+验证：`npm run typecheck`、`npm test`（128 项）、`npm run build`、`npm run test:browser` 通过；浏览器夹具截图核对深色工作台/首页/工程设置抽屉、UI 编辑器与浅色（`body.vscode-light`）工作台。真实本机 VS Code（隔离 `--extensions-dir`/`--user-data-dir`，读入 0.10.4 VSIX）确认：Activity Bar 显示按主题着色的碎块图标，“打开创作首页”的编辑器标签显示 `resources/kakera.png`，首页 Webview 渲染新令牌与 `KakeraMark`。未执行：`npm run test:host`、`npm run test:integration`；分镜/UI 自定义编辑器标签图标受扩展点限制仍为宿主文件图标。
+
+制品：`artifacts/kakera-editor-vscode-0.10.4.vsix`，41 个文件、21,636,844 字节（20.63 MB），SHA-256 `2AE5A2D8CB1C95D6A6B971E75D84277E81166C45FCD682BE6B644013A8CF339C`；隔离扩展目录安装后 CLI 列出 `dort0306.kakera-editor-vscode@0.10.4`，包内 `resources/kakera.png`（15,078 字节）与 `resources/kakera.svg`（1,291 字节）存在。
+
+2026-10-30 播放器 v0.10.1 国际化：核对相邻 `kakera-avg-rust` 的 v0.10.1 工作区，把默认关闭的游戏文本/语音国际化接入阅读、校验、编辑与预览。源码模型识别入口 `<localization>`、语言清单 schema 1、FTL、frame/option/character/变量/UI/画廊/窗口标题的 key 与 UI `text-arg`；工程设置新增“本地化”页编辑默认语言、显示名、FTL 消息和语音 clip 映射；事件向导新增 `ctx.locale`。编辑器只写清单/FTL/XML/JS，`language.json` 仍由匹配播放器维护并排除冻结/发行包。工具升级并重新准备 v0.10.1 哈希；修复宿主诊断参数加入 Unicode 隔离符后调试端口解析失败。详见 [19 本地化](19-localization.zh-cn.md)、[16 UI 编辑器](16-ui-editor.zh-cn.md)、[18 使用说明](18-visual-editor-guide.zh-cn.md)。
 
 2026-10-30 播放器 v0.10.0 UI 扩展：核对相邻 `kakera-avg-rust` 的 `9924e85`（v0.10.0），把自定义确认弹窗、玩家可配置快捷键和三角 HSV 控件接入可视化 UI 编辑器。UI 编辑器新增“快捷弹窗”、palette/color-bind/color-picker 编辑和 HSV 色盘；事件向导新增 `ctx.captureShortcut`、`cancelShortcutCapture`、`keybinding`、`resetKeybindings`、`colorPreference`、`resetColors`、`quit`。编辑器只写实际 UI XML/JS，玩家偏好文件 `keybindings.json`、`ui-colors.json` 仍由匹配播放器维护；静态画布不执行捕获、脚本、偏好落盘或交接。工具升级并重新准备 v0.10.0 哈希，工程清单和调试版本检查接受 0.10.0。详见 [16 UI 编辑器](16-ui-editor.zh-cn.md)、[18 使用说明](18-visual-editor-guide.zh-cn.md)。
 
@@ -50,11 +71,11 @@
 | 源码 | Saxes 校验与原范围补丁；Acorn 实时关联全部声明脚本/章节中的幕、选项、目标和源码范围；Managed 与 Recognized 可编辑，自定义回调候选只读映射，按幕判定能力；识别 v0.9.0/v0.9.1 生命周期注册、显式起始幕与 `ctx.resume/present` 引用 |
 | 文档与恢复 | TextDocument 当前缓冲、版本/哈希前置条件、冻结代次、引擎验证后 WorkspaceEdit；日常手工操作直接保存本次涉及的文件，保留换行与 BOM；恢复记录保存前/后内容，后续修改拒绝自动覆盖；冻结排除玩家/隐藏槽位文件 |
 | 资源 | 基本类型与 CG 导入、授权文本、哈希、引用与图片私有缓存；PNG/JPEG 点九生成/编辑、多段标记及预览；图集框选/网格/多图合成/区域编辑/真实 UI 应用；独立 Worker 与预算；路径/大小写/目录联接拒绝 |
-| UI 编辑器 | 多文件 UI/include 当前缓冲、页面/九类控件树与设计画布、单击/拖动/缩放/取消/键盘、属性/绑定/图片/点九/图集、跨页面层级与顺序、页面/变量、白名单事件创建/编辑/删除、CG 画廊标题/初始解锁；present/resume、CG 解锁、演出/音效与旧视频绑定诊断；静态示例预览，不执行游戏 JS |
+| UI 编辑器 | 多文件 UI/include 当前缓冲、页面/九类控件树与设计画布、单击/拖动/缩放/取消/键盘、属性/绑定/图片/点九/图集、跨页面层级与顺序、页面/变量创建/编辑/删除与引用保护、白名单事件创建/编辑/删除、颜色覆盖固定颜色或 UI string 来源、CG 画廊标题/初始解锁；present/resume、CG 解锁、演出/音效与旧视频绑定诊断；静态示例预览，不执行游戏 JS |
 | CG | 专用 `<cg>` 资产、`visual cg` 完整画面、自动/显式画廊、`game.cgId`、`cg.total/unlocked/progress` 绑定与 `ctx.unlock` 事件；不写共享 profile，不在加载时自动解锁 |
 | 多起始幕 | 空白分隔 `story.entry` 列表、加入/移除/唯一入口、多根关系图、入口标记、删除/重命名只改对应项；UI `restart` 目标/先打开页面；调试 `game_started=false`、空当前幕；播放器初始 UI 等待显式起点，不自动进入第一项 |
 | 变量编辑 | 变量初始值及 int min/max 编辑，ID/类型固定；删除变量并检查路线条件/更新引用；范围与类型校验、XML 范围补丁和宿主撤销/保存链 |
-| 原生工程侧栏 | 原生 TreeView 分类人物/美术资源/音频与字体/剧本/变量/JS 程序/界面；ThemeIcon、计数/描述、激活加载与变化刷新；分类/条目右键新建、重命名、删除、导入、打开和引用命令，跟随 VS Code 主题 |
+| 原生工程侧栏 | 原生 TreeView 分类人物/美术资源/音频与字体/剧本/变量/JS 程序/界面；ThemeIcon、计数/描述、激活加载与变化刷新；分类/条目右键新建、重命名、删除、导入、打开和引用命令，跟随 VS Code 主题；“界面”按 include 列出全部 UI XML，左键可视化打开对应文件、右键打开源码 |
 | 侧栏定位与分组 | 点击实际幕定位工作台并选中该幕；剧本按 XML 文件→幕两级；编辑器自动生成的幕/人物/资源/visual/UI 节点/点九图集使用 16 位十六进制短 ID，64 次冲突后才回退 UUID |
 | AI | 单一用户 profile/SecretStorage、Chat Completions 文本/JSON/SSE、取消/连接与总任务预算、连续 UTF-16 原文片段白名单、差异审阅后新增幕 |
 | 试玩/调试 | 私有内容代次、隔离存档、自有进程；JSON Lines 串行控制/修订、只读变量、XML 行/帧断点、候选语义、DAP sourceReference 冻结源码、状态轮询 |
@@ -120,6 +141,7 @@
 - 游戏构建 UI 当前使用 KPAK 2；格式 1 已通过底层工具集成测试，尚未作为 UI 选项开放。大包上限、设备音轨、主观听感、复杂存档兼容及全媒体 GUI 测试未在本轮覆盖。
 - v0.9.0 生命周期与隐藏交接已按静态契约、真实引擎 `--check` 和三组自动淡出交接运行测试接入；没有手工验收播放器窗口中的幕↔页面视频交接、跳过、失焦、跨进程隐藏槽恢复或 save 9 历史重放。生命周期仅提供离幕/关页的单动作可视编辑，不提供任意回调编辑、save 8 迁移或隐藏槽查看/写入。
 - 没有附带 Live2D Core 或第三方模型。Core 可由用户显式配置用于原生校验/试玩；含模型的构建目前显式生成静态回退版和启动脚本，不自动复制 Core，不宣称完整原生模型发行支持。没有公开发布 Marketplace 或上传游戏。
+- v0.10.1 本地化面板只编辑既有清单/FTL：不自动创建新语言文件、不切换本地化开关，不提供属性/函数/带参数术语编辑、逐语言图片/视频/模型、RTL 排版或语言参数化。真实系统语言/偏好/音频/字体和跨进程读档仍需匹配播放器验收；编辑器不写 `language.json`。
 
 后续优先补齐版本/信任矩阵和恢复故障注入，再按设计扩展资源、AI 能力探测与路线回放；已有可用功能不能替代这些尚未完成的验收。
 
@@ -253,7 +275,7 @@
 - 上游核对：v0.10.0 提交增加 `color-picker`/`color-bind`/`palette`、纯颜色几何、玩家快捷键捕获/偏好、确认弹窗与 `ctx.quit`、动态图片查看组合。格式仍为 story 8 / UI 3 / save 9 / profile 1 / read 1 / KPAK 1/2；新增固定偏好 `keybindings.json`、`ui-colors.json`，不属于 KPAK、工程监控或编辑器冻结代次（冻结/打包按文件名大小写不敏感排除）。
 - 快捷弹窗：新增 `addPopup` 源码事务，生成模态 `screen`、遮罩、可选标题/正文、确认按钮和 `route="close"` 取消按钮；确认动作支持关闭、已有事件或自动追加 `ctx.quit()` 事件。页面/控件使用 16 位短 ID，标题留空不生成 label。
 - 玩家快捷键：新增 `normalizeShortcutBinding`/`shortcutDisplay` 及事件向导字段。绑定按 ASCII token、Ctrl/Alt/Shift 顺序、64 字节、保留组合和 Ctrl+Alt 约束校验；`keybinding` 留空写 `null`，捕获结果事件必须已注册普通 `on.ui`。设计预览提供 `shortcuts.*` 默认标签/捕获状态；跨动作前缀冲突和偏好写回仍由匹配播放器校验。
-- HSV 与配色：读取/编辑根级 `palette`（ID 正则、唯一、最多 32、初值严格颜色）；`color-picker` 校验 UI string 绑定、事件、alpha、128×224、最多 8 个且不能在 repeat；`color-bind` 限制节点类型、来源和与静态 `color` 互斥。颜色属性使用文本 + HSV 色相环/固定方向 SV 三角/可选 alpha 条编辑，画布提供只读控件预览。
+- HSV 与配色：读取/编辑根级 `palette`（ID 正则、唯一、最多 32、初值严格颜色）；`color-picker` 校验 UI string 绑定、事件、alpha、128×224（0.10.3 起改为 `alpha=false` 128×128、默认/true 128×154）、最多 8 个且不能在 repeat；`color-bind` 限制节点类型、来源和与静态 `color` 互斥。颜色属性使用文本 + HSV 色相环/固定方向 SV 三角/可选 alpha 条编辑，画布提供只读控件预览。
 - 预览：`previewUi` 增加 palette `colors` 快照、`shortcuts` 默认绑定与标签；button 的 `color-bind` 只影响背景 tint，不再误染默认白字；nine-patch 颜色用半透明覆盖近似，精确分段需试玩。
 - 工具链：从相邻 v0.10.0 源码构建 release，`prepare-tools` 重新生成 `tools.json` 哈希；`tools.ts`、`session.ts`、调试 client、工程 schema、测试宿主清单、构建提示与 `verify-release` 接受/要求 0.10.0，同时保留 0.8.3–0.9.1 打开兼容。
 - `npm run check`：类型检查、**112 项**回归和构建通过（新增 palette/color-picker/color-bind、快捷键、快捷弹窗、HSV 数值/显示名测试）。
@@ -262,3 +284,86 @@
 - `npm run test:host`：真实 VS Code 激活、未保存缓冲、冻结 CLI、撤销/重做、多 Custom Editor、真实 v0.10.0 inline DAP 与受限宿主通过。
 - `npm run package`：生成 `artifacts/kakera-editor-vscode-0.10.0.vsix`（25 文件、19.94MB），工具哈希与模板字体/许可检查通过；SHA-256 `09FC8AC88FE0CFC5358A9F061E60E2147D6E5BCFCA287531331143DAB252A7A6`。未在本轮隔离安装该包，安装后的命令/宿主人工矩阵仍按下方未执行项处理。
 - 未执行：真实播放器的按键捕获/冲突/释放屏障、`keybindings.json`/`ui-colors.json` 原子写与坏文件回滚、HSV 指针/键盘焦点、DPI 矩阵和 D3D11 原生窗口；静态 `--check`、KPAK 与浏览器/宿主测试不能替代这些运行态验收。动态图片查看组合复用现有 image-bind，本轮未新增编辑器专用页面。
+
+## 0.10.1 本轮验证
+
+- 上游核对：相邻 `kakera-avg-rust` 工作区版本 0.10.1；实际构建 `kakera-avg.exe`/`kakera-pack.exe`，播放器 `--help` 报告 v0.10.1。核对 API 第 36 节、`src/localization.rs`、清单/FTL 预算、UI 绑定和错误示例；不修改上游格式或复制运行时。未重跑上游 Rust 全量测试，只使用其自报验收作为参考。
+- 编辑器：新增 `domain/localization.ts` 与 `source/localization.ts`，解析清单、FTL、语言/语音/参数/预算；`readStory`/`readUiDesign` 解析全部 key 来源和 UI `text-arg`；`editFtlMessage`、`editLocalizationManifest`、story/UI/标题/人物编辑走局部源码补丁；本地化设置页和 UI/幕/标题来源表单接入。
+- 工具：用 v0.10.1 release 重新生成 `resources/tools/win32-x64/tools.json`（播放器 SHA-256 `2d3d30d69628600f6eea491fe81aaa64ef5ec694dc9c7b0e9c4e9ab350888f1b`、打包器 `e69b42ebd3d6215714f47aca34717d79550d236be3398611eb5ca9eaa824b3eb`）；工程清单/调试/构建/发行检查接受 0.10.1。
+- 兼容修复：v0.10.1 宿主诊断把动态参数包在 Unicode 隔离符中，调试端口解析加入 `plainDiagnostic` 去除方向控制字符；条件分流真实播放器回归由此恢复。
+- HSV 选色器修复：引擎的 `color-picker` 只接受 UI string 草稿，`palette` 是独立的作者默认/玩家覆盖层；此前编辑器要求手选任意事件，事件通常不调用 `ctx.setUi`，播放器松开后会回到已提交值。现在事件向导支持“设置 UI 变量（使用控件当前值）”，添加 color-picker 时更新事件留空会自动追加 `ctx.setUi("草稿", ctx.value)`；解析器识别直接 `ctx.setUi` 事件，并在目标变量不一致或事件是其它固定动作时给出注意事项。palette 仍需 `color-bind` 读取、作者 JS `ctx.colorPreference(slot, draft)` 提交，编辑器不合并两层或写玩家偏好。
+- `npm run check`：类型检查、**119 项**单元/源码/表单回归和构建通过（新增清单/FTL/参数/UI 本地化/标题/语言事件和本地化设置页）。
+- `npm run test:browser`：Edge `156.0.4314.50` 的流程图、工作台、UI 画布、生命周期和显式起始幕回归通过；本次未新增真实浏览器中的本地化面板交互断言（该面板由 jsdom/React 回归覆盖）。
+- `npm run test:integration`：真实 v0.10.1 `--check` 接受生成的本地化工程（清单、两种文本语言、key 文本、无语音通道）；KPAK 2 包含 `languages.xml` 与全部声明 FTL、排除 `language.json`，发布包独立 `--check` 通过；原条件/UI/生命周期/幕重命名/KPAK 1/2 与独立宿主检查继续通过。
+- `npm run test:host`：真实 VS Code 激活、未保存缓冲、冻结 CLI、撤销/重做、多 Custom Editor、inline DAP 与受限宿主通过；本轮未新增宿主中的本地化编辑用例。
+- `npm run package`：生成 `artifacts/kakera-editor-vscode-0.10.1.vsix`（40 文件、20.62MB），工具 SHA-256、模板字体、引擎国际化许可与 VSIX 白名单检查通过；SHA-256 `4591AFB05AA7AC8AFDC067E88F79231C0318C6789CFF3F471168D3E7604E4491`。在独立扩展目录安装后 CLI 确认 `dort0306.kakera-editor-vscode@0.10.1`。
+- 未执行：真实播放器的系统首选语言探测、手动/默认回退、文本/语音独立切换时序、音频设备停止/恢复、字体字形覆盖、`language.json` 原子写与坏文件保留、跨进程语言偏好/读档、隐藏槽恢复、截图 revision 和 D3D11/RTL/DPI 矩阵；没有运行上游 Rust 全量测试、没有公开发布或上传游戏。静态 `--check`、KPAK、浏览器和宿主检查不替代这些运行态验收。
+
+### 2026-10-30 补充上游复核
+
+- 来源：实际执行 `git ls-remote`，上游 `https://github.com/dort0306/kakera-avg.git` 的 HEAD/main 为 `9924e85fb4b83a7adf7d9030607d93dc5ae4b0a3`（v0.10.0）。相邻 `D:\codes\kakera-avg-rust` 的 0.10.1 为未提交工作区增量；本轮逐项检查其 `src/localization.rs`、`src/i18n.rs`、UI 演出与调试实现、API 和验收记录，不把它称为远端已发布版本。播放器/打包器 release 哈希与上述插件清单一致，无需复制相同二进制；两个仓库原有修改均保留。
+- 修复编辑器 FTL 预览：字符串 Unicode 转义解码，普通正文反斜杠保真，负数与术语区分，数值/字符串 select 区分和语言复数规则，select 变体尾部换行处理。整条消息选定语言后不再跨语言借用术语；循环、指数引用和 UTF-8 输出预算有界拒绝。`Intl.PluralRules` 与 Rust 语言数据版本可能不同，静态预览仍非播放器排版保证。
+- `npm run check`：类型检查、**123 项**测试及构建通过。新增 4 项预览行为回归；Windows 目录联接用例首次在沙箱报 EPERM，获准环境重跑通过。日志 `.test-work/sync-check-final.log`。
+- `npm run test:browser`：Edge 156 的流程图、UI、生命周期表单、HSV、快捷弹窗与工作台 DOM 回归通过；未新增浏览器本地化面板专测。日志 `.test-work/sync-browser.log`。
+- `npm run test:host`：真实 VS Code 的缓冲、事务、撤销/重做、多个编辑器、源码映射、inline DAP 和未信任工作区回归通过。日志 `.test-work/sync-host.log`。
+- `npm run test:integration`：**本轮未全通过**。本地化工程的 Unicode 转义/负数/反斜杠经真实 v0.10.1 `--check` 接受，编辑器读取开场文案正确；KPAK 1/2 均完整重载通过，KPAK 2 索引核对全部语言 FTL 和 `language.json` 排除。幕重命名、条件/i64 与 UI 编辑器专项也通过。但 `verifyLifecycleEditor` 的 `continue` 模式在 10 秒内未从 opening 续接到 journey；串行及独立运行均复现，不能沿用上一轮的全通过结论。日志 `.test-work/sync-integration-serial.log`、`.test-work/sync-lifecycle.log`。
+- 续接失败的实际状态：`paused=false`、`last_error=null`、`host_prompt=false`、`ui_stack=[hud,cut]`、`frame_id=opening`、`trust=0`、`pending_frame=null`，隐藏 checkpoint 已创建。测试内容为 opening 的 `frameExit` 打开 cut、cut 的 200ms fade `finish=close`、`screenClose` 调用 `ctx.resume()`；另行恢复窗口前台仍复现。本轮只增强失败状态输出，没有修改引擎、跳过用例、改变剧情或绕过演出。尚不能确定是当前播放器运行时还是本机原生窗口环境，需上游独立定位；后续集成步骤因该失败未执行。
+- `npm run package`：40 文件、20.62MB 的 `artifacts/kakera-editor-vscode-0.10.1.vsix` 生成成功，工具/哈希/字体许可检查通过；SHA-256 `0D296DA6EE40E949B49BD5EDA7A56EE2921D5C9E8D3EF572D3F22FFCDB47CF15`。本轮未重新安装该包，未公开发布、上传或提交 Git。
+- 仍未执行：上游 Rust 全量测试、语言切换/音频听感/系统偏好/跨进程存档及全部 DPI/原生窗口人工矩阵。上游自报的验收记录不作为本轮执行证据。
+
+### 演出续接超时的后续分析（2026-10-30）
+
+- 修正问题表述：先前超时的 `ui_stack=[hud,cut]` 表示仍在演出页面，**没有证据证明演出已经关闭**；不能称为“演出关闭后未续接”，也不能由此认定 `screenClose` / `ctx.resume` 有确定性缺陷。`paused=false` 只表示调试器恢复，不表示原生窗口聚焦。
+- 上游新增 `screen_sequence_naturally_resumes_after_focus_and_debug_pause` 明确传入 `focused=true` 并人工推进时钟，验证了三种续接逻辑；其断言同时证明失焦时必须保留原幕与隐藏交接。这与依赖真实窗口/墙钟的插件集成测试前提不同。源码中 `tick_ui_media` 在失焦、宿主提示或调试暂停时停止时钟，恢复后的第一帧丢弃暂停间隔。
+- 二进制对照：上游新 release 播放器 SHA-256 `F926DAB20F5E9A75977E156D305FC51A004BE6192115909AB6BAF2350287962D`，插件随附播放器仍为 `2D3D30D6...888F1B`。同一插件生成工程及调试输入在两者均出现过停在 cut 的超时；不能据上游新构建通过便推断旧二进制存在已修复的续接缺陷。本轮未替换工具。
+- 插件旧播放器随后两次完整通过 continue/frame/page 三种真实窗口续接，日志 `.test-work/analyze-lifecycle-focus.log` 与 `.test-work/analyze-monitored.log`；首次只读诊断引入了额外等待，因此另用独立 50ms 前台监测验证。后一轮三次播放器在启动后保持前台，结束后才回到原窗口，所有变量更新均仅提交一次。另一次普通复测 continue 通过而 frame 超时，失败位置不是固定的。
+- 环境异常：重复监测的一次运行在 `clickStartOverlay` 的 `spawnSync powershell.exe` 阶段 ETIMEDOUT，尚未开始演出等待，日志 `.test-work/analyze-monitored-repeat.log`。自动化的窗口激活、宿主进程启动与调度确有不稳定现象；这项失败不能归入引擎续接逻辑。
+- 当前判断：窗口焦点/自动化时序是主要嫌疑，尚未在同一次 cut 超时中捕获完整焦点历史或引擎演出 age，因此**未确认唯一根因**。调试 v1 没有焦点、当前 sequence、age 字段，不能用 `paused=false` 或 `menu_paused=true` 替代这些证据。保留原断言和等待时限，仅增加测试模式/PID，以及失败时的预期幕、完整协议状态、原生前台 PID/最小化诊断；没有通过点击跳过演出、增加超时或跳过用例制造通过。
+
+### HSL 选色器同步（2026-10-30）
+
+- 对照本机上游 `doc/hsl-square-picker.zh-cn.md`、`src/color.rs::Hsla` 和 `src/interface/render.rs`：当前控件已由 HSV 三角形替换为编码 sRGB HSL 圆环与方形。XML/JS、story 8/UI 3/save 9、RGBA、palette 与玩家偏好格式不变；不引入旧形状开关。
+- 编辑器属性色盘与只读画布同步为环调 H、方形横向 S、纵向上 L=1 下 L=0。SVG 使用明确的 sRGB 分段渐变呈现同一 HSL 曲面，避免仅用黑白四角插值丢失纯色。灰色保留 H，黑白保留 H/S；自身 RGBA 回显保留浮点标记，外部不同颜色重新定位，透明度隐藏时保留原 alpha/RGB。
+- 输入锁定区域直到释放，按两轴夹取方形外拖，释放终点先处理；窗口级 pointermove/up 回退覆盖捕获丢失，Escape/失焦/只读取消手势；方向键和 Shift 支持键盘调整。修复旧颜色属性把 dirty 计入 busy，导致首次改色即禁用色盘的问题。真实 DOM 还定位并处理了 SVG 显示尺寸与 pointer 坐标浮点取整的边界误差；测试仍使用精确四角，不向内缩点或放宽标记断言。
+- 工具：在相邻上游执行 `cargo build --release --locked --offline --bins` 后运行准备脚本，更新同版本 `tools.json`。播放器 SHA-256 `e4d6edff314c36c61c75547d21b888c23a284ed0b821525328fa79b9c7c4fb70`；打包器 `ff1a4e390903b29132a6e91665dfd573bbeac7548b23ab691d01ce1fb4809676`。没有修改上游源码，也没有把版本号相同的旧 release 当成包含 HSL 的工具。
+- `npm run check`：类型检查、**126 项**测试和构建通过；HSL 专项包含六色相/亮度端点/透明 RGB/非有限值、4096 组不同颜色往返、外部回写/隐藏 alpha/取消/只读。4096 色网格最终补充独立重跑通过。日志 `.test-work/hsl-check-final.log`、`.test-work/hsl-math-final.log`。
+- `npm run test:browser`：真实 Edge 工作台 5×5 方形点阵含四角/边缘、黑白回显标记、区域锁定/外拖、丢失捕获、释放终点、键盘/alpha、最终源码修改请求与原流程图/UI/工作台回归通过。截图在对应 `.test-work/graph-browser-*/hsl-picker.png`；日志 `.test-work/hsl-browser-final.log`。
+- `npm run test:integration`：新工具完整通过，包括生成的 palette/color-bind/color-picker 与 setUi 事件、条件/i64、CG/本地化、未保存缓冲冻结、三种真实演出续接、KPAK 1/2、依赖/许可及源码外包检查。本轮续接通过不自动证明此前间歇超时的唯一原因。日志 `.test-work/hsl-integration.log`。
+- `npm run test:host`：真实 VS Code 的多文件 UI、保存/撤销/重做、源码映射、多个编辑器、inline DAP 与未信任工作区检查通过，日志 `.test-work/hsl-host.log`。未新增宿主内的 HSL 指针专项；指针测试来自真实 Edge 工作台 DOM。
+- `npm run package`：生成 `artifacts/kakera-editor-vscode-0.10.1.vsix`（40 文件、20.62MB），包内播放器/打包器逐项流式 SHA-256 与新清单一致，无开发源码/测试/玩家偏好文件。VSIX SHA-256 `506E6A2BD0C57142C181D1A702469810AAE5F6FB76693E9FE3C0041BE93AC553`；本轮未重新安装该包。`git diff --check` 通过。
+- 未执行：本轮没有重跑上游 Rust 全量测试，未人工验收播放器 HSL 指针/DPI/设备听感/玩家配色跨进程持久化；上游 HSL 文档中的自报 GUI 结果只作为参考。未公开发布、提交或上传游戏。
+
+### UI 变量删除与颜色覆盖来源（2026-10-30）
+
+- 实现：`deleteVariable` 只删除声明文件 `<variables>` 中对应标签；删除前检查控件 `bind`/`value`/`visible`/`enabled`/`image-bind`/`region-bind`/`color-bind`/`text-key-bind`、`text-arg`、入口 `title-bind`/`title-key-bind`、已识别 `setUi`/`colorPreference` 事件，以及脚本中的 `ctx.ui.变量`/`ctx.setUi("变量", …)`。脚本扫描跳过可编辑单动作事件；其他直接引用和无法静态解析的动态 `ctx.ui[...]`/`ctx.setUi(名称)` 保守拒绝，间接别名不在识别范围。匹配引擎 `--check` 不执行事件回调，不能只依赖引擎。
+- 颜色覆盖：`UiEvent` 新增 `colorVariable`，解析 `ctx.colorPreference(slot, ctx.ui.name)` 与 `ctx.ui["name"]`；事件向导“颜色来源”支持固定颜色、UI string 变量和作者默认（null）。生成访问对合法 JS 标识符用点号，其他 ID 用方括号；变量初值不是合法颜色时给出解析注意事项。palette/变量删除都会检查该引用。
+- 事件动作标签移除版本号后缀，只是 Webview 名称变化，不改命令、源码格式或引擎契约。
+- `npm run check`：类型检查、**127 项**单元/源码/表单回归和构建通过；新增 UI 变量删除引用保护、颜色覆盖 `ctx.ui` 源码解析/生成、表单颜色来源和事件标签无版本号断言。
+- 聚焦真实引擎：`verifyUiEditor` 子项通过，生成工程包含 `ctx.colorPreference("dialogue_text", ctx.ui.dialogueColorDraft)` 和删除未引用 UI 变量的结果，v0.10.1 `--check`、KPAK 1/2 与独立包检查通过。本轮没有重跑完整 `test:integration` 的生命周期/焦点路径。
+- `npm run test:host`：真实 VS Code 宿主通过，新增删除 `ui/state.xml` 中未引用变量、保存、undo/redo 与引擎校验；原 DAP/受限宿主检查保持通过。
+- `npm run test:browser`：Edge `156.0.4314.50` 的流程图/UI/工作台回归通过；新颜色来源下拉和变量删除行由 jsdom/React 表单回归实际输入覆盖，未在真实浏览器中逐项点击。
+- 未执行：在真实播放器中触发“保存颜色覆盖”读取 `ctx.ui`、动态名称访问、`ui-colors.json` 原子写/失败回滚和跨进程偏好；编辑器不执行事件回调，这些仍由匹配播放器验收。
+
+### UI XML 侧栏导航与 0.10.2 离线包（2026-10-30）
+
+- 实现：`uiFileList` 使用 `uiFragments` 有界 DFS；侧栏“界面”分类计数和条目改用该列表，入口/子文件分别显示“入口”/“include”。条目 id 为 `kakera:ui-file:<path>`、contextValue 为 `kakera.uiFile`，左键命令 `kakera.ui.open` 带文件参数。include 遍历失败时只回退入口。
+- 打开：`kakera.ui.open` 校验参数属于当前 UI 文件；无参仍打开入口。Custom Editor 对 include 子文件把 `selectedUiScreens` 设为该文件首个页面，入口保留 `<ui initial>`；不改 XML。
+- 源码：新增 `kakera.ui.source` 命令与 `kakera.uiFile` 右键菜单；无参打开入口，带文件参数打开对应 XML 文本编辑器。
+- 版本与打包：未指定版本时按 patch 位 +1 升至 0.10.2；`package-lock.json`、`package` 脚本、README/文档、状态栏和 AGENTS §8 规则同步；匹配播放器/引擎仍 v0.10.1。
+- `npm run check`：类型检查、**127 项**测试和构建通过；新增 `uiFileList` 顺序/坏 include 回退、`kakera.ui.source` 命令/菜单和 `package` 制品名断言。
+- `npm run test:host`：真实 VS Code 通过，新增 `kakera.ui.open` 打开 UI include、`kakera.ui.source` 打开对应 XML；无参入口、DAP 和受限宿主保持通过。
+- `npm run test:browser`：Edge `156.0.4314.50` 回归通过；侧栏是宿主原生 TreeView，浏览器夹具不覆盖树节点渲染。
+- `npm run package`：生成 `artifacts/kakera-editor-vscode-0.10.2.vsix`（40 文件、20.62MB、21,621,300 字节），SHA-256 `3DB618059DE3FAA7E8689AB1106CF39BE2C3CEA11274FDC6D93BCAA43557C7BB`；在隔离扩展目录安装后 CLI 确认 `dort0306.kakera-editor-vscode@0.10.2`。
+- 未执行：在真实窗口逐项点击侧栏分类/文件并人工检查上下文菜单外观的完整矩阵；自动化验证文件列表、命令参数、Custom Editor 与源码打开。完整 `test:integration` 未重跑。
+
+### HSL 取色器职责拆分同步与 0.10.3 离线包（2026-10-30）
+
+- 上游核对：相邻 v0.10.1 工作区新增 `hsl-picker-composition-implementation-plan` / `validation-plan` 并更新 `hsl-square-picker`。`PickerGeometry` 移除内置预览/HEX 与旧固定高度，按 `D=min(width,height−R)`、`R=alpha?26:0` 居中；alpha 条高 18、距色盘 8、左右各 8、宽 `width−16`。`interface.rs` 改为 `width<128 || height−R<128` 拒绝；demo 改为 256×282/256×256，并用外部 `colorPreview` panel、`colorPreviewText` 和两行 HEX label 绑定同一草稿。
+- 编辑器：`readUiDesign` 使用 alpha 条件尺寸；新增选色器默认 256×282（`alpha=false` 时 256×256）；设计画布按控件宽高调用同一几何绘制环/方形/可选 alpha，删除内置背景矩形和说明文字/HEX；作者属性色盘仍作为独立编辑工具。未新增 XML 属性、颜色格式、偏好或脚本命令。
+- 工具：从相邻上游当前工作区 `cargo build --release --locked --offline --bins` 重新构建 v0.10.1 播放器/打包器并重新准备 `tools.json`。播放器 SHA-256 `bb80e3bc296cee909bbaca0555b2b26f93457bb5dc96c8c17c15ca693728146b`，打包器 `f55629ac31dc7c5108aff777e9122b8f6932e2c60aff10c0ba6d80e533aaea2f`。
+- `npm run check`：类型检查、**128 项**测试和构建通过；新增紧凑尺寸/居中几何/alpha 条、默认尺寸、128×128/128×154 接受与 127/128×153/默认 alpha 128×128 拒绝、画布无内置预览文字/背景断言。
+- `npm run test:integration`：真实新工具完整通过，覆盖 localization、幕重命名、条件/i64、UI 编辑器（含 128×154 alpha 与 128×128 无 alpha 紧凑选色器）、生命周期、KPAK 1/2 与独立宿主检查。
+- `npm run test:host`：真实 VS Code 宿主、UI include 命令、撤销/重做、inline DAP 与受限宿主通过。
+- `npm run test:browser`：Edge `156.0.4314.50` 通过；新增画布选色器 `viewBox` 与“无内置 text/3 个标记”断言，作者色盘 5×5 拖动回归保持。
+- `npm run package`：生成 `artifacts/kakera-editor-vscode-0.10.3.vsix`（40 文件、20.62MB、21,618,116 字节），SHA-256 `F8B172FCE267616BD24BBEC02A955BB11394F5643F08C110FAF520072AF97E4B`；包内 `tools.json` 与上述哈希一致。隔离安装后 CLI 确认 `dort0306.kakera-editor-vscode@0.10.3`。
+- 未执行：本轮没有实际打开新捆绑播放器的配色页做 D3D11/CPU 指针拖动、DPI 或多显示器验收；上游的 125% 窗口证据不等于本插件复测。编辑器静态画布不执行选色输入、`ctx.setUi` 或偏好写入。

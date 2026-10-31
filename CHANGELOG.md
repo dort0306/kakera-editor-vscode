@@ -1,5 +1,60 @@
 # 更新记录
 
+## 0.11.0 新版 JS 注册 API 同步（适配播放器 v0.11.0） · 2026-10-31
+
+- 同步上游 v0.11.0：剧情注册改为 `frame("幕ID").advance/choice/end`，生命周期改为 `frame(id).enter/exit` 与 `ui("页面").bind("screen.open"/"screen.close")`，界面回调改为 `ui("控件或页面").bind("作者事件名", 回调)`；全局进入钩子与捕获结果固定绑定虚拟目标 `ui("$game")`/`ui("$host")`。旧 `on.*` 已被播放器删除且无别名；编辑器遇到旧注册只给迁移诊断，不把它猜成或改写成新路线。
+- UI 事件改为结构化（目标、事件名）：事件列表显示“目标 · 事件名”，两个控件可共享事件名而各自绑定回调；新增/改名/删除只处理目标自身 XML 控件 `event` 或页面 `background-*` 引用，`captureShortcut` 结果只接受 `$host` 注册。新增控件时从可证明的固定回调复制到新控件自己的注册；`color-picker` 自动事件也绑定自身控件，没有可复制回调时拒绝生成孤立注册。受管路线文件头升为 `// Kakera Managed Routes v2`。
+- 模板 `scripts/ui.js` 改为按目标注册（hud/continue/choice/startStory/restart）；从相邻 v0.11.0 工作区重新构建 release 播放器/打包器并更新 `tools.json` 哈希；工程清单、调试版本、构建/发行检查接受并默认生成 0.11.0，保留 0.8.3–0.10.1 打开兼容。
+- 版本按新规则升至 0.11.0，使插件 `x.y` 与上游引擎一致；规则已写入 AGENTS §8，`package-lock.json`、`package` 制品名、README、当前状态栏和文档同步。
+- 验证：`npm run check`（typecheck、131 项测试、构建）、`npm run test:browser`、`npm run test:host`（真实本机 VS Code：激活、未保存缓冲、撤销/重做、多自定义编辑器、真实 DAP、只读工作区）和 `npm run test:integration`（真实 v0.11.0 模板、国际化、条件/i64、目标作用域 UI 编辑器、生命周期、KPAK 1/2 与独立宿主）通过；`npm run package` 生成 `artifacts/kakera-editor-vscode-0.11.0.vsix`（41 个文件、21,684,092 字节、SHA-256 `C7339ADD109EAE55B7C336DAA233906167A46D93A5BE89D6EBF55E2E1995C576`），工具/哈希/字体/许可检查通过。隔离安装命令在本轮未返回，实际未执行项见[实现记录](doc/12-implementation-status.zh-cn.md)。
+
+## 0.10.4 工程图标与统一视觉色调 · 2026-10-31
+
+- 以仓库根目录的 `kakera.svg` 作为工程标识：`resources/kakera.svg` 换成由该图拆出的四片碎块单色标记，用作 VS Code Activity Bar 图标（Activity Bar 图标按 alpha 轮廓着色，颜色仍由主题提供）；新增 `resources/kakera.png`（256×256，由根目录图形渲染）并设为清单 `icon`，供 VSIX/市场展示。工作台、UI 编辑器与创作首页的品牌位改用同一图形的内联 `KakeraMark` 组件，不再用字母“K”色块。
+- 创作首页的 Webview 面板设置 `iconPath`，编辑器标签页显示该图标。自定义编辑器（分镜/UI）的标签页图标由 VS Code 决定，扩展点 `customEditors` 不支持图标，因此不在本次可改范围。
+- Webview 设计令牌从青绿/金色改为图形本色：深蓝 `#0058E0`、天蓝 `#008AFF`、钢蓝 `#0060A8`、碎块粉 `#FF6FE3`；深色与浅色主题都重新配平背景、面板、边框、按钮、输入、流程图、舞台、图片工具棋盘格与首页光晕。品牌色在两种主题下保持一致，仅表面色切换。
+- 补齐缺失图标：面板标题与抽屉标题新增图标块，检查器“故事起点/幕标识/台词与人物/剧情路由/画面”分段标题、保存幕按钮、TIP 卡片、工程设置的标题/人物/本地化页签、UI 编辑器的面板与“UI 变量/配色槽位/交互事件/CG 画廊”小节、图片工具页签、分镜前移/后移和本地化小节均加上内联 SVG 图标；图标仍为内联单色（沿用 `currentColor`），按钮文字、无障碍名称和测试选择器未变。
+- 只改呈现层：XML/JS 写回、命令 payload、保存事务、冻结代次、引擎契约与玩家偏好文件均未变。`npm run check`（128 项）、`npm run test:browser` 通过，并在浏览器夹具上核对深色/浅色两种主题；另在隔离扩展目录的真实 VS Code 中核对 Activity Bar 图标与首页标签图标。分镜/UI 自定义编辑器的标签图标受扩展点限制，说明见[实现记录](doc/12-implementation-status.zh-cn.md)。
+- 按未指定版本 patch+1 规则升至 0.10.4，生成 `artifacts/kakera-editor-vscode-0.10.4.vsix`（41 个文件、21,636,844 字节、SHA-256 `2AE5A2D8CB1C95D6A6B971E75D84277E81166C45FCD682BE6B644013A8CF339C`），隔离目录安装确认为 `dort0306.kakera-editor-vscode@0.10.4`；匹配播放器/引擎仍为 v0.10.1。
+
+## 0.10.3 HSL 选色器职责拆分同步 · 2026-10-30
+
+- 同步上游同版本增量：`color-picker` 只绘制色相环、正方形和可选 alpha 条（含水印棋盘、渐变、滑块），移除内置颜色预览与 HEX 文本；预览/十六进制由作者用 `color-bind` 面板/图片和 `bind` label 读取同一草稿独立组合。
+- 布局改为 `D=min(width,height−R)`、`R=alpha?26:0`，环/方形/alpha 组在控件外矩形内居中；alpha 条高 18、距色盘 8、左右各 8、宽 `width−16`。`alpha=false` 最小 128×128，默认/`true` 最小 128×154（推荐 256×256 / 256×282）；旧 256×320 等合法矩形继续按新规则居中。
+- 编辑器同步：源码校验使用 alpha 条件尺寸；新增选色器默认 256×282（无 alpha 时 256×256）；设计画布按控件宽高绘制居中的环/方形/可选 alpha，去掉内置说明文字和背景预览；作者属性色盘保持独立编辑工具。
+- 从上游当前 v0.10.1 工作区重新构建 release 播放器/打包器并更新 `tools.json` 哈希；真实引擎完整集成检查通过。工具哈希与验证记录见 [实现记录](doc/12-implementation-status.zh-cn.md)。
+- 按未指定版本 patch+1 规则升至 0.10.3，生成 `artifacts/kakera-editor-vscode-0.10.3.vsix`；文件数、大小、SHA-256 与实际安装确认记录在实现记录。匹配播放器/引擎仍为 v0.10.1。
+
+## 0.10.2 UI XML 侧栏导航与离线包 · 2026-10-30
+
+- Activity Bar 的“界面”分类从单一“UI 编辑器”按钮改为按 include 深度列出入口与全部 UI XML 文件；左键以可视化 UI 编辑器打开对应文件，入口保持 `<ui initial>`，子文件定位到该文件声明的首个页面；右键新增“打开 UI 源码”打开原 XML。
+- 新增 `kakera.ui.source` 命令与 `kakera.uiFile` 右键菜单；`kakera.ui.open` 支持可选文件参数，无参仍打开入口。UI include 结构损坏时侧栏只回退显示入口，不猜测、复制或改写文件。
+- 按“未指定版本时 patch 位 +1”的默认规则将扩展升至 0.10.2；`package-lock.json`、`package` 制品名、README/文档当前版本同步，匹配播放器/引擎仍为 v0.10.1。规则已写入 AGENTS.md。
+- 生成 `artifacts/kakera-editor-vscode-0.10.2.vsix`；在隔离扩展目录安装后 CLI 确认 `dort0306.kakera-editor-vscode@0.10.2`。实际文件数、大小与 SHA-256 记录在 [实现记录](doc/12-implementation-status.zh-cn.md)。
+- `npm run check`（127 项）、`npm run test:host`（含 UI 文件打开/源码命令）和 `npm run test:browser` 通过；完整 `test:integration` 未重跑。
+
+## 0.10.1 同版本开发增量：UI 变量删除与颜色覆盖来源 · 2026-10-30
+
+- UI 编辑器的“UI 变量”条目新增编辑/删除；删除只移除声明文件中的原变量标签，并检查控件 `bind`/`value`/`visible`/`enabled`/`image-bind`/`region-bind`/`color-bind`/`text-key-bind`、`text-arg`、入口 `title-bind`/`title-key-bind`、已识别 `setUi`/`colorPreference` 事件和脚本中的 `ctx.ui`/`ctx.setUi` 引用。无法证明的动态脚本访问保守拒绝，避免删除只在运行时解析的变量。
+- “保存颜色覆盖”事件新增“颜色来源”：固定颜色、作者默认（`null`）或读取已声明的 UI string 变量；后者生成 `ctx.colorPreference("槽位", ctx.ui.变量)`（不能写成点号的 ID 使用 `ctx.ui["变量"]`），可直接把选色器草稿写入 palette 槽位。变量初值不是合法颜色时给出解析注意事项。
+- 事件“执行动作”列表移除 `v0.10.0`/`v0.10.1` 版本号后缀，只保留功能名称。
+- 编辑器仍只写 UI XML/JS，不写 `ui-colors.json`；`ctx.ui` 的实际运行态解析、偏好文件原子写和失败回滚由匹配播放器负责。本次未提升扩展版本或重新打包 VSIX。
+
+## 0.10.1 游戏国际化与独立语言偏好（适配播放器 v0.10.1） · 2026-10-30
+
+- 同步上游 HSL 选色器增量：属性色盘和画布由 HSV 三角形改为色相环与 S/L 正方形；同步黑白/灰色记忆、RGBA 浮点回显、全方形命中、手势锁定/释放终点、alpha 与键盘编辑。修复颜色草稿首次修改就禁用色盘的问题，重新构建随附播放器/打包器并更新工具哈希；XML/JS 和 RGBA 偏好格式不变。
+- 补充核对上游远端与本机 0.10.1 增量：修复 FTL 静态预览的 Unicode 字符串转义、普通反斜杠、负数字面量、语言内术语解析和复数选择；引用循环/指数展开及 UTF-8 输出超限有界拒绝。新增预览回归与真实引擎/KPAK 1/2 本地化检查。
+- 同步上游 v0.10.1：新增默认关闭的游戏文本/语音国际化、语言清单 schema 1、Fluent FTL、按通道精确匹配、`ctx.locale`/`localeInfo` 与独立 `language.json`；宿主提示改为内嵌中文 Fluent，不改变 story 8 / UI 3 / save 9 / KPAK 1/2 与 demo content-version=11。
+- 源码模型支持入口 `<localization>`、`languages.xml`、FTL、frame `text key`、option `text-key`、character `name-key`、变量 `label-key`、UI `text-key`/`text-key-bind`/`text-arg`、画廊 `title-key`、根 `title-key`/`title-key-bind`；旧字面量保持原样。
+- 新增有界清单/FTL 读取与校验：语言标识规范、默认语言、字体/音频引用、voice key 覆盖、重复/循环/缺失引用、参数契约、文件与条目预算；结构错误阻止加载，覆盖问题显示源码位置诊断。
+- 工程设置新增“本地化”页：默认文本/语音、语言显示名、消息新增/编辑/删除、语音语言与 clip 映射编辑；“查看清单/FTL”跳转源码。面板不自动创建清单/FTL，也不开启/关闭本地化。
+- 幕台词/选项、人物名字、UI 控件文字、画廊标题和窗口标题可切换固定文字或本地化 key；UI 检查器可编辑最多 16 个 `text-arg`，绑定限制为 UI 标量、`cg`/`saves` 只读标量和 `locale` 标量。
+- 事件向导新增“切换文本/语音语言”，写 `ctx.locale("text"|"voice", 已声明 ID 或 null)`；绑定建议/repeat 示例加入 `locale.*`、`textLocales`、`voiceLocales`；静态画布按默认语言和初始值格式化预览。
+- `language.json` 与既有玩家偏好一起排除冻结代次和发行包；KPAK 开启时包含全部声明语言的清单/FTL/字体/音频依赖。
+- 工具链升级 v0.10.1：重新准备播放器/打包器 SHA-256，工程清单、调试版本、构建提示和 `verify-release` 接受/要求 0.10.1；继续接受 0.8.3–0.10.0 工程。修复 v0.10.1 宿主诊断在参数外加入 Unicode 隔离符后调试端口解析失败。
+- 新增清单/FTL/参数/UI 本地化/标题/语言事件回归；真实 v0.10.1 `--check`、KPAK 1/2 全语言依赖与 `language.json` 排除见实现记录。
+- 修复 HSV 选色器“松开后回到旧值”：新增“设置 UI 变量（使用控件当前值）”事件动作；添加 color-picker 时未选择更新事件会自动生成 `ctx.setUi("草稿", ctx.value)`，并在属性检查器/解析提示中说明 palette 槽位与 UI string 草稿的分层。`color-picker` 仍只能绑定 UI string，palette 通过 `color-bind` 读取、`ctx.colorPreference` 持久化，这是引擎 v0.10.x 设计。
+
 ## 0.10.0 快捷弹窗、玩家快捷键与 HSV 配色（适配播放器 v0.10.0） · 2026-10-30
 
 - 同步上游 v0.10.0：新增 UI `color-picker`、`color-bind`、根级 `palette`，玩家快捷键捕获/绑定事件，以及自定义确认弹窗和 `ctx.quit()`。

@@ -1,7 +1,8 @@
-/** Strict sRGB RGBA and HSV helpers shared by UI parsing, preview and the editor picker.
- * The engine stores unpremultiplied #RRGGBBAA; HSV is over encoded sRGB, not linear light. */
+/** Strict sRGB RGBA helpers. The current picker uses encoded sRGB HSL;
+ * historical triangle geometry does not participate in the picker. */
 export interface Rgba { r: number; g: number; b: number; a: number }
 export interface Hsva { h: number; s: number; v: number; a: number }
+export interface Hsla { h: number; s: number; l: number; a: number }
 export interface Point { x: number; y: number }
 
 const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
@@ -23,6 +24,19 @@ export function formatColor(color: Rgba): string {
 }
 export function normalizeColor(text: string): string { return formatColor(parseColor(text)); }
 export function isColorText(text: string | undefined): text is string { if (!text) return false; try { parseColor(text); return true; } catch { return false; } }
+/** Gray preserves H; black and white preserve both H and S, like the player. */
+export function rgbaToHsla(color: Rgba, lastHue = 0, lastSaturation = 0): Hsla {
+  const max = Math.max(color.r, color.g, color.b) / 255, min = Math.min(color.r, color.g, color.b) / 255;
+  const delta = max - min, l = (max + min) / 2;
+  return { h: rgbaToHsva(color, lastHue).h, s: l === 0 || l === 1 ? clampUnit(lastSaturation) : delta / (1 - Math.abs(2 * l - 1)), l, a: color.a / 255 };
+}
+export function hslaToRgba(value: Hsla): Rgba {
+  const h = normalizeHue(value.h), s = clampUnit(value.s), l = clampUnit(value.l);
+  const chroma = (1 - Math.abs(2 * l - 1)) * s, sector = h / 60, second = chroma * (1 - Math.abs(sector % 2 - 1));
+  const [r, g, b] = sector < 1 ? [chroma, second, 0] : sector < 2 ? [second, chroma, 0] : sector < 3 ? [0, chroma, second] : sector < 4 ? [0, second, chroma] : sector < 5 ? [second, 0, chroma] : [chroma, 0, second];
+  const offset = l - chroma / 2;
+  return { r: quantize(r + offset), g: quantize(g + offset), b: quantize(b + offset), a: quantize(Number.isFinite(value.a) ? value.a : 1) };
+}
 export function rgbaToHsva(color: Rgba, lastHue = 0, lastSaturation = 0): Hsva {
   const r = color.r / 255, g = color.g / 255, b = color.b / 255, max = Math.max(r, g, b), min = Math.min(r, g, b), delta = max - min;
   const v = max, s = max > 0 ? delta / max : 0;

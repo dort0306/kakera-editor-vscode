@@ -8,7 +8,7 @@ import { ImageTools } from './image-tools';
 import { Condition, ConditionalTargets } from './conditions';
 import { UiEditor } from './ui-editor';
 import { LifecycleEditor } from './lifecycle-editor';
-import { Icon } from './icons';
+import { Icon, KakeraMark } from './icons';
 import { routeDestinations, storyEntries } from '../../domain/src/index';
 declare function acquireVsCodeApi(): { postMessage: (message: unknown) => void };
 const host = acquireVsCodeApi();
@@ -21,8 +21,15 @@ function Select({ value, onChange, items, empty = '无' }: { value: string; onCh
 function Updates({ value, change, story }: { value: Update[]; change: (u: Update[]) => void; story: Story }) {
   return <div>{value.map((u, i) => <div className="update" key={i}><span>{i + 1}</span><Select value={u.variable} items={story.variables} onChange={id => { const v = story.variables.find(v => v.id === id); if (v) change(value.map((item, at) => at === i ? { op: 'set', variable: id, value: { kind: 'constant', type: v.type, value: v.initial } } : item)); }} /><select value={u.op} onChange={e => change(value.map((item, at) => at === i ? { ...item, op: e.target.value as 'set' | 'add' } : item))}><option value="set">赋值</option>{story.variables.find(v => v.id === u.variable)?.type === 'int' && <option value="add">加减</option>}</select>{u.value.kind === 'constant' ? <input aria-label="更新值" value={u.value.value} onChange={e => change(value.map((item, at) => at === i ? { ...item, value: { ...u.value, value: e.target.value } as Expr } : item))} /> : <span>表达式（源码中编辑）</span>}<button onClick={() => change(value.filter((_, at) => at !== i))}>移除</button></div>)}<button disabled={!story.variables.length} onClick={() => { const v = story.variables[0]; change([...value, { op: 'set', variable: v.id, value: { kind: 'constant', type: v.type, value: v.initial } }]); }}>＋变量更新</button></div>;
 }
+function defaultMessageKeys(story: Story): string[] {
+  const catalog = story.localization;
+  const locale = catalog?.texts.find(item => item.id === catalog.defaultText);
+  return [...new Set((locale?.messages ?? []).flatMap(file => file.entries.filter(entry => !entry.term).map(entry => entry.id)))].sort();
+}
 function Editor({ frame, state, onDirty, saveSignal = 0 }: { frame: Frame; state: EditorState; onDirty: (value: boolean) => void; saveSignal?: number }) {
   const story = state.story!, entryRefs = storyEntries(story);
+  const messageKeys = defaultMessageKeys(story);
+  const catalogEnabled = !!story.localization?.enabled;
   const routeEditable = state.logic ? state.logic.frames[frame.ref]?.editable === true : !!state.routes;
   const changeEntries = (refs: string[]) => setPending(send({ ...state, revision: base }, 'entry', { refs }));
   const [draft, setDraft] = useState(frame), [base, setBase] = useState(state.revision), [dirty, setDirty] = useState(false);
@@ -52,7 +59,7 @@ function Editor({ frame, state, onDirty, saveSignal = 0 }: { frame: Frame; state
     routeChange(kind === 'choice' ? [{ frame: frame.ref, kind, option: 'choice1', target: '', updates: [] }] : [{ frame: frame.ref, kind, ...(kind === 'advance' ? { target: '' } : {}), updates: [] }]);
   };
   const routeLabel = routes.length ? routes[0].kind === 'choice' ? '选择幕' : routes[0].kind === 'end' ? '结束幕' : '推进幕' : '脚本路线';
-  const save = () => { if (!dirty || conflict || !!pending) return; setPending(send({ ...state, revision: base }, 'patch', { ref: frame.ref, patch: { text: draft.text, speaker: draft.speaker, visual: draft.visual, audio: draft.audio, ...(routeEditable ? { options: draft.options } : {}) }, ...(routeEditable ? { routes } : {}) })); };
+  const save = () => { if (!dirty || conflict || !!pending) return; setPending(send({ ...state, revision: base }, 'patch', { ref: frame.ref, patch: { text: draft.text, ...(draft.textKey !== undefined ? { textKey: draft.textKey } : {}), speaker: draft.speaker, visual: draft.visual, audio: draft.audio, ...(routeEditable ? { options: draft.options } : {}) }, ...(routeEditable ? { routes } : {}) })); };
   const lastSave = useRef(saveSignal);
   useEffect(() => { if (saveSignal === lastSave.current) return; lastSave.current = saveSignal; save(); }, [saveSignal]);
   return <section className="properties inspector-panel">
@@ -64,28 +71,45 @@ function Editor({ frame, state, onDirty, saveSignal = 0 }: { frame: Frame; state
       {conflict && <div className="notice banner">源文件已更新。你的草稿保留在这里，请复制需要的内容后重新载入。<button className="ghost compact" onClick={reload}>载入最新源码</button></div>}
       <fieldset disabled={!state.writable || !!pending || lifecycleDirty}>
         <div className="inspector-section">
-          <div className="section-label"><span>故事起点</span><span className="badge">{entryRefs.length} 个</span></div>
+          <div className="section-label"><span><Icon name="flag" size={12} />故事起点</span><span className="badge">{entryRefs.length} 个</span></div>
           <div className="entry-list">{entryRefs.map(ref => <span className="entry-chip" key={ref}>{story.frames.find(f => f.ref === ref)?.name || ref}<button aria-label={`移除起始幕 ${ref}`} disabled={entryRefs.length <= 1 || !!pending} onClick={() => changeEntries(entryRefs.filter(entry => entry !== ref))}>×</button></span>)}</div>
           <div className="actions"><button className="subtle" disabled={entryRefs.includes(frame.ref) || !!pending} onClick={() => changeEntries([...entryRefs, frame.ref])}><Icon name="flag" size={14} />加入起始幕</button><button className="subtle" disabled={entryRefs.length === 1 && entryRefs[0] === frame.ref || !!pending} onClick={() => changeEntries([frame.ref])}>设为唯一入口</button></div>
           <p className="muted">可声明多个起始幕；播放器启动后先显示初始 UI，不会自动进入第一个。主菜单/UI 事件用 <code>ctx.restart("幕")</code> 或 <code>ctx.resume("幕")</code> 显式选择；至少保留一个。</p>
         </div>
         <div className="inspector-section">
-          <div className="section-label"><span>幕标识</span><span className="muted">ID / 引用名</span></div>
+          <div className="section-label"><span><Icon name="hash" size={12} />幕标识</span><span className="muted">ID / 引用名</span></div>
           <label>幕 ID<input aria-label="幕 ID" value={nextRef} maxLength={200} spellCheck={false} onChange={e => setNextRef(e.target.value)} /></label>
           <div className="actions"><button className="subtle" disabled={!nextRef.trim() || nextRef.trim() === frame.ref || !!pending || dirty || conflict} onClick={() => setPending(send({ ...state, revision: base }, 'rename', { ref: frame.ref, next: nextRef.trim() }))}>重命名幕</button></div>
           <p className="muted">会同步更新故事入口和已识别的推进/选项目标。存在动态路线或 `ctx.resume`/生命周期引用时会拒绝，避免留下悬空目标。</p>
         </div>
         <div className="inspector-section">
-          <div className="section-label"><span>台词与人物</span><span className="muted">{draft.text.length} 字</span></div>
-          <label>台词<textarea rows={5} value={draft.text} onChange={e => mark({ text: e.target.value })} /></label>
+          <div className="section-label"><span><Icon name="text" size={12} />台词与人物</span><span className="muted">{draft.text.length} 字</span></div>
+          <div className="field-grid two">
+            <label>文字来源<select aria-label="台词来源" value={draft.textKey ? 'key' : 'literal'} onChange={e => {
+              if (e.target.value === 'key') mark({ textKey: messageKeys[0] ?? '' });
+              else mark({ textKey: '', text: draft.text });
+            }}><option value="literal">固定文字</option><option value="key" disabled={!catalogEnabled || !messageKeys.length}>本地化 key</option></select></label>
+            {draft.textKey ? <label>本地化 key<select aria-label="台词本地化 key" value={draft.textKey} onChange={e => mark({ textKey: e.target.value })}><option value="">选择默认文本消息</option>{messageKeys.map(key => <option key={key} value={key}>{key}</option>)}</select></label> : null}
+          </div>
+          {draft.textKey ? <div className="notice">
+            <p>默认文本：{draft.text || '（缺少消息）'}</p>
+            <p className="muted">此处只引用 key；译文与默认文本请在“工程 → 游戏设置 → 本地化”中编辑。切换回固定文字可继续直接改台词。</p>
+          </div> : <label>台词<textarea rows={5} value={draft.text} onChange={e => mark({ text: e.target.value })} /></label>}
           <div className="field-grid two"><label>说话人<Select value={draft.speaker} items={story.characters} empty="旁白（无角色）" onChange={speaker => mark({ speaker })} /></label><label>完整画面<Select value={draft.visual} items={story.visuals} empty="空画面" onChange={v => mark({ visual: v })} /></label></div>
           <div className="audio-grid">{['bgm', 'voice', 'se'].map((field, i) => <label key={field}>{['背景音乐', '语音', '音效'][i]}<Select value={draft.audio[field] ?? ''} items={audio} empty="停止 / 静音" onChange={value => mark({ audio: { ...draft.audio, [field]: value } })} /></label>)}</div>
         </div>
         <div className="inspector-section">
-          <div className="section-label"><span>剧情路由</span><span className="badge">{routeLabel}</span></div>
+          <div className="section-label"><span><Icon name="route" size={12} />剧情路由</span><span className="badge">{routeLabel}</span></div>
           {routeEditable ? <><select aria-label="剧情路由类型" value={routes[0]?.kind ?? 'end'} onChange={e => changeKind(e.target.value as Route['kind'])}><option value="advance">推进到下一幕</option><option value="choice">显示选择</option><option value="end">结束</option></select>
             {routes.map((route, index) => <div className="route" key={index}>
-              {route.kind === 'choice' && <label>选项文字<input value={draft.options.find(o => o.id === route.option)?.text ?? ''} onChange={e => mark({ options: draft.options.map(o => o.id === route.option ? { ...o, text: e.target.value } : o) })} /></label>}
+              {route.kind === 'choice' && (() => {
+                const option = draft.options.find(o => o.id === route.option);
+                return <div className="option-text"><label>选项文字<select aria-label={`选项 ${route.option ?? ''} 文字来源`} value={option?.textKey ? 'key' : 'literal'} onChange={e => {
+                  if (e.target.value === 'key') mark({ options: draft.options.map(o => o.id === route.option ? { ...o, textKey: messageKeys[0] ?? '' } : o) });
+                  else mark({ options: draft.options.map(o => o.id === route.option ? { ...o, textKey: '', text: o.text } : o) });
+                }}><option value="literal">固定文字</option><option value="key" disabled={!catalogEnabled || !messageKeys.length}>本地化 key</option></select></label>
+                {option?.textKey ? <label>选项 key<select aria-label={`选项 ${route.option ?? ''} 本地化 key`} value={option.textKey} onChange={e => mark({ options: draft.options.map(o => o.id === route.option ? { ...o, textKey: e.target.value } : o) })}><option value="">选择默认文本消息</option>{messageKeys.map(key => <option key={key} value={key}>{key}</option>)}</select></label> : <label>选项文字<input value={option?.text ?? ''} onChange={e => mark({ options: draft.options.map(o => o.id === route.option ? { ...o, text: e.target.value } : o) })} /></label>}</div>;
+              })()}
               {route.kind !== 'end' && <ConditionalTargets route={route} story={story} change={next => routeChange(routes.map((r, at) => at === index ? next : r))} />}
               {route.kind === 'choice' && <><label>选项显示条件</label><Condition optional story={story} value={route.guard} change={guard => routeChange(routes.map((r, at) => at === index ? { ...r, guard } : r))} /></>}
               {route.kind !== 'end' && <Updates story={story} value={route.updates} change={updates => routeChange(routes.map((r, at) => at === index ? { ...r, updates } : r))} />}
@@ -96,7 +120,7 @@ function Editor({ frame, state, onDirty, saveSignal = 0 }: { frame: Frame; state
           {!!state.logic?.frames[frame.ref]?.locations.length && <button className="subtle" onClick={() => send(state, 'source', { ref: frame.ref, logic: true })}><Icon name="code" size={13} />查看此幕逻辑</button>}
         </div>
         <div className="inspector-section">
-          <div className="section-label"><span>画面</span><span className="muted">完整背景与三槽立绘</span></div>
+          <div className="section-label"><span><Icon name="image" size={12} />画面</span><span className="muted">完整背景与三槽立绘</span></div>
           <details open={visual} onToggle={e => setVisual(e.currentTarget.open)}><summary>为此幕创建独立画面</summary><p className="muted">保存完整背景与三槽立绘，或选择专用 CG；CG 画面不能同时有背景或人物。已有共享画面保持原样。</p>
             <label>CG 专用画面<Select value={cg} items={cgs} empty="不使用 CG" onChange={value => { setCg(value); if (value) { setBackground(''); setPortraits([]); } }} /></label>
             {cg ? <p className="notice">当前使用 CG 资源 {cg}：运行帧显示完整图片，不叠加人物；请在 game.enter 中按需解锁。</p> : <>
@@ -109,21 +133,21 @@ function Editor({ frame, state, onDirty, saveSignal = 0 }: { frame: Frame; state
       </fieldset>
       <LifecycleEditor key={frame.ref} state={state} kind="frameExit" owner={frame.ref} disabled={dirty || !!pending} onDirty={setLifecycleDirty} save={(operation, revision) => send({ ...state, revision }, 'uiEdit', { operation })}/>
     </div>
-    <div className="inspector-savebar"><div className="actions"><button className="primary" disabled={!dirty || conflict || !!pending} onClick={save}>{pending ? '正在保存…' : '保存幕'}</button><button className="subtle" disabled={!!pending} onClick={reload}><Icon name="undo" size={14} />还原编辑</button></div></div>
+    <div className="inspector-savebar"><div className="actions"><button className="primary" disabled={!dirty || conflict || !!pending} onClick={save}>{pending ? '正在保存…' : <><Icon name="save" size={14} />保存幕</>}</button><button className="subtle" disabled={!!pending} onClick={reload}><Icon name="undo" size={14} />还原编辑</button></div></div>
   </section>;
 }
 function Home() {
   const cards: [string, React.ReactNode, string, string][] = [
     ['kakera.storyboard.open', <Icon name="film" size={20} />, '可视分镜', '台词、构图与明确分支'],
     ['kakera.ui.open', <Icon name="layout" size={20} />, 'UI 编辑器', '页面、控件与可视布局'],
-    ['kakera.tools.configure', <Icon name="wrench" size={20} />, '准备工具', '配置 v0.9.1 播放器和打包器'],
+    ['kakera.tools.configure', <Icon name="wrench" size={20} />, '准备工具', '配置 v0.11.0 播放器和打包器'],
     ['kakera.ai.configure', <Icon name="sparkles" size={20} />, '可选 AI', '用户配置的服务，原文先审阅'],
     ['kakera.debug.start', <Icon name="bug" size={20} />, '真实试玩', '帧级断点和只读运行状态']
   ];
   return <main className="home">
     <div className="home-atmosphere" aria-hidden="true"><i /><i /><i /></div>
     <section className="home-hero">
-      <div className="home-brand"><span className="brand-mark">K</span><span>KAKERA</span></div>
+      <div className="home-brand"><KakeraMark size={30} className="brand-mark" /><span>KAKERA</span></div>
       <span className="eyebrow">VISUAL STORY WORKBENCH</span>
       <h1>让每一幕，<br /><em>成为故事的起点。</em></h1>
       <p className="home-lede">一格一幕，保留 XML / JS。先写下台词和选择，再走进真实的故事。</p>
@@ -252,7 +276,7 @@ export function App() {
   return <main className="workspace app-shell">
     <header className="app-bar">
       <div className="app-brand">
-        <span className="brand-mark">K</span>
+        <KakeraMark size={34} className="brand-mark" label={`Kakera：${state.title?.text ?? '故事工作台'}`} />
         <div className="app-brand-copy"><span className="eyebrow">KAKERA / {state.story.id}</span><h1>{state.title?.text ?? '故事工作台'}</h1></div>
       </div>
       <div className="app-actions" role="toolbar" aria-label="工程操作">
@@ -293,13 +317,13 @@ export function App() {
         </section>
         <Variables state={state} />
         <details className="issues rail-card"><summary><span><Icon name="alert" size={15} />注意事项 · {state.issues.length}</span><Icon name="chevron" size={14} className="summary-chevron" /></summary><div className="rail-card-body">{state.issues.length ? state.issues.map((i, n) => <p key={n}>{i}</p>) : <p className="muted">当前没有需要处理的问题。</p>}</div></details>
-        <section className="rail-card rail-hint"><span className="eyebrow">TIP</span><p>拖动幕卡调整布局，拖出右侧连接点即可重新连线。Alt + 方向键可微调位置。</p></section>
+        <section className="rail-card rail-hint"><span className="eyebrow"><Icon name="bulb" size={12} />TIP</span><p>拖动幕卡调整布局，拖出右侧连接点即可重新连线。Alt + 方向键可微调位置。</p></section>
       </aside>
 
       <section className="story-column">
         <section className="panel stage-panel">
           <div className="panel-head">
-            <div className="panel-title"><span className="panel-kicker">STAGE</span><h2>舞台预览</h2></div>
+            <div className="panel-title with-icon"><span className="panel-icon"><Icon name="film" size={15} /></span><div className="panel-title-copy"><span className="panel-kicker">STAGE</span><h2>舞台预览</h2></div></div>
             <div className="stage-meta"><span className="badge">{visual?.cg ? 'CG 专用画面' : visual ? '完整画面' : '空画面'}</span><span className="pill">{Math.max(0, frames.indexOf(frame!)) + 1} / {frames.length}</span></div>
           </div>
           <div className="stage-frame"><div className="stage" aria-label="静态构图预览">
@@ -314,7 +338,7 @@ export function App() {
 
         <section className="panel story-panel">
           <div className="panel-head story-head">
-            <div className="panel-title"><span className="panel-kicker">STORYBOARD</span><h2>分镜</h2></div>
+            <div className="panel-title with-icon"><span className="panel-icon"><Icon name="board" size={15} /></span><div className="panel-title-copy"><span className="panel-kicker">STORYBOARD</span><h2>分镜</h2></div></div>
             <div className="view-tabs"><button aria-pressed={view === 'branches'} onClick={() => setView('branches')}><Icon name="layout" size={14} />分支视图</button><button aria-pressed={view === 'files'} onClick={() => setView('files')}><Icon name="film" size={14} />文件顺序</button></div>
             <label className="search-box"><Icon name="search" size={14} /><input ref={search} aria-label="搜索分镜" placeholder="搜索台词或幕 ID" value={query} onChange={e => { setQuery(e.target.value); setOffset(0); }} /></label>
           </div>
@@ -323,7 +347,7 @@ export function App() {
             <button className="subtle" disabled={locked || !canEditSelected} title={selectedRefs.length > 1 ? `复制选中的 ${selectedRefs.length} 幕` : '复制当前幕'} onClick={() => duplicateSelected()}><Icon name="copy" size={14} />复制幕</button>
             <button className="subtle danger-ghost" disabled={locked || !canEditSelected || state.logic?.complete === false || frames.length <= selectedRefs.length} title={selectedRefs.length > 1 ? `删除选中的 ${selectedRefs.length} 幕` : '删除当前幕'} onClick={deleteSelected}><Icon name="trash" size={14} />删除幕</button>
             <button className="subtle" disabled={locked || !frame} onClick={() => setStructural(send(state, 'entry', { refs: [frame.ref] }))}><Icon name="flag" size={14} />设为唯一入口</button>
-            {view === 'files' && <><button className="subtle" disabled={locked || !frame} onClick={() => move(-1)}>前移</button><button className="subtle" disabled={locked || !frame} onClick={() => move(1)}>后移</button></>}
+            {view === 'files' && <><button className="subtle" disabled={locked || !frame} onClick={() => move(-1)}><Icon name="chevron-left" size={13} />前移</button><button className="subtle" disabled={locked || !frame} onClick={() => move(1)}><Icon name="chevron" size={13} />后移</button></>}
             {structural && <span className="saving-status"><span className="spinner" />正在保存…</span>}
           </div>
           <div className="story-meta-row">
@@ -352,16 +376,16 @@ export function App() {
       {copied.length > 0 && <span className="status-item" title="Ctrl+V 在当前幕之后粘贴副本">已复制 {copied.length} 幕</span>}
       <span className="status-spacer" />
       <span className="status-item">{routeKind === 'end' ? '结束幕' : routeKind === 'choice' ? '选择幕' : routeKind ? '推进幕' : '脚本路线'}</span>
-      <span className="status-item"><Icon name="check" size={13} />Kakera v0.9.1</span>
+      <span className="status-item"><Icon name="check" size={13} />Kakera v0.11.0</span>
     </footer>
 
     <div className={`drawer-scrim ${drawer ? 'open' : ''}`} onClick={() => setDrawer(null)} aria-hidden="true" />
     <aside className={`side-drawer ${drawer === 'settings' ? 'open' : ''}`} role="dialog" aria-modal={drawer === 'settings' ? 'true' : undefined} aria-hidden={drawer !== 'settings'} aria-label="工程设置">
-      <div className="drawer-head"><div><span className="eyebrow">PROJECT</span><h2>工程设置</h2></div><button className="icon-button" aria-label="关闭工程设置" onClick={() => setDrawer(null)}>×</button></div>
+      <div className="drawer-head"><div className="drawer-title"><span className="panel-icon"><Icon name="settings" size={16} /></span><div><span className="eyebrow">PROJECT</span><h2>工程设置</h2></div></div><button className="icon-button" aria-label="关闭工程设置" onClick={() => setDrawer(null)}>×</button></div>
       <div className="drawer-body"><ProjectSettings state={assetDirty ? { ...state, writable: false } : state} send={send} command={command} currentFrame={frame?.ref} onDirty={setSettingsDirty} /></div>
     </aside>
     <aside className={`side-drawer wide ${drawer === 'images' ? 'open' : ''}`} role="dialog" aria-modal={drawer === 'images' ? 'true' : undefined} aria-hidden={drawer !== 'images'} aria-label="图片工具">
-      <div className="drawer-head"><div><span className="eyebrow">ASSETS</span><h2>图片工具</h2></div><button className="icon-button" aria-label="关闭图片工具" onClick={() => setDrawer(null)}>×</button></div>
+      <div className="drawer-head"><div className="drawer-title"><span className="panel-icon"><Icon name="image" size={16} /></span><div><span className="eyebrow">ASSETS</span><h2>图片工具</h2></div></div><button className="icon-button" aria-label="关闭图片工具" onClick={() => setDrawer(null)}>×</button></div>
       <div className="drawer-body"><ImageTools state={state} send={send} blocked={draftDirty || settingsDirty || !!structural} onDirty={setAssetDirty} /></div>
     </aside>
   </main>;

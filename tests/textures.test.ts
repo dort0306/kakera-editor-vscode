@@ -49,7 +49,7 @@ test('网格裁切只生成完整格，区域越界/同名/超过上限拒绝', 
 });
 const storyXml = `<story schema="8" id="s" entry="a"><interface src="ui.xml"/><scripts><script src="routes.js"/></scripts><assets><image id="sheet" src="sheet.png"/><nine-patch id="panel" src="old.9.png"/></assets><variables><int id="score" initial="0"/></variables><frames><frame id="a"><text>选</text><options><option id="x">路线甲</option></options></frame><frame id="b"><text>后</text></frame></frames></story>`;
 const ui = `<ui schema="3"><screen id="main"><!-- 原注释 --><image id="sprite" image="sheet" region-bind="ui.cell" x="0" y="0" width="10" height="10"/><nine-patch id="box" image="panel" density="2"><label id="txt" text="保留"/></nine-patch></screen></ui>`;
-const sources = () => new Map([['story.xml', storyXml], ['ui.xml', ui], ['routes.js', `// 留下手写\non.choice('a','x', ctx => { ctx.add('score',1); return 'b'; }, ctx => ctx.vars.score >= 0n); on.end('b');`]]);
+const sources = () => new Map([['story.xml', storyXml], ['ui.xml', ui], ['routes.js', `// 留下手写\nframe('a').choice('x', ctx => { ctx.add('score',1); return 'b'; }, ctx => ctx.vars.score >= 0n); frame('b').end();`]]);
 test('图集应用只改选中控件、解除 region 绑定并保留 UI 子节点/注释；点九密度写入真实标签', () => {
   const input = sources(), changed = assignTexture(input, 'sheet', 'image', 'sprite', { name: 'a', x: 2, y: 4, width: 6, height: 8 });
   assert.ok(changed.get('ui.xml')!.includes('region="2,4,6,8"')); assert.ok(!changed.get('ui.xml')!.includes('region-bind')); assert.ok(changed.get('ui.xml')!.includes('<!-- 原注释 -->'));

@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { randomBytes } from 'node:crypto';
 import { emitRoutes, readStory, analyzeLogic } from '../packages/source/src/index';
 import { validateRoutes, type Expr, type Route } from '../packages/domain/src/index';
-import { launch } from '../packages/extension/src/tools';
+import { launch, plainDiagnostic } from '../packages/extension/src/tools';
 import { DebugClient, type DebugState } from '../packages/debug-adapter/src/client';
 import { addStartOverlay, clickStartOverlay, waitForStarted } from './start-player';
 
@@ -39,7 +39,7 @@ export async function verifyConditionalRoutes(player: string, root: string): Pro
   const token = randomBytes(32).toString('hex'), tokenFile = path.join(root, 'conditional.token'); await fs.writeFile(tokenFile, token);
   let log = '', resolvePort: (port: number) => void = () => {}, rejectPort: (e: Error) => void = () => {};
   const port = new Promise<number>((resolve, reject) => { resolvePort = resolve; rejectPort = reject; });
-  const process = launch(player, ['--project', content, '--save-dir', path.join(root, 'conditional-saves'), '--debug-listen', '127.0.0.1:0', '--debug-token-file', tokenFile, '--no-audio', '--no-live2d'], text => { log = (log + text).slice(-16384); const match = /调试 API：127\.0\.0\.1:(\d+)/.exec(log); if (match) resolvePort(Number(match[1])); });
+  const process = launch(player, ['--project', content, '--save-dir', path.join(root, 'conditional-saves'), '--debug-listen', '127.0.0.1:0', '--debug-token-file', tokenFile, '--no-audio', '--no-live2d'], text => { log = (log + text).slice(-16384); const match = /调试 API：127\.0\.0\.1:(\d+)/.exec(plainDiagnostic(log)); if (match) resolvePort(Number(match[1])); });
   const timer = setTimeout(() => rejectPort(new Error('条件分流测试未取得调试端口')), 15000);
   process.done.then(() => rejectPort(new Error('测试播放器提前退出')), rejectPort);
   let client: DebugClient | undefined;

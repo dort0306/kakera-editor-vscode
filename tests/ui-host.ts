@@ -27,7 +27,18 @@ export async function verifyUiHost(session: Session): Promise<void> {
   await assert.rejects(session.apply(stale, changed.changes, undefined, { save: true }), /改变/);
   loaded = await session.load(); const title = patchGameTitle(loaded.sources, '子文件标题'); assert.deepEqual([...title.keys()], ['ui/state.xml']); await session.apply(loaded, title, undefined, { save: true }); assert.equal(state.isDirty, false);
   loaded = await session.load(); await session.apply(loaded, patchGameTitle(loaded.sources, '新游戏标题'), undefined, { save: true });
-  loaded = await session.load(); const beforeMoveHud = hud.getText(), pages = loaded.documents.get('ui/pages.xml')!, beforeMovePages = pages.getText();
+  loaded = await session.load();
+  const variableDocument = loaded.documents.get('ui/state.xml')!;
+  await session.apply(loaded, editUi(loaded.sources, { action: 'deleteVariable', id: 'show' }).changes, undefined, { save: true });
+  assert.equal(readUiDesign((await session.load()).sources).variables.some(variable => variable.id === 'show'), false);
+  await vscode.window.showTextDocument(variableDocument);
+  await vscode.commands.executeCommand('undo');
+  assert.equal(readUiDesign((await session.load()).sources).variables.some(variable => variable.id === 'show'), true);
+  await vscode.commands.executeCommand('redo');
+  assert.equal(readUiDesign((await session.load()).sources).variables.some(variable => variable.id === 'show'), false);
+  await variableDocument.save(); assert.equal(variableDocument.isDirty, false);
+  loaded = await session.load();
+  const beforeMoveHud = hud.getText(), pages = loaded.documents.get('ui/pages.xml')!, beforeMovePages = pages.getText();
   const move = editUi(loaded.sources, { action: 'moveNode', id: 'end', screen: 'settings', index: 0 }); assert.equal(move.changes.size, 2); await session.apply(loaded, move.changes, undefined, { save: true });
   assert.ok(!hud.getText().includes('id="end"')); assert.ok(pages.getText().includes('id="end"')); assert.equal(hud.isDirty, false); assert.equal(pages.isDirty, false);
   await vscode.window.showTextDocument(hud); await vscode.commands.executeCommand('undo'); assert.equal(hud.getText(), beforeMoveHud); assert.equal(pages.getText(), beforeMovePages);
@@ -45,7 +56,7 @@ export async function verifyUiHost(session: Session): Promise<void> {
     assert.equal(await vscode.workspace.applyEdit(edit), true);
   };
   try {
-    await replaceBuffer(script, scriptBefore + '\non.screenOpen("settings", ctx => {});\non.ui("handoff.check", ctx => ctx.present("settings"));\n');
+    await replaceBuffer(script, scriptBefore + '\nui("settings").bind("screen.open", ctx => {});\nui("hud").bind("handoff.check", ctx => ctx.present("settings"));\n');
     await replaceBuffer(pages, pagesBefore.replace('id="settings"', 'id="settings.draft"'));
     loaded = await session.load();
     assert.equal(script.isDirty, true); assert.equal(pages.isDirty, true);
@@ -76,5 +87,10 @@ export async function verifyUiHost(session: Session): Promise<void> {
   await vscode.commands.executeCommand('kakera.ui.open');
   const target = path.join(session.root, 'ui.xml').toLowerCase();
   assert.ok(vscode.window.tabGroups.all.flatMap(g => g.tabs).some(t => t.input instanceof vscode.TabInputCustom && t.input.uri.fsPath.toLowerCase() === target), 'UI 入口应在 Custom Editor 中打开（Windows 路径忽略盘符大小写）');
+  const hudUi = path.join(session.root, 'ui/pages/hud.xml');
+  await vscode.commands.executeCommand('kakera.ui.open', 'ui/pages/hud.xml');
+  assert.ok(vscode.window.tabGroups.all.flatMap(g => g.tabs).some(t => t.input instanceof vscode.TabInputCustom && t.input.uri.fsPath.toLowerCase() === hudUi.toLowerCase()), '侧栏 UI 文件应以 Custom Editor 打开对应 XML');
+  await vscode.commands.executeCommand('kakera.ui.source', 'ui/pages/hud.xml');
+  assert.equal(vscode.window.activeTextEditor?.document.uri.fsPath.toLowerCase(), hudUi.toLowerCase(), 'UI 源码命令应打开对应 XML 文本编辑器');
   console.log('HOST UI EDITOR PASS: nested buffered documents, private frozen child XML, direct save, stale rejection, title in included state file, two-file reparent undo/redo, invalid binding rollback and UI custom editor command.');
 }

@@ -44,7 +44,7 @@ test('工作台新增/删除直接发出保存操作，自动选中新幕；日�
     state = { ...state, revision: '3', story: readStory(sources), routes: readManagedRoutes(sources.get('routes.js')!)!, selected: removed.selected, appliedRequestId: remove.requestId }; await deliver();
     assert.equal(state.story!.frames.length, 2);
     await act(async () => window.dispatchEvent(new dom.window.MessageEvent('message', { data: { type: 'settled', requestId: remove.requestId } })));
-    const mappedSources = new Map(sources); mappedSources.set('routes.js', "on.advance('a', ctx => checkFlag(ctx.vars.flag) ? 'b' : 'a'); on.end('b');");
+    const mappedSources = new Map(sources); mappedSources.set('routes.js', "frame('a').advance(ctx => checkFlag(ctx.vars.flag) ? 'b' : 'a'); frame('b').end();");
     const mappedStory = { ...readStory(mappedSources), scripts: ['routes.js'] }, mapping = analyzeLogic(mappedSources, mappedStory);
     state = { ...state, revision: '4', story: mappedStory, routes: mapping.routes, logic: mapping, selected: 'a' }; await deliver();
     assert.equal(button('＋新增幕').disabled, true); assert.ok(node.textContent?.includes('条件或变量更新包含自定义表达式'));

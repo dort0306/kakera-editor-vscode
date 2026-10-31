@@ -1,4 +1,6 @@
-// UI events use the player's restricted host, never the extension host.
-on.ui("advance", (ctx) => { ctx.advance(); });
-on.ui("choose", (ctx) => { ctx.choose(ctx.item.id); });
-on.ui("restart", (ctx) => { ctx.restart(); });
+// v0.11.0 registers every UI callback on its real XML target.
+ui("hud").bind("advance", (ctx) => { ctx.advance(); });
+ui("continue").bind("advance", (ctx) => { ctx.advance(); });
+ui("choice").bind("choose", (ctx) => { ctx.choose(ctx.item.id); });
+ui("startStory").bind("restart", (ctx) => { ctx.restart(); });
+ui("restart").bind("restart", (ctx) => { ctx.restart(); });

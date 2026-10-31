@@ -1,6 +1,6 @@
 # 08 依据与外部 API
 
-核对日期：2026-10-30。播放器 v0.10.0（story 8 / UI 3 / save 9）；编辑器采用 VS Code 插件，AI 使用用户可配置的兼容 API，不绑定必需模型。下表部分路径属于相邻上游工程，未随本仓库提供；实际插件验证以 [12 实现记录](12-implementation-status.zh-cn.md)为准。
+核对日期：2026-10-31。播放器 v0.11.0（story 8 / UI 3 / save 9）；编辑器采用 VS Code 插件，AI 使用用户可配置的兼容 API，不绑定必需模型。下表部分路径属于相邻上游工程，未随本仓库提供；实际插件验证以 [12 实现记录](12-implementation-status.zh-cn.md)为准。
 
 ## 1. 仓库依据
 
@@ -14,6 +14,9 @@
 | 上游 `doc/multiple-entries-implementation-plan.zh-cn.md` / `doc/multiple-entries-validation.zh-cn.md` | 多起始幕、UI 首次进入、显式 resume/restart 与调试 game_started（不在本仓库） |
 | 上游 `doc/configurable-shortcuts-implementation-plan.zh-cn.md`、`doc/hsv-triangle-picker-implementation-plan.zh-cn.md`、`doc/confirmation-quit-implementation-plan.zh-cn.md` / 对应验收 | 玩家快捷键、三角 HSV/配色、确认弹窗与退出（不在本仓库） |
 | 上游 `doc/ui-extensibility-roadmap.zh-cn.md`、`doc/ui-extensibility-validation.zh-cn.md`、`doc/ui-extensibility-independent-review.zh-cn.md` | v0.10.0 UI 扩展范围、验收和独立复验（不在本仓库） |
+| 上游 `doc/v0.10.1-implementation-plan.zh-cn.md`、`doc/engine-i18n-*.md`、`doc/game-localization-*.md`、`doc/v0.10.1-validation.zh-cn.md` | v0.10.1 宿主/游戏国际化范围、消息索引、验收与限制（不在本仓库） |
+| 上游 `doc/js-api-redesign-implementation-plan.zh-cn.md`、`doc/js-api-redesign-validation-plan.zh-cn.md`、`doc/js-api-redesign-validation.zh-cn.md` | v0.11.0 `frame()`/`ui()` 注册、目标作用域事件、`$game`/`$host`、旧 `on.*` 拒绝与迁移清单（不在本仓库） |
+| 上游 `doc/localization-example/`、`locales/engine/zh-CN.ftl` | 可运行本地化示例与宿主中文词条（不随本仓库复制） |
 | [v0.8.3 策略](../v0.8.3-implementation-plan.zh-cn.md) / [验收](../v0.8.3-validation.zh-cn.md) | 历史版本实现与真实检查范围 |
 | [调试 transport](../../src/debug.rs) / [App](../../src/app/debug.rs) | 真实请求、认证、修订与提交前断点 |
 | [发布选择](../../src/package/selection.rs) | 运行依赖/许可证/显式 include 的实际策略 |

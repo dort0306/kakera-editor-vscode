@@ -13,6 +13,7 @@ import { assignTexture } from '../packages/source/src/texture-source';
 import { verifyConditionalRoutes } from './conditional-native';
 import { verifyUiEditor } from './ui-native';
 import { verifyLifecycleEditor } from './lifecycle-native';
+import { verifyLocalization } from './localization-native';
 async function main() {
 const root = await fs.mkdtemp(path.resolve('.test-work/native-'));
 const tools = await toolchain(path.resolve(process.argv[2] ?? 'resources/tools/win32-x64'));
@@ -25,6 +26,7 @@ await fs.writeFile(path.join(content, 'scripts/routes.js'), emitRoutes([
 ]));
 const output = (text: string) => process.stdout.write(text);
 await launch(tools.player, ['--project', content, '--check', '--no-audio'], output).done;
+await verifyLocalization(tools, root);
 const renameRoot = path.join(root, 'rename-content'); await fs.cp(content, renameRoot, { recursive: true });
 const renameSources = new Map([['story.xml', await fs.readFile(path.join(renameRoot, 'story.xml'), 'utf8')], ['scripts/routes.js', await fs.readFile(path.join(renameRoot, 'scripts/routes.js'), 'utf8')]]);
 const renameStory = readStory(renameSources), renameLogic = analyzeLogic(renameSources, renameStory), renamed = renameFrame(renameSources, renameLogic, 'journey', 'journey.renamed');

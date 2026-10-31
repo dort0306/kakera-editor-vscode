@@ -5,7 +5,7 @@ const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url),
 test('原生工程侧栏按人物/美术/剧本/变量/JS 分类，并贡献新建删除右键菜单', () => {
   assert.ok(pkg.contributes.views.kakera.some((view: { id: string }) => view.id === 'kakera.project'));
   const commands = new Set<string>(pkg.contributes.commands.map((command: { command: string }) => command.command));
-  for (const id of ['kakera.tree.refresh', 'kakera.character.create', 'kakera.character.rename', 'kakera.character.delete', 'kakera.variable.create', 'kakera.variable.edit', 'kakera.variable.delete', 'kakera.frame.open', 'kakera.frame.create', 'kakera.frame.delete']) assert.ok(commands.has(id), id);
+  for (const id of ['kakera.tree.refresh', 'kakera.character.create', 'kakera.character.rename', 'kakera.character.delete', 'kakera.variable.create', 'kakera.variable.edit', 'kakera.variable.delete', 'kakera.frame.open', 'kakera.frame.create', 'kakera.frame.delete', 'kakera.ui.source']) assert.ok(commands.has(id), id);
   const context = pkg.contributes.menus['view/item/context'] as { command: string; when: string }[];
   for (const command of context) assert.ok(commands.has(command.command), command.command);
   const has = (command: string, viewItem: string) => context.some(menu => menu.command === command && menu.when.includes(`viewItem == ${viewItem}`));
@@ -17,5 +17,8 @@ test('原生工程侧栏按人物/美术/剧本/变量/JS 分类，并贡献新�
   assert.ok(has('kakera.frame.delete', 'kakera.frame'));
   assert.ok(has('kakera.variable.delete', 'kakera.variable'));
   assert.ok(has('kakera.character.delete', 'kakera.character'));
+  assert.ok(has('kakera.ui.open', 'kakera.category.ui'));
+  assert.ok(has('kakera.ui.source', 'kakera.uiFile'));
+  assert.equal(pkg.scripts.package.includes(`-${pkg.version}.vsix`), true);
   assert.ok(pkg.contributes.menus['view/title'].some((menu: { command: string }) => menu.command === 'kakera.tree.refresh'));
 });

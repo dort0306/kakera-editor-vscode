@@ -9,7 +9,7 @@ import { Playtests } from './playtest';
 import { Adapter } from '../../debug-adapter/src/adapter';
 import { readMessage, type EditorState } from '../../protocol/src/index';
 import { validateRoutes, validateStory, i64, type Route } from '../../domain/src/index';
-import { addAsset, appendGroup, emitRoutes, escapeXml, insertFrame, newFrameRef, newShortId, patchFrame, readStory, reorderFrames, readGameTitle, patchGameTitle, editCharacter, addCharacterLooks, characterLooks, assignCharacterLook, setFrameVisual, reconcilePendingRoutes, insertConnectedFrame, deleteConnectedFrame, deleteConnectedFrames, duplicateConnectedFrames, setStoryEntry, setStoryEntries, addStoryVariable, editStoryVariable, deleteStoryVariable, deleteCharacter, patchLogicRoutes, protectedLogicTargets } from '../../source/src/index';
+import { addAsset, appendGroup, emitRoutes, escapeXml, insertFrame, newFrameRef, newShortId, patchFrame, readStory, reorderFrames, readGameTitle, patchGameTitle, editCharacter, addCharacterLooks, characterLooks, assignCharacterLook, setFrameVisual, reconcilePendingRoutes, insertConnectedFrame, deleteConnectedFrame, deleteConnectedFrames, duplicateConnectedFrames, setStoryEntry, setStoryEntries, addStoryVariable, editStoryVariable, deleteStoryVariable, deleteCharacter, patchLogicRoutes, protectedLogicTargets, localizationIssues, storyLocalizationUsages, editFtlMessage, deleteFtlMessage, editLocalizationManifest } from '../../source/src/index';
 import { child, parseXml, setAttribute } from '../../source/src/xml';
 import { endpoint, splitProposal, type AiProfile } from '../../ai-client/src/index';
 import { archiveEntries } from './archive';
@@ -19,7 +19,7 @@ import { WORKBENCH_FILE, readWorkbench, frameLayout, moveFrame, moveFrames } fro
 import { reconnectFrame, renameFrame } from '../../source/src/editing';
 import { saveGraphExport } from './graph-export';
 import { readUiDesign, editUi, locateUi } from '../../source/src/ui-source';
-import { uiEntry } from '../../source/src/ui-files';
+import { uiEntry, uiFileList } from '../../source/src/ui-files';
 import { uiNodes } from '../../domain/src/ui';
 import { UiImageCache } from './ui-assets';
 
@@ -33,7 +33,7 @@ type TreeNode =
   | { kind: 'frame'; ref: string; file: string; name: string }
   | { kind: 'variable'; id: string; variableType: string; initial: string }
   | { kind: 'script'; file: string }
-  | { kind: 'ui' };
+  | { kind: 'uiFile'; file: string };
 class KakeraTreeItem extends vscode.TreeItem {
   constructor(readonly node: TreeNode, label: string, collapsibleState: vscode.TreeItemCollapsibleState = vscode.TreeItemCollapsibleState.None) { super(label, collapsibleState); }
 }
@@ -55,7 +55,7 @@ class Tree implements vscode.TreeDataProvider<vscode.TreeItem> {
     const node = item instanceof KakeraTreeItem ? item.node : undefined;
     if (!node) {
       const story = this.loaded.story, art = story.assets.filter(a => ['image', 'cg', 'nine-patch', 'live2d'].includes(a.kind)), media = story.assets.filter(a => ['audio', 'font'].includes(a.kind));
-      return [this.category('characters', story.characters.length), this.category('art', art.length), this.category('media', media.length), this.category('frames', story.frames.filter(f => !f.pending).length), this.category('variables', story.variables.length), this.category('scripts', story.scripts.length), this.category('ui', 1)];
+      return [this.category('characters', story.characters.length), this.category('art', art.length), this.category('media', media.length), this.category('frames', story.frames.filter(f => !f.pending).length), this.category('variables', story.variables.length), this.category('scripts', story.scripts.length), this.category('ui', uiFileList(this.loaded.sources).length)];
     }
     if (node.kind === 'frameFile') {
       const kinds = new Map((this.loaded.routes ?? []).map(route => [route.frame, route.kind]));
@@ -93,8 +93,11 @@ class Tree implements vscode.TreeDataProvider<vscode.TreeItem> {
       const child = new KakeraTreeItem({ kind: 'script', file }, file);
       child.id = `kakera:script:${file}`; child.description = 'JS'; child.contextValue = 'kakera.script'; child.iconPath = new vscode.ThemeIcon('file-code'); child.tooltip = `编辑 ${file}`; child.command = { command: 'kakera.source.open', title: '打开 JS 程序', arguments: [file] }; return child;
     });
-    const ui = new KakeraTreeItem({ kind: 'ui' }, 'UI 编辑器');
-    ui.id = 'kakera:ui:open'; ui.description = 'UI 3'; ui.contextValue = 'kakera.ui'; ui.iconPath = new vscode.ThemeIcon('layout'); ui.command = { command: 'kakera.ui.open', title: '打开 UI 编辑器' }; return [ui];
+    const uiFiles = uiFileList(this.loaded.sources), entry = (() => { try { return uiEntry(this.loaded.sources); } catch { return ''; } })();
+    return uiFiles.map(file => {
+      const child = new KakeraTreeItem({ kind: 'uiFile', file }, file);
+      child.id = `kakera:ui-file:${file}`; child.description = file === entry ? '入口' : 'include'; child.contextValue = 'kakera.uiFile'; child.iconPath = new vscode.ThemeIcon('file-code'); child.tooltip = `${file} · ${file === entry ? 'UI 入口' : 'UI include'}；左键打开可视化 UI 编辑器，右键打开源码`; child.command = { command: 'kakera.ui.open', title: '打开 UI 编辑器', arguments: [file] }; return child;
+    });
   }
 }
 function variableUsedByRoutes(routes: Route[] | undefined, id: string): boolean {
@@ -161,7 +164,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     if (!session) {
       session = new Session(root, path.join(storage, 'projects', hashText(root).slice(0, 24)), output, async () => (await tools()).player, engineArgs); sessions.set(root, session);
       const watcher = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(vscode.Uri.file(root), '**/*'));
-      const target = session; context.subscriptions.push(watcher, watcher.onDidChange(() => scheduleRefresh(target)), watcher.onDidCreate(() => scheduleRefresh(target)), watcher.onDidDelete(() => scheduleRefresh(target)));
+      const target = session;
+      // Player-owned preferences and hidden state never invalidate editor source state.
+      const ignored = (uri: vscode.Uri) => /^(language\.json|keybindings\.json|ui-colors\.json|ui-audio\.json|flow-checkpoint\.json|settings\.json|read\.json|profile\.json)$/i.test(path.basename(uri.fsPath));
+      context.subscriptions.push(watcher, watcher.onDidChange(uri => { if (!ignored(uri)) scheduleRefresh(target); }), watcher.onDidCreate(uri => { if (!ignored(uri)) scheduleRefresh(target); }), watcher.onDidDelete(uri => { if (!ignored(uri)) scheduleRefresh(target); }));
     }
     active = session; scheduleTreeRefresh(session); return session;
   }
@@ -206,17 +212,19 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       state.view = selectedViews.get(panel) ?? 'story';
       state.uiScreen = selectedUiScreens.get(panel); state.uiSelected = selectedUiNodes.get(panel);
       try { state.ui = readUiDesign(loaded.sources); } catch (e) { state.issues.push(`UI：${e instanceof Error ? e.message : '读取失败'}`); }
-      state.title = readGameTitle(loaded.sources);
+      try { state.title = readGameTitle(loaded.sources); } catch (e) { state.issues.push(`标题：${e instanceof Error ? e.message : '读取失败'}`); }
       state.characterLooks = Object.fromEntries(loaded.story.characters.map(c => [c.id, characterLooks(loaded.sources, c.id)]));
       state.live2dMode = vscode.workspace.getConfiguration('kakera').inspect<string>('tools.cubismCore')?.globalValue ? 'native' : 'fallback';
-      tree.loaded = loaded; tree.title = state.title.text; tree.syncView(); tree.emitter.fire();
-      state.issues.push(...validateStory(loaded.story).map(i => i.message));
+      tree.loaded = loaded; tree.title = state.title?.text; tree.syncView(); tree.emitter.fire();
+      const storyIssues = validateStory(loaded.story);
+      const localization = localizationIssues(loaded.story, [...storyLocalizationUsages(loaded.story), ...(state.ui?.localizationUsages ?? [])]);
+      state.issues.push(...storyIssues.map(i => i.message), ...localization.map(i => i.message));
       state.issues.push(...loaded.logic.issues);
-      for (const file of loaded.story.files) {
-        const doc = loaded.documents.get(file)!;
-        const issues = validateStory(loaded.story).filter(i => i.file === file).map(i => new vscode.Diagnostic(new vscode.Range(Math.max(0, i.line - 1), 0, Math.max(0, i.line - 1), 1), i.message, i.severity === 'error' ? vscode.DiagnosticSeverity.Error : vscode.DiagnosticSeverity.Warning));
-        diagnostics.set(doc.uri, issues);
-      }
+      const issuesFor = (file: string) => [
+        ...storyIssues.filter(i => i.file === file),
+        ...localization.filter(i => i.file === file)
+      ].map(i => new vscode.Diagnostic(new vscode.Range(Math.max(0, i.line - 1), 0, Math.max(0, i.line - 1), 1), i.message, i.severity === 'error' ? vscode.DiagnosticSeverity.Error : vscode.DiagnosticSeverity.Warning));
+      for (const [file, doc] of loaded.documents) if (file !== WORKBENCH_FILE) diagnostics.set(doc.uri, issuesFor(file));
       // Only declared image resources can enter the webview. No API secrets or raw machine paths.
       const imageCache = path.join(session.storage, 'images');
       if (state.writable) await fs.mkdir(imageCache, { recursive: true });
@@ -301,6 +309,36 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       await vscode.window.showTextDocument(loaded.documents.get(logic?.file ?? frame.file)!, { selection: new vscode.Range(line, 0, line, 0) }); return;
     }
     if (message.revision !== loaded.revision) throw new Error('分镜内容已更新，请刷新后重试；你的草稿仍保留');
+    if (message.type === 'localizationSource') {
+      const catalog = loaded.story.localization;
+      if (!catalog?.enabled || !catalog.file) throw new Error('当前工程没有开启本地化');
+      const locale = message.payload.locale === undefined ? '' : string(message.payload.locale, 64);
+      const file = message.payload.manifest === true || !locale ? catalog.file : catalog.texts.find(item => item.id === locale)?.messages[0]?.src;
+      if (!file) throw new Error('找不到本地化源文件');
+      const doc = loaded.documents.get(file);
+      if (!doc) throw new Error(`本地化文件尚未载入：${file}`);
+      await vscode.window.showTextDocument(doc); return;
+    }
+    if (message.type === 'localization') {
+      await run(session, '正在保存本地化', async signal => {
+        const operation = message.payload.operation as { action?: unknown; locale?: unknown; key?: unknown; value?: unknown } | undefined;
+        const manifest = message.payload.manifest as Parameters<typeof editLocalizationManifest>[1] | undefined;
+        if (manifest && operation) throw new Error('本地化操作不能同时包含清单和消息');
+        let changes: Map<string, string>;
+        if (manifest) {
+          if (typeof manifest !== 'object' || typeof manifest.action !== 'string') throw new Error('本地化清单操作无效');
+          changes = editLocalizationManifest(loaded.sources, manifest);
+        } else {
+          if (!operation || !['message', 'deleteMessage'].includes(String(operation.action))) throw new Error('不支持的本地化操作');
+          const locale = string(operation.locale, 64), key = string(operation.key, 128);
+          changes = operation.action === 'message'
+            ? editFtlMessage(loaded.sources, locale, key, string(operation.value, 60000))
+            : deleteFtlMessage(loaded.sources, locale, key);
+        }
+        if (changes.size) await session.apply(loaded, changes, signal, { save: true });
+      });
+      await refresh(panel, session, message.requestId); await panel.webview.postMessage({ type: 'settled', requestId: message.requestId }); return;
+    }
     if (message.type === 'uiEdit') {
       await run(session, '正在保存 UI', async signal => {
         const result = editUi(loaded.sources, message.payload.operation);
@@ -368,10 +406,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         if (branch !== undefined && (typeof branch !== 'number' || !Number.isInteger(branch) || branch < 0 || branch >= 32)) throw new Error('条件连接点无效');
         for (const [file, text] of reconnectFrame(loaded.sources, loaded.logic, ref, string(message.payload.target), message.payload.option === undefined ? undefined : string(message.payload.option, 256), branch)) changes.set(file, text);
       } else if (message.type === 'title') {
-        for (const [file, xml] of patchGameTitle(loaded.sources, string(message.payload.title, 1024), message.payload.fixed === true)) changes.set(file, xml);
+        const mode = message.payload.mode === undefined ? 'literal' : string(message.payload.mode, 16);
+        if (!['literal', 'key', 'key-binding'].includes(mode)) throw new Error('未知标题来源');
+        for (const [file, xml] of patchGameTitle(loaded.sources, string(message.payload.title, 1024), message.payload.fixed === true, mode as 'literal' | 'key' | 'key-binding')) changes.set(file, xml);
       } else if (message.type === 'character') {
         const id = message.payload.id === undefined ? undefined : string(message.payload.id, 256);
-        for (const [file, xml] of editCharacter(loaded.sources, id, string(message.payload.name, 1024)).changes) changes.set(file, xml);
+        const nameKey = message.payload.nameKey === undefined ? undefined : (message.payload.nameKey === null ? null : string(message.payload.nameKey, 128));
+        for (const [file, xml] of editCharacter(loaded.sources, id, string(message.payload.name, 1024), nameKey).changes) changes.set(file, xml);
       } else if (message.type === 'characterLooks') {
         const looks = message.payload.looks;
         if (!Array.isArray(looks) || looks.some(l => !l || typeof l.image !== 'string' || (l.live2d !== undefined && typeof l.live2d !== 'string') || (l.visualId !== undefined && typeof l.visualId !== 'string'))) throw new Error('人物外观无效');
@@ -381,9 +422,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       } else
       if (message.type === 'patch') {
         const patch = message.payload.patch as Parameters<typeof patchFrame>[2];
-        if (!patch || Object.keys(patch).some(k => !['text', 'speaker', 'visual', 'audio', 'options'].includes(k))) throw new Error('不支持的幕属性');
+        if (!patch || Object.keys(patch).some(k => !['text', 'textKey', 'speaker', 'visual', 'audio', 'options'].includes(k))) throw new Error('不支持的幕属性');
         if (patch.text !== undefined) string(patch.text);
+        if (patch.textKey !== undefined && patch.textKey !== null) string(patch.textKey, 128);
         for (const field of ['speaker', 'visual'] as const) if (patch[field] !== undefined) string(patch[field], 256);
+        if (patch.options !== undefined) {
+          if (!Array.isArray(patch.options) || patch.options.some(option => !option || typeof option.id !== 'string' || typeof option.text !== 'string' || (option.textKey !== undefined && typeof option.textKey !== 'string'))) throw new Error('选项数据无效');
+        }
         changes.set(frame!.file, patchFrame(loaded.sources.get(frame!.file)!, ref, patch));
         if (message.payload.routes !== undefined) {
           if (!loaded.routes || !loaded.logic.frames[ref]?.editable || !Array.isArray(message.payload.routes)) throw new Error(loaded.logic.frames[ref]?.reason ?? '此幕路线尚不能安全编辑');
@@ -458,7 +503,15 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     async resolveCustomTextEditor(document, panel) {
       try {
         const session = await sessionFor(document.uri); panels.set(panel, session); panelFiles.set(panel, document.uri.fsPath.toLowerCase());
-        try { const loaded = await session.load(); if (readUiDesign(loaded.sources).files.some(file => path.resolve(session.root, file).toLowerCase() === document.uri.fsPath.toLowerCase())) selectedViews.set(panel, 'ui'); } catch { /* source remains available while repairing invalid XML */ }
+        try {
+          const loaded = await session.load(), design = readUiDesign(loaded.sources);
+          if (design.files.some(file => path.resolve(session.root, file).toLowerCase() === document.uri.fsPath.toLowerCase())) {
+            selectedViews.set(panel, 'ui');
+            // Entry keeps the declared initial screen; an include selects its first local screen.
+            const own = design.screens.find(screen => path.resolve(session.root, screen.file).toLowerCase() === document.uri.fsPath.toLowerCase());
+            if (own && own.file !== design.entry) selectedUiScreens.set(panel, own.id);
+          }
+        } catch { /* source remains available while repairing invalid XML */ }
         const pendingFrame = pendingFrameSelections.get(document.uri.fsPath.toLowerCase());
         if (pendingFrame) { const loaded = await session.load(); if (loaded.story.frames.some(frame => frame.ref === pendingFrame)) { selectedFrames.set(panel, pendingFrame); selectedViews.set(panel, 'story'); } pendingFrameSelections.delete(document.uri.fsPath.toLowerCase()); }
         panel.webview.options = { enableScripts: true, localResourceRoots: [context.extensionUri] }; panel.webview.html = html(panel.webview);
@@ -486,7 +539,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     try { return await handler(...args); } catch (e) { const message = e instanceof Error ? e.message : '操作失败'; output.appendLine(message); void vscode.window.showErrorMessage(message); }
   }));
   command('kakera.home', () => {
-    const panel = vscode.window.createWebviewPanel('kakera.home', 'Kakera 创作首页', vscode.ViewColumn.One, { enableScripts: true, localResourceRoots: [context.extensionUri] }); panel.webview.html = html(panel.webview);
+    const panel = vscode.window.createWebviewPanel('kakera.home', 'Kakera 创作首页', vscode.ViewColumn.One, { enableScripts: true, localResourceRoots: [context.extensionUri] }); panel.iconPath = vscode.Uri.joinPath(context.extensionUri, 'resources', 'kakera.png'); panel.webview.html = html(panel.webview);
     const allowed = ['kakera.project.create', 'kakera.project.open', 'kakera.storyboard.open', 'kakera.ui.open', 'kakera.tools.configure', 'kakera.ai.configure', 'kakera.validate', 'kakera.playtest.start', 'kakera.build.run', 'kakera.debug.start', 'kakera.recovery'];
     panel.webview.onDidReceiveMessage(m => { if (m?.type === 'command' && allowed.includes(m.command)) void vscode.commands.executeCommand(m.command); });
   });
@@ -518,7 +571,20 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     pendingFrameSelections.set(targetFile, frame.ref);
     await vscode.commands.executeCommand('vscode.openWith', vscode.Uri.file(target), 'kakera.storyboard');
   });
-  command('kakera.ui.open', async () => { const session = await current(), loaded = await session.load(); await vscode.commands.executeCommand('vscode.openWith', vscode.Uri.file(await safePath(session.root, uiEntry(loaded.sources))), 'kakera.storyboard'); });
+  command('kakera.ui.open', async (arg?: unknown) => {
+    const session = await current(), loaded = await session.load();
+    const requested = typeof arg === 'string' ? arg : arg instanceof KakeraTreeItem && arg.node.kind === 'uiFile' ? arg.node.file : undefined;
+    const files = uiFileList(loaded.sources);
+    const file = requested && files.includes(requested) ? requested : uiEntry(loaded.sources);
+    await vscode.commands.executeCommand('vscode.openWith', vscode.Uri.file(await safePath(session.root, file)), 'kakera.storyboard');
+  });
+  command('kakera.ui.source', async (arg?: unknown) => {
+    const session = await current(), loaded = await session.load();
+    const requested = typeof arg === 'string' ? arg : arg instanceof KakeraTreeItem && arg.node.kind === 'uiFile' ? arg.node.file : undefined;
+    const files = uiFileList(loaded.sources);
+    const file = requested && files.includes(requested) ? requested : uiEntry(loaded.sources);
+    await vscode.window.showTextDocument(vscode.Uri.file(await safePath(session.root, file)));
+  });
   command('kakera.source.open', async (arg?: unknown) => {
     const session = await current(), relative = typeof arg === 'string' ? arg : arg instanceof KakeraTreeItem && arg.node.kind === 'script' ? arg.node.file : 'story.xml';
     await vscode.window.showTextDocument(vscode.Uri.file(await safePath(session.root, relative)));
@@ -544,7 +610,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         { frame: ids.get('ending')!, kind: 'end', updates: [] }
       ];
       await fs.writeFile(path.join(target, 'content/scripts/routes.js'), emitRoutes(routes));
-      await fs.writeFile(path.join(target, 'project.kakera-editor.json'), JSON.stringify({ editorSchema: 1, engineContract: '0.10.0', contentRoot: 'content' }, null, 2) + '\n');
+      await fs.writeFile(path.join(target, 'project.kakera-editor.json'), JSON.stringify({ editorSchema: 1, engineContract: '0.11.0', contentRoot: 'content' }, null, 2) + '\n');
       await fs.writeFile(path.join(target, '.gitignore'), '.editor/\n.cache/\n.work/\nbuilds/\n');
       await fs.mkdir(path.join(target, 'authoring'));
       const session = await sessionFor(vscode.Uri.file(path.join(target, 'project.kakera-editor.json')));
@@ -690,7 +756,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       await fs.mkdir(candidate);
       try {
         await session.check(frozen, signal); await frozen.assertCurrent();
-        if (await vscode.window.showInformationMessage(`将以 v0.10.0 依赖选择构建 ${loaded.story.id}。全部声明资源及 licenses、assets/licenses 中的许可证会入包；额外文件仅按 kakera.package.json。请确认授权与附加清单，动态路线需自行试玩覆盖。`, { modal: true }, '生成本地发行目录') !== '生成本地发行目录') return;
+        if (await vscode.window.showInformationMessage(`将以 v0.11.0 依赖选择构建 ${loaded.story.id}。全部声明资源及 licenses、assets/licenses 中的许可证会入包；额外文件仅按 kakera.package.json。请确认授权与附加清单，动态路线需自行试玩覆盖。`, { modal: true }, '生成本地发行目录') !== '生成本地发行目录') return;
         const pack = path.join(candidate, 'game.kpak');
         const hasModels = loaded.story.assets.some(a => a.kind === 'live2d');
         if (hasModels && await waitReview(vscode.window.showWarningMessage('当前构建会生成 Live2D 静态回退版，不复制 Cubism Core；请通过“开始游戏.cmd”运行。', '构建静态回退版', '取消'), signal) !== '构建静态回退版') return;

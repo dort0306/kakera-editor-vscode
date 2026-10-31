@@ -1,42 +1,108 @@
 import type { CharacterLook, GameTitle, Portrait } from '../../domain/src/index';
+import { localizedStatic } from '../../domain/src/localization';
 import { appendGroup, newShortId, patchFrame, readStory, type Sources } from './index';
 import { child, escapeXml, group, parseXml, setAttribute, type XmlNode } from './xml';
 import { uiFragments } from './ui-files';
 
 export function readGameTitle(sources: Sources): GameTitle {
-  const file = child(parseXml(sources.get('story.xml')!), 'interface')?.attrs.src;
+  const storyFile = sources.get('story.xml');
+  if (storyFile === undefined) throw new Error('缺少 story.xml');
+  const file = child(parseXml(storyFile), 'interface')?.attrs.src;
   if (!file || !sources.has(file)) throw new Error('缺少 UI 文件');
   const ui = parseXml(sources.get(file)!);
   if (ui.tag !== 'ui' || ui.attrs.schema !== '3') throw new Error('只支持 UI schema 3');
+  const catalog = (() => { try { return readStory(sources).localization; } catch { return undefined; } })();
   const binding = ui.attrs['title-bind'];
-  const owner = binding?.startsWith('ui.') ? uiFragments(sources).flatMap(f => group(f.root, 'variables').filter(n => n.tag === 'string' && n.attrs.id === binding.slice(3)).map(variable => ({ file: f.file, variable }))) : [];
-  const variable = owner[0]?.variable;
+  const keyBinding = ui.attrs['title-key-bind'];
+  const fixedKey = ui.attrs['title-key'];
+  const sourcesSet = [ui.attrs.title, binding, keyBinding, fixedKey].filter(value => value !== undefined);
+  if (sourcesSet.length > 1) throw new Error('窗口标题的 title/title-bind/title-key/title-key-bind 不能同时设置');
+  const owner = (path: string | undefined) => path?.startsWith('ui.') ? uiFragments(sources).flatMap(f => group(f.root, 'variables').filter(n => n.tag === 'string' && n.attrs.id === path.slice(3)).map(variable => ({ file: f.file, variable }))) : [];
+  const variableOwner = owner(binding), keyVariableOwner = owner(keyBinding);
+  const variable = variableOwner[0]?.variable, keyVariable = keyVariableOwner[0]?.variable;
   if (binding && !variable) throw new Error('窗口标题绑定必须引用已声明的 UI string');
-  if (owner.length > 1) throw new Error('窗口标题变量重复');
-  return { file, text: variable?.attrs.initial ?? ui.attrs.title ?? 'Kakera AVG', ...(binding ? { binding } : {}), ...(owner[0] && owner[0].file !== file ? { variableFile: owner[0].file } : {}) };
+  if (keyBinding && !keyVariable) throw new Error('窗口标题 text-key 绑定必须引用已声明的 UI string');
+  if (variableOwner.length > 1 || keyVariableOwner.length > 1) throw new Error('窗口标题变量重复');
+  let text: string, textKey: string | undefined;
+  if (fixedKey !== undefined) {
+    textKey = fixedKey;
+    try { text = localizedStatic(catalog, fixedKey); } catch { text = ''; }
+  } else if (keyBinding && keyVariable) {
+    const key = keyVariable.attrs.initial;
+    try { text = key ? localizedStatic(catalog, key) : ''; } catch { text = ''; }
+  } else {
+    text = variable?.attrs.initial ?? ui.attrs.title ?? 'Kakera AVG';
+  }
+  if (!text.trim() || [...text].length > 256 || /\p{Cc}/u.test(text)) throw new Error('窗口标题必须解析为 1–256 个字符且不能包含控制字符');
+  return { file, text, ...(binding ? { binding } : {}), ...(keyBinding ? { keyBinding } : {}), ...(textKey !== undefined ? { textKey } : {}), ...(variableOwner[0] && variableOwner[0].file !== file ? { variableFile: variableOwner[0].file } : {}), ...(keyVariableOwner[0] && keyVariableOwner[0].file !== file ? { keyVariableFile: keyVariableOwner[0].file } : {}) };
 }
-export function patchGameTitle(sources: Sources, title: string, fixed = false): Sources {
-  if (typeof title !== 'string' || !title.trim() || [...title].length > 256 || /\p{Cc}/u.test(title)) throw new Error('标题必须为 1–256 个字符且不能包含控制字符');
-  const info = readGameTitle(sources), file = info.binding && !fixed ? info.variableFile ?? info.file : info.file; let xml = sources.get(file)!;
+/** 'literal' keeps the existing binding-literal editing behavior unless `fixed`
+ * is set; 'key' and 'key-binding' switch the title to a localization source. */
+export function patchGameTitle(sources: Sources, title: string, fixed = false, mode: 'literal' | 'key' | 'key-binding' = 'literal'): Sources {
+  if (typeof title !== 'string' || [...title].length > 256 || /\p{Cc}/u.test(title)) throw new Error('标题必须为 0–256 个字符且不能包含控制字符');
+  const info = readGameTitle(sources), file = mode === 'literal' && info.binding && !fixed ? info.variableFile ?? info.file : info.file;
+  let xml = sources.get(file)!;
+  const root = () => parseXml(xml);
+  if (mode === 'key' || mode === 'key-binding') {
+    if (mode === 'key') {
+      if (!/^[A-Za-z][A-Za-z0-9_-]{0,127}$/.test(title)) throw new Error('标题 key 必须以英文字母开头，且只包含英文、数字、下划线或连字符');
+      xml = setAttribute(xml, root(), 'title-bind', '');
+      xml = setAttribute(xml, root(), 'title-key-bind', '');
+      xml = setAttribute(xml, root(), 'title-key', title);
+    } else {
+      const variable = uiFragments(sources).flatMap(fragment => group(fragment.root, 'variables')).find(node => node.tag === 'string' && node.attrs.id === title.slice(3));
+      if (!title.startsWith('ui.') || !variable) throw new Error('标题的 text-key 绑定必须引用已声明的 UI string');
+      xml = setAttribute(xml, root(), 'title-bind', '');
+      xml = setAttribute(xml, root(), 'title-key', '');
+      xml = setAttribute(xml, root(), 'title-key-bind', title);
+    }
+    xml = setAttribute(xml, root(), 'title', '');
+    return new Map([[file, xml]]);
+  }
+  if (!title.trim()) throw new Error('标题不能为空');
   if (info.binding && !fixed) {
     const variable = group(parseXml(xml), 'variables').find(n => n.tag === 'string' && n.attrs.id === info.binding!.slice(3))!;
     xml = setAttribute(xml, variable, 'initial', title);
-  } else {
-    if (info.binding) xml = setAttribute(xml, parseXml(xml), 'title-bind', '');
-    xml = setAttribute(xml, parseXml(xml), 'title', title);
+    return new Map([[file, xml]]);
   }
+  if (info.binding) xml = setAttribute(xml, root(), 'title-bind', '');
+  if (info.textKey !== undefined) xml = setAttribute(xml, root(), 'title-key', '');
+  if (info.keyBinding !== undefined) xml = setAttribute(xml, root(), 'title-key-bind', '');
+  xml = setAttribute(xml, root(), 'title', title);
   return new Map([[file, xml]]);
 }
-export function editCharacter(sources: Sources, id: string | undefined, name: string): { changes: Sources; id: string } {
-  if (typeof name !== 'string' || !name.trim() || [...name].length > 256 || /\p{Cc}/u.test(name)) throw new Error('人物名必须非空，最多 256 个字符，且不含控制字符');
+export function editCharacter(sources: Sources, id: string | undefined, name: string, nameKey?: string | null): { changes: Sources; id: string } {
+  if (typeof name !== 'string' || [...name].length > 256 || /\p{Cc}/u.test(name)) throw new Error('人物名必须最多 256 个字符，且不含控制字符');
+  if (!nameKey && !name.trim()) throw new Error('人物名不能为空');
+  const key = nameKey ? nameKey.trim() : '';
+  if (key && !/^[A-Za-z][A-Za-z0-9_-]{0,127}$/.test(key)) throw new Error('人物 name-key 必须以英文字母开头，且只包含英文、数字、下划线或连字符');
   const story = readStory(sources);
   if (!id) {
     const newId = newShortId(story.characters.map(character => character.id));
-    return { changes: new Map([['story.xml', appendGroup(sources.get('story.xml')!, 'characters', `<character id="${newId}" name="${escapeXml(name)}" />`)]]), id: newId };
+    const markup = key ? `<character id="${newId}" name-key="${escapeXml(key)}" />` : `<character id="${newId}" name="${escapeXml(name)}" />`;
+    return { changes: new Map([['story.xml', appendGroup(sources.get('story.xml')!, 'characters', markup)]]), id: newId };
   }
   for (const file of story.files) {
     const xml = sources.get(file)!, character = group(parseXml(xml), 'characters').find(n => n.attrs.id === id);
-    if (character) return { changes: new Map([[file, character.attrs.name === name ? xml : setAttribute(xml, character, 'name', name)]]), id };
+    if (!character) continue;
+    if (nameKey !== undefined) {
+      let next = xml;
+      const at = () => group(parseXml(next), 'characters').find(n => n.attrs.id === id)!;
+      if (key) {
+        next = setAttribute(next, at(), 'name', '');
+        next = setAttribute(next, at(), 'name-key', key);
+      } else {
+        next = setAttribute(next, at(), 'name-key', '');
+        next = setAttribute(next, at(), 'name', name);
+      }
+      return { changes: new Map([[file, next]]), id };
+    }
+    if (character.attrs['name-key'] !== undefined) {
+      if (name !== story.characters.find(character => character.id === id)?.name) throw new Error('此人物使用本地化 name-key，请在本地化面板编辑消息，或切换为固定名字');
+      return { changes: new Map(), id };
+    }
+    if (character.attrs.name === name) return { changes: new Map([[file, xml]]), id };
+    return { changes: new Map([[file, setAttribute(xml, character, 'name', name)]]), id };
   }
   throw new Error('人物不存在或已被外部修改');
 }
