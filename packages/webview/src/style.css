@@ -568,6 +568,20 @@ body.vscode-light .panel-icon { border-color: rgba(11, 95, 208, .2); }
 .ui-inspector .inspector-scroll { padding: 11px 12px 0; }
 .ui-inspector .actions button { min-height: 29px; font-size: 10px; }
 .ui-inspector .inspector-section { padding-bottom: 9px; margin-bottom: 9px; }
+/* Collapsed secondary insert panel keeps the canvas tall; primary add-controls stay visible. */
+.ui-insert-more { display: block; padding: 0; margin: 0; border-radius: 12px; overflow: hidden; }
+.ui-insert-more > summary { display: flex; align-items: center; gap: 6px; padding: 7px 12px; color: var(--k-muted); font-size: 10px; cursor: pointer; list-style: none; }
+.ui-insert-more > summary::-webkit-details-marker { display: none; }
+.ui-insert-more > summary::after { content: '＋'; margin-left: auto; color: var(--k-muted); }
+.ui-insert-more[open] > summary::after { content: '－'; }
+.ui-insert-more > fieldset { padding: 4px 12px 10px; margin: 0; border: 0; border-top: 1px solid var(--k-border-soft); border-radius: 0; }
+.ui-canvas-hint { margin-left: 10px; color: var(--k-muted); font-size: 9px; white-space: nowrap; }
+.ui-canvas-quick { display: inline-flex; gap: 2px; margin-left: auto; }
+.ui-canvas-quick button { color: var(--k-text); }
+.particle-presets { display: flex; flex-wrap: wrap; gap: 5px; margin: 6px 0; }
+.particle-presets button { min-height: 25px; padding: 2px 9px; font-size: 10px; }
+.shortcut-hint { max-width: 40vw; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+@media (max-width: 1180px) { .shortcut-hint { display: none; } }
 .ui-media-form p { margin: 5px 0 7px; font-size: 10px; }
 .ui-media-form fieldset { margin: 7px 0; padding: 8px; background: var(--k-bg-deep); border: 1px solid var(--k-border-soft); border-radius: 8px; }
 .ui-media-form legend { padding: 0 4px; color: var(--k-muted); font-size: 10px; }

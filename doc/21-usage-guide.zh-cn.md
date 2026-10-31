@@ -2,11 +2,11 @@
 
 本文件承接根 README 迁出的操作说明。根 README 只保留项目简介、构建与测试方法及许可证；可视化编辑器的完整入口与常见问题见 [18 可视化编辑器使用说明](18-visual-editor-guide.zh-cn.md)，UI 控件/事件写入规则见 [16 UI 编辑器](16-ui-editor.zh-cn.md)，条件分流见 [15](15-variable-conditional-routes.zh-cn.md)，点九与图集见 [14](14-graph-and-texture-tools.zh-cn.md)，JS/XML 映射见 [13](13-live-logic-mapping.zh-cn.md)，游戏本地化见 [19](19-localization.zh-cn.md)，与上游引擎同步的契约细节见 [22 引擎同步与版本增量](22-engine-sync-notes.zh-cn.md)，能力状态见 [20](20-capabilities-status.zh-cn.md)。
 
-更新：2026-10-31，插件 0.11.2。
+更新：2026-11-01，插件 0.11.3。
 
 ## 1. 安装与启动
 
-在 VS Code 命令面板执行 **Extensions: Install from VSIX...**，选择生成的 `artifacts/kakera-editor-vscode-0.11.2.vsix`。当前预览包包含经过 SHA-256 核验的 v0.11.2 播放器、打包器和 Noto CJK 字体，不需要 Rust 或 AI 服务；安装后扩展 ID 为 `dort0306.kakera-editor-vscode@0.11.2`。
+在 VS Code 命令面板执行 **Extensions: Install from VSIX...**，选择生成的 `artifacts/kakera-editor-vscode-0.11.3.vsix`。当前预览包包含经过 SHA-256 核验的 v0.11.3 播放器、打包器和 Noto CJK 字体，不需要 Rust 或 AI 服务；安装后扩展 ID 为 `dort0306.kakera-editor-vscode@0.11.3`。
 
 1. 执行 **Kakera：打开创作首页**，新建工程或打开已有内容根；如果 VS Code 还没有打开文件夹，也可以直接在资源管理器的空状态点击“打开 Kakera 工程目录”。
 2. 在分镜中选择一幕，编辑台词、说话人、画面、音频与路由。
@@ -133,7 +133,29 @@ UI 编辑器左侧的“＋快捷弹窗”可在所选 UI 文件生成一页模�
 
 脚本在装配阶段用 `component.register("x-名字", { props, expand })` 注册加载期组合标签，UI XML 可直接写 `<x-名字 …/>`；展开结果仍是普通 UI 3 节点，事件、UI 变量与资源照旧由作者显式声明。编辑器静态读取可证明的顶层字面量注册（动态名/别名/函数内注册只给不确定诊断），校验标签名、prop 名与类型、必需属性、实例内 ID 与 `repeat.<节点ID>.*` 元数据绑定，并在设计画布把实例画成虚线占位——**不执行 expand**，最终语义仍由匹配引擎 `--check` 与真实试玩决定。UI 编辑器“插入组件”提供两个内置组件：标签页 `x-tabs`（按同工程其他非模态页面生成按钮、高亮变量与切换事件）和分页器 `x-pagination`（绑定带 `page-size`/`page-bind` 的 repeat，用 `ctx.repeats` 元数据更新页码）。插入时把注册写入已声明脚本（新工程模板带 `scripts/components.js`）、变量写入入口 `<variables>`、事件用 `event.register` 追加，不新建脚本文件。
 
-### 3.6 模板常用页面（0.11.2）
+### 3.6 粒子发射器、快捷键与布局（0.11.3）
+
+匹配 v0.11.3 播放器的 2D 图片粒子是普通 UI 节点 `<particles>`：可放在页面或 panel/nine-patch 的直接子级，不能放进 repeat；发射区域同时是裁剪矩形，坐标相对父节点。添加控件时选择“粒子发射器”和已声明图片/CG 纹理，编辑器写入可用初值（`rate="24"`、`max="96"` 等），再由右侧检查器调整：
+
+- **纹理与着色**：`image` 必须是已声明 image/cg；`color` 只做着色与基础透明度，不替换纹理。
+- **发射**：`rate`（0–200/秒）与 `burst`（0–128）不能同时为 0；`max`（1–512）限制同时存活数量；`autostart` 在页面进入时自动发射，不写入剧情。
+- **生命周期与运动**：`life`/`life-max`（0.1–10 秒）、`size`/`size-max`（0.5–512）、`vx`/`vx-max`、`vy`/`vy-max`（±2000）、`accel-x`/`accel-y`（±2000）、`spin`/`spin-max`（±720）与 `fade`；每对上限不能小于下限。
+- **预算与位置**：每页最多 4 个、整份 UI 最多 32 个；粒子没有 `enabled`、`bind` 或事件属性，`visible` 只隐藏绘制、不停发射。
+- **预设**：检查器“粒子与运动”上方的雨/雪/花瓣/光点只填写当前草稿，点“保存属性”才写 XML；纹理、发射区域与颜色不受影响。
+- **控制命令**：事件向导“控制粒子发射器”生成 `ctx.particles("发射器").start()/stop()/clear()/burst()`。start 要求 `rate > 0`，burst 要求已声明 burst；`stop()` 保留存活粒子，`clear()` 立即清空；循环、动态名称或一个回调里多条命令的写法仍以源码维护。
+- **画布**：发射区域显示虚线边框、纹理静态样本和 rate/burst/autostart 标注，不执行时钟、随机或引擎状态；菜单暂停、失焦冻结、页面清理等运行效果请用真实播放器验收。
+
+UI 编辑器常用快捷键（焦点在输入框、下拉框或可编辑区域时保留原生行为）：
+
+| 按键 | 动作 |
+| --- | --- |
+| `Delete` / `Backspace` | 删除当前选中的控件（子树与可证明的脚本绑定一起处理） |
+| `Ctrl+D` / `⌘D` | 复制选中控件，生成新 ID 副本 |
+| `Ctrl+C` / `Ctrl+V` | 复制选中控件，再在原控件后粘贴一份新 ID 副本 |
+| `Ctrl+S` / `⌘S` | 保存当前属性草稿（等同“保存属性”） |
+
+只读、草稿未保存、表单打开或源码 revision 变化时，快捷键会拒绝并说明原因；画布工具栏也提供选中控件的“复制/删除”按钮与快捷键提示，状态栏显示已复制控件。布局上，“插入组合标签”收为可展开的次级面板，画布获得更大高度；粒子说明与预设位于分组属性之前；窄窗口仍按单列显示页面、画布与属性。
+### 3.7 模板常用页面（0.11.2）
 
 新建工程模板现在带 7 个页面——`title`（初始标题页：开始/继续/读档/CG 画廊/退出）、`hud`（对话与选项）、`save`（200 个手动槽，每页 10 条）、`load`（自动档与手动槽两个标签页）、`gallery`（CG 画廊与进度，空画廊允许 0 条）、`confirm-save`/`confirm-quit`（覆盖与退出确认）。存档/读档/画廊都用 v0.11.2 的 repeat 分页；模板“开始新游戏”写无参 `ctx.restart()`，因为创建工程只重命名 frame ID、不改写 `scripts/ui.js`。整份模板通过真实引擎 `--check`（7 个 XML UI 页面、3 个 JS 文件）。
 

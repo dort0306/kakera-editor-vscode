@@ -231,3 +231,13 @@ UI 编辑器读取全部已声明文本语言/语音语言和 FTL，并在 `工�
 - “插入组件”提供 `x-tabs` 与 `x-pagination`。标签页按同工程其他非模态页面生成按钮、UI bool 高亮变量与切换事件；分页器要求目标 repeat 已声明 `page-size`/`page-bind`，生成 `ctx.repeats.<ID>.canPrev/canNext` 条件更新事件。注册写入已声明脚本（优先 `scripts/components.js`），新工程模板自带该脚本。
 - 生成的事件含条件、局部变量与元数据读取，事件列表把它们标为“源码维护”（`editable=false`），XML/脚本原文保留；作者可在源码中继续修改，或用事件向导新建独立定义后改实例 prop 指向它。
 - `--check`/真实引擎仍是最终校验：保存时走同一条冻结代次与 `--check`，编辑器不执行 expand、不写玩家偏好或存档。
+
+## 2D 图片粒子、UI 快捷键与布局（0.11.3 / 引擎 v0.11.3）
+
+- 上游契约：`<particles>` 是普通 UI 节点，共享 `id/x/y/width/height/visible/color`，另有 `image/rate/burst/max/life/life-max/size/size-max/vx/vx-max/vy/vy-max/accel-x/accel-y/spin/spin-max/fade/autostart`。`image` 必须是已声明 image/cg 资源；`rate` 0–200 与 `burst` 0–128 不能同时为 0；`max` 1–512（默认 128）；`life` 0.1–10、`size` 0.5–512、速度/加速度 ±2000、转速 ±720，每组 `-max` 不得小于下限；粒子没有 `enabled`、`bind` 或事件属性。每页 4 个、整份 UI 32 个，不能放进 repeat。
+- 读取与写入：`readUiDesign` 在节点解析阶段严格校验上述范围、纹理引用、repeat 位置和预算，错误带文件名、控件 ID 与原因；`addNode` 要求已声明纹理并写入可用初值（`rate="24"`、`max="96"`、`life`/`size`/`vy` 等），`patchNode` 只允许粒子属性白名单，空值删除属性。设计画布在发射区域画虚线边框、纹理静态样本与 rate/burst/autostart 标注；样本由控件 ID 决定的固定序列生成，不启动时钟、随机状态或引擎渲染。
+- 属性检查器：粒子节点先显示“粒子发射器”说明、发射区域/裁剪提示、预算和雨/雪/花瓣/光点预设（只填当前草稿，“保存属性”才写入 XML，纹理/区域/颜色不受影响），再显示“布局与外观 / 内容与资源 / 粒子与运动”分组；`fade`/`autostart` 用 true/false 下拉框，其余数值沿用文本输入以保留原始精度。
+- 事件：`UiEventCommand` 增加 `particles`，`UiEvent` 增加 `particleAction`（start/stop/clear/burst）。只有顶层单条 `ctx.particles("字面量").start()/stop()/clear()/burst()` 会被识别；生成与改名写入固定回调，start 要求 `rate > 0`、burst 要求已声明 `burst`，目标必须是已声明发射器。循环、动态名称、共享回调或多命令保持 Opaque（`editable=false`）并显示原因。
+- 快捷键：在 UI 编辑器窗口级监听 `Delete`/`Backspace`（删除选中控件）、`Ctrl/⌘+D`（复制）、`Ctrl/⌘+C`/`V`（复制/粘贴新 ID 副本）、`Ctrl/⌘+S`（保存属性草稿）。输入框、下拉框与 `contenteditable` 内的按键不被拦截；`locked`（只读/保存中）、草稿未保存、表单打开或 revision 冲突时拒绝并在错误条说明原因。`Ctrl+S` 在表单打开时提示使用“保存设置”。快捷键与“复制控件/删除控件”按钮共用同一 `UiEdit` 事务，不新增消息类型。
+- 布局：`插入组合标签` 改为可折叠的次级面板（summary 行），画布获得更大高度；画布工具栏新增选中控件的复制/删除按钮和快捷键提示，状态栏显示已复制控件与快捷键摘要。页面/控件/属性三栏与窄窗口单列顺序、既有 aria 名称、按钮文字与测试选择器保持不变。
+- 验证边界：静态画布与源码测试不执行发射，也不代替匹配播放器对菜单/失焦/调试暂停、页面清理、读档重建、热更、设备重建、性能容量与真实窗口快捷键的验收；`--check` 只校验声明与引用，`ctx.particles` 命令在运行时按整批页面栈校验。

@@ -33,7 +33,7 @@ export function previewUi(design: UiDesign, screen: UiScreen, story?: Story, fra
     : (catalog?.voices ?? []).map(locale => ({ id: locale.id, label: locale.label, selected: locale.id === catalog?.defaultVoice, default: locale.id === catalog?.defaultVoice }));
   const values: Record<string, any> = {
     game: { frameId: frame?.ref ?? '', speaker: story?.characters.find(c => c.id === frame?.speaker)?.name ?? '旁白', text: frame?.text ?? '台词示例', continueText: '继续', autoText: '自动播放', complete: true, canAdvance: !frame?.options.length, ended: false, noChoices: false, live2dEnabled: false, autoPlaying: false, transitioning: false },
-    settings: { muted: false, autosave: true, skip_all: false, fullscreen: false, text_speed: 30, auto_delay: 2, bgm_volume: .7, voice_volume: .8, se_volume: .7, video_volume: .8 },
+    settings: { muted: false, autosave: true, skip_all: false, fullscreen: false, text_speed: 30, auto_delay: 2, master_volume: 1, bgm_volume: .7, voice_volume: .8, se_volume: .7, video_volume: .8 },
     saves: { page: 1, pages: 20, pageText: '第 1 页 / 共 20 页', canPrev: false, canNext: true },
     ui: Object.fromEntries(design.variables.map(v => [v.id, v.type === 'bool' ? v.initial === 'true' : v.initial])),
     colors,

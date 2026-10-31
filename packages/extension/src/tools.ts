@@ -2,15 +2,15 @@ import { spawn, type ChildProcess } from 'node:child_process';
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import { hashFile } from './files';
-type EngineVersion = '0.8.3' | '0.8.4' | '0.9.0' | '0.9.1' | '0.10.0' | '0.10.1' | '0.11.0' | '0.11.1' | '0.11.2';
-const versions: EngineVersion[] = ['0.8.3', '0.8.4', '0.9.0', '0.9.1', '0.10.0', '0.10.1', '0.11.0', '0.11.1', '0.11.2'];
+type EngineVersion = '0.8.3' | '0.8.4' | '0.9.0' | '0.9.1' | '0.10.0' | '0.10.1' | '0.11.0' | '0.11.1' | '0.11.2' | '0.11.3';
+const versions: EngineVersion[] = ['0.8.3', '0.8.4', '0.9.0', '0.9.1', '0.10.0', '0.10.1', '0.11.0', '0.11.1', '0.11.2', '0.11.3'];
 export interface ToolManifest { engineVersion: EngineVersion; files: Record<string, string> }
 /** v0.10.1+ host diagnostics wrap dynamic arguments in Unicode isolating marks.
  * Strip bidi/directional controls before parsing human-readable CLI output. */
 export function plainDiagnostic(value: string): string { return value.replace(/[\u200e\u200f\u202a-\u202e\u2066-\u2069]/g, ''); }
 export async function toolchain(directory: string): Promise<{ player: string; packer: string; engineVersion: EngineVersion; hashes: Record<string, string> }> {
   const manifest = JSON.parse(await fs.readFile(path.join(directory, 'tools.json'), 'utf8')) as ToolManifest;
-  if (!versions.includes(manifest.engineVersion) || !manifest.files) throw new Error('工具目录需要 v0.8.3–v0.11.2 tools.json 哈希清单；运行 prepare-tools 脚本生成');
+  if (!versions.includes(manifest.engineVersion) || !manifest.files) throw new Error('工具目录需要 v0.8.3–v0.11.3 tools.json 哈希清单；运行 prepare-tools 脚本生成');
   for (const name of ['kakera-avg.exe', 'kakera-pack.exe']) {
     if ((await fs.lstat(path.join(directory, name))).isSymbolicLink() || await hashFile(path.join(directory, name)) !== manifest.files[name]) throw new Error('工具哈希不匹配，请重新准备工具');
   }

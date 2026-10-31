@@ -2,7 +2,7 @@
 
 面向 Kakera AVG 的可视创作插件：以“一格一幕”的分镜工作台编辑剧情，保留普通 XML/JS 源码，使用真实播放器验证和试玩。
 
-**当前版本：0.11.2，Windows x64 本地桌面开发预览版；匹配 Kakera v0.11.2 播放器与打包器。** 首版面向 Windows 本地桌面 VS Code，播放器独立开窗；浏览器版、SSH/容器远程环境、Code-OSS 分叉、原生舞台内嵌和 JS 行级调试不在首版范围。
+**当前版本：0.11.3，Windows x64 本地桌面开发预览版；匹配 Kakera v0.11.3 播放器与打包器。** 首版面向 Windows 本地桌面 VS Code，播放器独立开窗；浏览器版、SSH/容器远程环境、Code-OSS 分叉、原生舞台内嵌和 JS 行级调试不在首版范围。
 
 - **一格一幕**：每个分镜格对应一个完整 XML `frame`，明确背景、人物、台词、音频和路由；分镜排序不改剧情，新幕 ID 只生成一次。
 - **源码往返**：可视编辑只补丁对应的语法范围，手写 JS、注释与排版保留，复杂逻辑作为 Opaque 代码块展示。
@@ -19,7 +19,7 @@ XML/JS 始终是内容的事实来源，打开文档以当前 `TextDocument` 缓
 npm ci
 npm run check                 # 类型、单元/协议测试与构建
 npm run test:browser          # Edge/Chromium：工作台/首页、流程图与 UI 控件原生交互及截图
-# 准备匹配工具，参数为实际 v0.11.2 release 二进制目录
+# 准备匹配工具，参数为实际 v0.11.3 release 二进制目录
 node scripts/prepare-tools.mjs D:\path\to\kakera\target\release
 npm run test:integration      # 真实模板、快照、KPAK 1/2 与独立宿主检查
 npm run test:host             # 本机 VS Code：未保存缓冲、undo/redo、多视图、DAP
@@ -34,4 +34,4 @@ npm run package               # 生成 artifacts/ 下的离线 VSIX
 
 ## 许可证
 
-本仓库代码采用 [MIT 许可证](LICENSE)。React、Acorn、Saxes 等运行依赖的声明由构建脚本汇总至 `THIRD_PARTY_NOTICES.txt`；saxes npm 包遗漏的许可来自[官方 v6.0.0 LICENSE](https://raw.githubusercontent.com/lddubeau/saxes/v6.0.0/LICENSE)。v0.11.1 播放器内嵌的 Fluent/unic-langid 双许可选择与全文随离线包放在 `resources/licenses/engine-i18n/`，并汇总进同一通知文件。模板字体遵循 [SIL OFL 1.1](templates/minimal/content/assets/licenses/OFL.txt)。播放器及其他素材保留各自授权，当前内部预览包不包含 Live2D Core 或模型。
+本仓库代码采用 [MIT 许可证](LICENSE)。React、Acorn、Saxes 等运行依赖的声明由构建脚本汇总至 `THIRD_PARTY_NOTICES.txt`；saxes npm 包遗漏的许可来自[官方 v6.0.0 LICENSE](https://raw.githubusercontent.com/lddubeau/saxes/v6.0.0/LICENSE)。v0.11.x 播放器内嵌的 Fluent/unic-langid 双许可选择与全文随离线包放在 `resources/licenses/engine-i18n/`，并汇总进同一通知文件。模板字体遵循 [SIL OFL 1.1](templates/minimal/content/assets/licenses/OFL.txt)。播放器及其他素材保留各自授权，当前内部预览包不包含 Live2D Core 或模型。

@@ -3,7 +3,7 @@ import type { Sources } from './index';
 import { appendGroup, newShortId, readStory } from './index';
 import { child, escapeXmlAttribute as escapeXml, parseXml, setAttribute, type XmlNode } from './xml';
 import { uiFragments, type UiFragment } from './ui-files';
-import { UI_ATTRIBUTES, UI_COMPONENT_ATTRIBUTES, UI_CONTAINERS, UI_KINDS, UI_BUILTIN_COMPONENTS, UI_REPEAT_METADATA, uiNodes, type UiBinding, type UiDesign, type UiEdit, type UiEvent, type UiEventCommand, type UiGalleryEntry, type UiKind, type UiNode, type UiNodeKind, type UiPaletteSlot, type UiScreen, type UiComponentProp, type UiBuiltinComponent } from '../../domain/src/ui';
+import { UI_ATTRIBUTES, UI_COMPONENT_ATTRIBUTES, UI_CONTAINERS, UI_KINDS, UI_BUILTIN_COMPONENTS, UI_REPEAT_METADATA, UI_PARTICLES, UI_PARTICLE_ACTIONS, uiNodes, type UiBinding, type UiDesign, type UiEdit, type UiEvent, type UiEventCommand, type UiGalleryEntry, type UiKind, type UiNode, type UiNodeKind, type UiPaletteSlot, type UiParticleAction, type UiScreen, type UiComponentProp, type UiBuiltinComponent } from '../../domain/src/ui';
 import { COMPONENT_LAYOUT_ATTRIBUTES, BUILTIN_COMPONENTS_SOURCE, componentList, readComponents } from './ui-components';
 import { readUiMedia, editUiMedia } from './ui-media';
 import { canonicalLocaleId, formatFtlValue } from '../../domain/src/localization';
@@ -21,8 +21,8 @@ function walkJs(n: Ast, visit: (node: Ast) => void): void {
   while (stack.length) { if (!--budget) throw new Error('UI 脚本节点超过预算'); const node = stack.pop()!; visit(node); for (const [key, value] of Object.entries(node)) if (!['loc', 'start', 'end'].includes(key)) { if (Array.isArray(value)) stack.push(...value.filter(v => v?.type)); else if (value?.type) stack.push(value); } }
 }
 function scriptAst(sources: Sources): { file: string; ast: Ast }[] { return readStory(sources).scripts.map(file => ({ file, ast: parse(sources.get(file) ?? '', { ecmaVersion: 2022, locations: true }) as Ast })); }
-const uiCommandNames: UiEventCommand[] = ['open', 'close', 'advance', 'restart', 'choose', 'setting', 'setUi', 'sequence', 'playSound', 'soundEnabled', 'soundActor', 'soundExclude', 'present', 'resume', 'unlock', 'captureShortcut', 'cancelShortcutCapture', 'keybinding', 'resetKeybindings', 'colorPreference', 'resetColors', 'quit', 'locale'];
-const eventSettings = ['text_speed', 'auto_delay', 'bgm_volume', 'voice_volume', 'se_volume', 'video_volume', 'muted', 'autosave', 'skip_all', 'fullscreen'];
+const uiCommandNames: UiEventCommand[] = ['open', 'close', 'advance', 'restart', 'choose', 'setting', 'setUi', 'sequence', 'playSound', 'soundEnabled', 'soundActor', 'soundExclude', 'present', 'resume', 'unlock', 'captureShortcut', 'cancelShortcutCapture', 'keybinding', 'resetKeybindings', 'colorPreference', 'resetColors', 'quit', 'locale', 'particles'];
+const eventSettings = ['text_speed', 'auto_delay', 'master_volume', 'bgm_volume', 'voice_volume', 'se_volume', 'video_volume', 'muted', 'autosave', 'skip_all', 'fullscreen'];
 const ctxMember = (n: Ast | undefined, ctx: string): string | undefined => n?.type === 'MemberExpression' && !n.optional && n.object?.name === ctx ? n.computed ? typeof n.property?.value === 'string' ? n.property.value : undefined : n.property?.name : undefined;
 function literalArg(n: Ast | undefined): string | undefined { return n?.type === 'Literal' && typeof n.value === 'string' ? n.value : undefined; }
 function nullableLiteralArg(n: Ast | undefined): string | null | undefined { return n?.type === 'Literal' && (typeof n.value === 'string' || n.value === null) ? n.value : undefined; }
@@ -34,10 +34,28 @@ function uiVariableArg(n: Ast | undefined, ctx: string): string | undefined {
 }
 /** Emits dot access for ASCII identifiers and bracket access for other declared IDs. */
 function uiVariableAccess(id: string): string { return /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(id) ? `ctx.ui.${id}` : `ctx.ui[${JSON.stringify(id)}]`; }
-type EventShape = { command: UiEventCommand; commandTarget?: string; page?: string; action?: string; resultEvent?: string; binding?: string | null; slot?: string; color?: string | null; colorVariable?: string; channel?: 'text' | 'voice'; locale?: string | null };
+type EventShape = { command: UiEventCommand; commandTarget?: string; page?: string; action?: string; resultEvent?: string; binding?: string | null; slot?: string; color?: string | null; colorVariable?: string; channel?: 'text' | 'voice'; locale?: string | null; particleAction?: UiParticleAction };
+/** `ctx.particles("发射器").start()/stop()/clear()/burst()` (engine §39.3). */
+function particleCommand(call: Ast, ctx: string): EventShape | undefined {
+  if (call.arguments.length !== 0 || call.optional) return;
+  const callee = call.callee;
+  if (callee?.type !== 'MemberExpression' || callee.optional || callee.computed) return;
+  const action = callee.property?.name;
+  if (!(UI_PARTICLE_ACTIONS as readonly string[]).includes(action)) return;
+  const handle = callee.object;
+  if (handle?.type !== 'CallExpression' || handle.optional || handle.arguments.length !== 1) return;
+  const factory = handle.callee;
+  if (factory?.type !== 'MemberExpression' || factory.optional || factory.computed) return;
+  if (factory.object?.type !== 'Identifier' || factory.object.name !== ctx || factory.property?.name !== 'particles') return;
+  const id = literalArg(handle.arguments[0]);
+  if (!id) return;
+  return { command: 'particles', commandTarget: id, particleAction: action as UiParticleAction };
+}
 function eventCall(n: Ast, ctx: string): EventShape | undefined {
   if (n?.type !== 'ExpressionStatement' || n.expression?.type !== 'CallExpression') return;
-  const call = n.expression, method = ctxMember(call.callee, ctx); if (!method) return;
+  const call = n.expression;
+  const particle = particleCommand(call, ctx); if (particle) return particle;
+  const method = ctxMember(call.callee, ctx); if (!method) return;
   if (call.arguments.length > 2) return;
   const first = literalArg(call.arguments[0]), second = call.arguments[1];
   const valueArg = (arg: Ast | undefined) => ctxMember(arg, ctx) === 'value';
@@ -343,6 +361,39 @@ export function readUiDesign(sources: Sources): UiDesign {
       if (!ok) fail(`需要 UI ${prop.valueType} 变量`);
     }
   }
+  /** v0.11.3 `<particles>`: strict ranges and range ordering mirror engine §39.2. */
+  function particleEmitter(fragment: UiFragment, n: XmlNode): void {
+    if (!n.attrs.image) error(fragment.file, n, 'particles 需要 image 纹理');
+    if (!story.assets.some(asset => asset.id === n.attrs.image && (asset.kind === 'image' || asset.kind === 'cg'))) error(fragment.file, n, `particles 的 image 必须是已声明的图片或 CG 资源：${n.attrs.image}`);
+    const numericText = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/;
+    const scalar = (key: string, min: number, max: number, fallback: number): number => {
+      const raw = n.attrs[key];
+      if (raw === undefined) return fallback;
+      const value = numericText.test(raw) ? Number(raw) : NaN;
+      if (!Number.isFinite(value) || value < min || value > max) error(fragment.file, n, `${key} 需要 ${min}–${max} 范围内的有限数值`);
+      return value;
+    };
+    const countOf = (key: string, max: number, fallback: number): number => {
+      const raw = n.attrs[key];
+      if (raw === undefined) return fallback;
+      if (!/^\d+$/.test(raw) || Number(raw) > max) error(fragment.file, n, `${key} 需要 0–${max} 的整数`);
+      return Number(raw);
+    };
+    const twin = (low: string, high: string, min: number, max: number, first: number): void => {
+      const value = scalar(low, min, max, first), limit = scalar(high, min, max, value);
+      if (limit < value) error(fragment.file, n, `${high} 不能小于 ${low}`);
+    };
+    const rate = scalar('rate', 0, UI_PARTICLES.rateMax, 0), burst = countOf('burst', UI_PARTICLES.burstMax, 0);
+    if (rate === 0 && burst === 0) error(fragment.file, n, 'particles 的 rate 与 burst 不能同时为 0');
+    if (countOf('max', UI_PARTICLES.maxMax, 128) < 1) error(fragment.file, n, 'particles 的 max 至少为 1');
+    twin('life', 'life-max', UI_PARTICLES.lifeMin, UI_PARTICLES.lifeMax, 2);
+    twin('size', 'size-max', UI_PARTICLES.sizeMin, UI_PARTICLES.sizeMax, 16);
+    twin('vx', 'vx-max', -UI_PARTICLES.speed, UI_PARTICLES.speed, 0);
+    twin('vy', 'vy-max', -UI_PARTICLES.speed, UI_PARTICLES.speed, 0);
+    scalar('accel-x', -UI_PARTICLES.accel, UI_PARTICLES.accel, 0); scalar('accel-y', -UI_PARTICLES.accel, UI_PARTICLES.accel, 0);
+    twin('spin', 'spin-max', -UI_PARTICLES.spin, UI_PARTICLES.spin, 0);
+    for (const key of ['fade', 'autostart']) if (n.attrs[key] !== undefined && !['true', 'false'].includes(n.attrs[key])) error(fragment.file, n, `${key} 必须是 true/false`);
+  }
   function nodes(items: XmlNode[], fragment: UiFragment, depth: number, repeat = false, scope?: { prefix: string; local: Set<string> }): UiNode[] {
     return items.map(n => {
       if (depth > 8 || ++count > 1024) error(fragment.file, n, '超过 UI 深度 8 / 节点 1024 预算');
@@ -409,6 +460,11 @@ export function readUiDesign(sources: Sources): UiDesign {
         if (!variable || variable.type !== 'string') error(fragment.file, n, 'color-picker 的 value 必须是已声明的 UI string');
         try { parseColor(variable.initial); } catch (e) { error(fragment.file, n, `color-picker 初值非法：${e instanceof Error ? e.message : '格式错误'}`); }
       }
+      if (n.tag === 'particles') {
+        // v0.11.3 emitters are declared by a page or a plain container, never per repeat item.
+        if (repeat) error(fragment.file, n, 'particles 不能放在 repeat 模板中');
+        particleEmitter(fragment, n);
+      }
       if (n.attrs['color-bind'] !== undefined) {
         if (n.attrs.color !== undefined) error(fragment.file, n, 'color 与 color-bind 不能同时设置');
         const path = n.attrs['color-bind'], valid = path.startsWith('ui.') ? vars.get(path.slice(3))?.type === 'string' : path.startsWith('colors.') ? palette.has(path.slice(7)) : false;
@@ -428,6 +484,12 @@ export function readUiDesign(sources: Sources): UiDesign {
     }
   }
   expand(entry);
+  for (const screen of result.screens) {
+    // Emitters belong to the page that declares them (engine §39.2 per-page budget).
+    const emitters = uiNodes(screen.children).filter(node => node.kind === 'particles').length;
+    if (emitters > UI_PARTICLES.perScreen) throw new Error(`${screen.file}：页面 ${screen.id} 最多 ${UI_PARTICLES.perScreen} 个粒子发射器`);
+  }
+  if (result.screens.flatMap(screen => uiNodes(screen.children)).filter(node => node.kind === 'particles').length > UI_PARTICLES.total) throw new Error(`UI 最多 ${UI_PARTICLES.total} 个粒子发射器`);
   for (const screen of result.screens) for (const node of uiNodes(screen.children)) {
     const route = node.attrs.route;
     if (route !== undefined && (node.attrs.event !== undefined || route !== 'close' && (!route.startsWith('open:') || !screens.has(route.slice(5))))) error(node.file, { attrs: node.attrs } as XmlNode, '按钮导航需要合法目标且不能同时设置 event');
@@ -585,6 +647,12 @@ export function readUiDesign(sources: Sources): UiDesign {
         if (event.channel === 'voice' && !catalog.voices.length) fail(event, '本游戏没有声明语音语言');
         else if (!list.some(locale => locale.id === event.locale)) fail(event, '语言 ID 不属于对应通道的已声明集合');
       }
+    } else if (command === 'particles') {
+      const emitter = commandTarget ? nodeById.get(commandTarget) : undefined;
+      if (!emitter || emitter.kind !== 'particles') fail(event, '粒子发射器不存在');
+      else if (!(UI_PARTICLE_ACTIONS as readonly string[]).includes(event.particleAction ?? '')) fail(event, '粒子动作只接受 start/stop/clear/burst');
+      else if (event.particleAction === 'start' && !(Number(emitter.attrs.rate ?? 0) > 0)) fail(event, '该发射器没有 rate，不能 start');
+      else if (event.particleAction === 'burst' && !(Number(emitter.attrs.burst ?? 0) > 0)) fail(event, '该发射器没有声明 burst');
     }
   }
   const logic = analyzeLogic(sources, story);
@@ -686,7 +754,7 @@ function setTextArguments(source: string, node: XmlNode, args: { name: string; v
   if (!target) throw new Error('文字控件源码已改变，请刷新');
   return next.slice(0, target.closeStart) + markup + next.slice(target.closeStart);
 }
-type CommandShape = { command: UiEventCommand; commandTarget?: string; page?: string; action?: string; resultEvent?: string; binding?: string | null; slot?: string; color?: string | null; colorVariable?: string; channel?: 'text' | 'voice'; locale?: string | null };
+type CommandShape = { command: UiEventCommand; commandTarget?: string; page?: string; action?: string; resultEvent?: string; binding?: string | null; slot?: string; color?: string | null; colorVariable?: string; channel?: 'text' | 'voice'; locale?: string | null; particleAction?: UiParticleAction };
 /** Emits the same fixed command forms that the visual editor can read back. */
 function commandBody(event: CommandShape): string {
   const target = event.commandTarget !== undefined ? JSON.stringify(event.commandTarget) : undefined;
@@ -709,6 +777,7 @@ function commandBody(event: CommandShape): string {
     case 'resetKeybindings': return 'ctx.resetKeybindings();';
     case 'colorPreference': return `ctx.colorPreference(${JSON.stringify(event.slot)}, ${event.colorVariable !== undefined ? uiVariableAccess(event.colorVariable) : event.color === null || event.color === undefined ? 'null' : JSON.stringify(event.color)});`;
     case 'resetColors': return 'ctx.resetColors();';
+    case 'particles': return `ctx.particles(${target}).${event.particleAction}();`;
     case 'quit': return 'ctx.quit();';
     case 'locale': return `ctx.locale(${JSON.stringify(event.channel)}, ${event.locale === null || event.locale === undefined ? 'null' : JSON.stringify(event.locale)});`;
   }
@@ -939,11 +1008,21 @@ export function editUi(input: Sources, value: unknown): { changes: Sources; sele
     const at = op.parent ? locateUi(sources, str(op.parent)) : locateUi(sources, page.id, true);
     if (op.parent && (!uiNodes(page.children).some(n => n.id === op.parent) || !UI_CONTAINERS.includes(at.node.tag))) throw new Error('请选择当前页面中的容器作为父级');
     if (kind === 'color-picker' && (op.parent && insideRepeat(page.children, op.parent))) throw new Error('color-picker 不能放在 repeat 中');
+    if (kind === 'particles') {
+      if (op.parent && insideRepeat(page.children, op.parent)) throw new Error('particles 不能放在 repeat 中');
+      if (uiNodes(page.children).filter(n => n.kind === 'particles').length >= UI_PARTICLES.perScreen) throw new Error(`每个页面最多 ${UI_PARTICLES.perScreen} 个粒子发射器`);
+    }
     const pickerAlpha = op.alpha !== 'false';
-    const attrs: Record<string, string> = { id: newShortId(uiIds(design)), x: '24', y: '24', width: kind === 'scene' ? String(design.width) : kind === 'color-picker' ? '256' : '240', height: kind === 'scene' ? String(design.height) : kind === 'color-picker' ? (pickerAlpha ? '282' : '256') : kind === 'panel' || kind === 'repeat' || kind === 'nine-patch' ? '160' : '48' };
+    const attrs: Record<string, string> = { id: newShortId(uiIds(design)), x: '24', y: '24', width: kind === 'scene' ? String(design.width) : kind === 'color-picker' ? '256' : '240', height: kind === 'scene' ? String(design.height) : kind === 'color-picker' ? (pickerAlpha ? '282' : '256') : kind === 'particles' ? '320' : kind === 'panel' || kind === 'repeat' || kind === 'nine-patch' ? '160' : '48' };
     if (['label', 'button', 'toggle'].includes(kind)) attrs.text = kind === 'label' ? '新的文字' : kind === 'button' ? '按钮' : '开关';
     if (kind === 'panel') attrs.color = '#263B4B';
     if (['image', 'nine-patch'].includes(kind)) { const asset = readStory(sources).assets.find(a => a.id === op.image && a.kind === (kind === 'nine-patch' ? 'nine-patch' : 'image')); if (!asset) throw new Error('请先选择已导入的对应图片资源'); attrs.image = asset.id; }
+    if (kind === 'particles') {
+      // v0.11.3 emitters reuse the declared image/CG texture cache; the texture is required.
+      const asset = readStory(sources).assets.find(a => a.id === op.image && (a.kind === 'image' || a.kind === 'cg'));
+      if (!asset) throw new Error('请先选择已导入的图片或 CG 资源作为粒子纹理');
+      Object.assign(attrs, { image: asset.id, rate: '24', max: '96', life: '0.8', 'life-max': '1.6', size: '8', 'size-max': '16', vy: '40', 'vy-max': '90' });
+    }
     if (['button', 'toggle', 'slider'].includes(kind) && op.event) {
       // v0.11.1 definitions are independent; the new control only references one.
       const source = design.events.find(event => event.kind === 'event' && event.name === op.event);
@@ -1204,6 +1283,15 @@ export function editUi(input: Sources, value: unknown): { changes: Sources; sele
         if (!list.some(item => item.id === locale)) throw new Error(`语言 ${locale} 不属于 ${channel} 通道的已声明集合`);
       } else if (channel === 'voice' && !catalog.voices.length) throw new Error('本游戏没有声明语音语言，不能提交语音选择');
       shape.channel = channel; shape.locale = locale;
+    }
+    else if (op.command === 'particles') {
+      const emitter = design.screens.flatMap(item => uiNodes(item.children)).find(node => node.kind === 'particles' && node.id === commandTarget);
+      if (!emitter) throw new Error('请选择已声明的粒子发射器');
+      const action = typeof op.particleAction === 'string' ? str(op.particleAction, 16) : '';
+      if (!(UI_PARTICLE_ACTIONS as readonly string[]).includes(action)) throw new Error('粒子动作只接受 start/stop/clear/burst');
+      if (action === 'start' && !(Number(emitter.attrs.rate ?? 0) > 0)) throw new Error('该发射器没有 rate，不能 start；请提高 rate 或改用 burst/stop');
+      if (action === 'burst' && !(Number(emitter.attrs.burst ?? 0) > 0)) throw new Error('该发射器没有声明 burst 数量');
+      shape.commandTarget = emitter.id; shape.particleAction = action as UiParticleAction;
     }
     else if (!['close', 'advance', 'choose', 'soundEnabled', 'cancelShortcutCapture', 'resetKeybindings', 'resetColors', 'quit'].includes(op.command)) throw new Error('不支持的事件动作');
     const body = commandBody(shape);

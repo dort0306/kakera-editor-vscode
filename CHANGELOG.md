@@ -1,5 +1,17 @@
 # 更新记录
 
+## 0.11.3 粒子可视化、UI 快捷键与布局（适配播放器 v0.11.3） · 2026-11-01
+
+- 同步 Kakera v0.11.3 的 2D 图片粒子（story 8 / UI 3 / save 9 不变）：UI XML 新增普通节点 `<particles>`。编辑器按上游 API 第 39.2 节解析并校验 `image`（已声明 image/cg 纹理）、`rate`/`burst`（两者不能同时为 0）、`max`、`life`/`life-max`、`size`/`size-max`、`vx`/`vx-max`、`vy`/`vy-max`、`accel-x`/`accel-y`、`spin`/`spin-max`、`fade`、`autostart` 与共享 `x/y/width/height/color/visible`；拒绝未知属性（粒子没有 `enabled`）、非有限值、越界、范围倒置、未声明纹理、repeat 内声明、每页超过 4 个或整份 UI 超过 32 个，并沿用严格 XML 错误信息。
+- 粒子可视化编辑：添加控件可选用已声明图片/CG 作为纹理；属性检查器新增“粒子与运动”分组，先显示发射器说明、预算与雨/雪/花瓣/光点预设（只填草稿，“保存属性”后写入 XML），再显示分组属性；设计画布在发射区域绘制虚线边框、纹理静态样本和 rate/burst/autostart 标注，不启动时钟、随机或引擎状态。事件向导新增“控制粒子发射器”，生成 `ctx.particles("发射器").start()/stop()/clear()/burst()`，start 要求 `rate > 0`、burst 要求已声明 burst；循环/动态写法保留源码维护。
+- UI 编辑器常用快捷键：`Delete`/`Backspace` 删除选中控件、`Ctrl+D` 复制、`Ctrl+C`/`Ctrl+V` 复制粘贴（生成新 ID 副本）、`Ctrl+S` 保存属性草稿。输入框、下拉框与 `contenteditable` 内的原生按键不被拦截；只读、草稿未保存、表单打开或源码冲突时给出原因并拒绝写入。画布工具栏新增选中控件的复制/删除按钮与快捷键提示，状态栏显示已复制控件。
+- 布局优化：“插入组合标签”收为可展开的次级面板，为设计画布让出约 150px 高度；画布静态示例提示与快捷键提示移入工具栏；粒子节点的发射器说明与预设位于分组属性之前；窄窗口单列布局与既有入口、aria 名称、测试选择器保持不变。
+- 同步 v0.11.3 总音量：`ctx.setting("master_volume", …)` 加入设置白名单，静态预览 `settings` 示例新增 `master_volume`；`settings.json` 仍由匹配播放器维护，编辑器不写。
+- 工具与版本：从相邻 v0.11.3 工作区重新准备 `resources/tools/win32-x64`（播放器 SHA-256 `f29374094e08f015be52914140df7a7ef6883319c7e3b8db82cd59b168a17873`、打包器 `3689347129a46f6ef63dc830662b3c4ecd6baf8b693ce71be84d80e897591e36`），`tools.json` 为 0.11.3；工程清单默认生成并接受 0.11.3（继续接受 0.8.3–0.11.2），调试客户端、构建/发行检查、`prepare-tools`/`verify-release`、工程清单 schema 与状态栏同步。
+- 相关测试：新增 `tests/particles.test.ts`（属性范围、纹理/预算/repeat、新增与补丁、事件命令与不可编辑诊断、静态预览）与 `tests/particles-editor.test.ts`（画布示意、预设草稿、Delete/Ctrl+C/V/D/S、粒子事件向导），浏览器回归新增粒子画布/预设/快捷键检查；真实 v0.11.3 引擎 `--check`、KPAK 1/2 与独立包检查覆盖粒子纹理与命令。
+- 制品：`npm run package` 生成 `artifacts/kakera-editor-vscode-0.11.3.vsix`；实际文件数与 SHA-256 在打包后才可知，记录于[实现与验证记录](doc/12-implementation-status.zh-cn.md)（不写入随包文件）。
+- 未验证项与限制见[实现与验证记录](doc/12-implementation-status.zh-cn.md)：静态画布不等于粒子运行效果，性能容量、菜单/失焦/调试暂停、设备重建与跨 GPU 表现仍以匹配播放器验收为准。
+
 ## 0.11.2 引擎 v0.11.2 同步、内置组合组件、常用页面与工程图标 · 2026-10-31
 
 - 同步 Kakera v0.11.2（story 8 / UI 3 / save 9 不变）：新增脚本装配期的组合标签 `component.register("x-名字", { props, expand })`，以及 repeat 通用分页 `page-size`/`page-bind` 与只读元数据 `repeat.<节点ID>.<字段>`、`ctx.repeats`。编辑器静态读取可证明的顶层字面量注册（标签名与 prop 名都必须小写 ASCII/数字/连字符，prop 恰好 `required: true` 或类型匹配的 `default`），校验实例的必需属性、类型、布局覆盖、实例内 ID（展开为 `实例ID.局部ID`）与分页元数据绑定；动态/别名/函数内注册只给不确定诊断，未注册的 `x-*` 实例报错。设计画布把组合标签画成虚线占位、不执行 expand，引擎 `--check` 仍是最终校验。

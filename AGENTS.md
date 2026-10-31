@@ -4,7 +4,7 @@
 
 ## 1. 先确认事实与任务边界
 
-- 当前基线为 Kakera 播放器 v0.11.2：story 8、UI 3、save 9，调试协议 v1，demo content-version=11，JS 注册使用 `frame(id).advance/choice/end`、独立 `event.register(id, callback)` 定义，XML `event` / 单参数 `ui(id).bind(eventId)` 引用，UI 额外支持 `component.register` 组合标签与 repeat 通用分页。插件已有 0.11.2 开发预览实现；实际能力和未完成项见 [实现记录](doc/12-implementation-status.zh-cn.md)，不要把全部规划当成交付。
+- 当前基线为 Kakera 播放器 v0.11.3：story 8、UI 3、save 9，调试协议 v1，demo content-version=11，JS 注册使用 `frame(id).advance/choice/end`、独立 `event.register(id, callback)` 定义，XML `event` / 单参数 `ui(id).bind(eventId)` 引用，UI 额外支持 `component.register` 组合标签、repeat 通用分页与 `<particles>` 2D 图片粒子。插件已有 0.11.3 开发预览实现；实际能力和未完成项见 [实现记录](doc/12-implementation-status.zh-cn.md)，不要把全部规划当成交付。
 - 未实现的下版本规划在 [PLAN.md](PLAN.md) 里。根 README 只保留项目简介、构建与测试方法和许可证；能力状态见 [20](doc/20-capabilities-status.zh-cn.md)，日常操作见 [21](doc/21-usage-guide.zh-cn.md)，引擎同步与版本增量见 [22](doc/22-engine-sync-notes.zh-cn.md)，逐版本变更见 [CHANGELOG](CHANGELOG.md)。新增内容按此分工放置，不往 README 堆功能说明或路线图。
 - 本文件初次编写时仓库只有文档与许可证，没有插件源码、引擎源码、构建系统或测试。开始任务时重新检查实际文件，不把规划目录和命令当作已经存在。
 - 当前实际检查命令为 `npm run check`、`npm run test:browser`、`npm run test:integration`、`npm run test:host` 和 `npm run package`。浏览器测试需本机 Edge/Chromium；引擎/宿主检查需要已准备的匹配工具/本机 VS Code，详见 README。独立 Rust wrapper 仍未实现，当前通过真实 CLI 复用引擎。
@@ -87,7 +87,7 @@
 - 断点停在候选提交前，区分当前幕与 `pending_frame`，包括自循环；`next` 不保证每次跨一幕。
 - 不提供引擎没有的任意 jump、setVariables、eval、条件断点、JS 行级步进或推送事件。变量面板只读。
 - 试玩从入口启动，使用独立 save-dir；只管理自己启动的播放器。既有会话不悄悄替换成新代次。
-- 使用匹配的 `kakera-pack` 及 v0.11.2 依赖选择，额外文件只走 `kakera.package.json` 显式文件清单，保留排除规则。
+- 使用匹配的 `kakera-pack` 及 v0.11.3 依赖选择，额外文件只走 `kakera.package.json` 显式文件清单，保留排除规则。
 - 包和发行候选位于内容根之外，失败保留旧产物；发布前全包检查、许可证/隐私清单检查及源码外运行验证。公开上传需另有任务授权。
 
 ## 8. 验证与交付
@@ -229,3 +229,14 @@
 - repeat 通用分页：`page-size`（1–200）与 `page-bind` 必须成对；`page-bind` 引用已声明 UI int、必须 `min="1"`、`max` 不小于实际最大页数，一个页变量只能绑定一个 repeat。只读元数据绑定仅为 `repeat.<完整节点ID>.<字段>`（`page/pages/pageSize/total/start/end/canPrev/canNext/pageText`）；未分页或不存在的 repeat 引用报错。页码、页缓存、滚动与焦点都不入剧情槽或隐藏交接文件。
 - story 8 / UI 3 / save 9 / profile 1 / read 1 / 隐藏槽 1 / KPAK 1、2 与 demo content-version=11 不变；旧播放器拒绝新语法，编辑器不做迁移。`--check` 只校验 XML 引用、分页声明与元数据绑定，不执行普通事件回调，命令名错误要另在源头审查或真实窗口验证。
 - 新工程模板内置 `title/hud/save/load/gallery/confirm-save/confirm-quit` 七个页面、存档/读档/画廊分页与确认弹窗，并通过真实引擎 `--check`。模板“开始新游戏”使用无参 `ctx.restart()`：`kakera.project.create` 会重命名 frame ID 但不改写 `scripts/ui.js`，写死幕名会让新工程开箱即坏；测试起始覆盖也必须在重启后打开非暂停 HUD，而不是停留在暂停的标题页。
+
+## 2D 图片粒子、UI 快捷键与布局（引擎 v0.11.3）
+
+- `<particles>` 是普通 UI 节点：可放在 screen 或 panel/nine-patch 的直接子节点位置，不能放进 repeat；共享 `id/x/y/width/height/visible/color`，另有 `image/rate/burst/max/life/life-max/size/size-max/vx/vx-max/vy/vy-max/accel-x/accel-y/spin/spin-max/fade/autostart`。粒子没有 `enabled`、`bind` 或事件属性；`visible` 只隐藏绘制、不停止发射。
+- 范围与预算属于匹配引擎：`image` 必须是已声明 image/cg 纹理；`rate` 0–200 与 `burst` 0–128 不能同时为 0；`max` 1–512（默认 128）；`life` 0.1–10、`size` 0.5–512、速度/加速度 ±2000、转速 ±720，每组 `-max` 不得小于下限；每页最多 4 个、整份 UI 最多 32 个。编辑器静态校验并保留文件/控件/原因，不得放宽或改成宽松解析。
+- JS 只写 `ctx.particles("发射器").start()/stop()/clear()/burst()`：start 要求 `rate > 0`、burst 要求已声明 `burst`，目标必须是已声明发射器；识别范围仅限顶层单条固定命令，循环/动态名称/共享回调/多命令保持 Opaque。命令的页面栈、重复操作与生命周期限制由匹配播放器运行时整批校验，`game.enter`/`screen.open/close` 不接受粒子命令。
+- `settings.master_volume` 与 `ctx.setting("master_volume", ctx.value)` 是普通设置项；`settings.json`、`keybindings.json`、`ui-colors.json`、`language.json` 等玩家偏好仍由匹配播放器维护，编辑器不写。
+- 设计画布只做静态示意（虚线区域、纹理样本、rate/burst/autostart 标注），不得启动时钟、随机状态、引擎渲染或写入剧情；预设只填属性草稿，保存属性后才写 XML。真实粒子容量、暂停/失焦、页面清理、读档重建、热更与设备重建必须由匹配播放器验收，静态测试不能替代。
+- UI 编辑器常用快捷键（窗口级、输入框/下拉框/`contenteditable` 内不拦截）：`Delete`/`Backspace` 删除选中控件、`Ctrl/⌘+D` 复制、`Ctrl/⌘+C`/`V` 复制与粘贴新 ID 副本、`Ctrl/⌘+S` 保存属性草稿。拒绝时必须给出原因（只读、草稿未保存、表单打开、revision 冲突），且只能走既有 `uiEdit` 事务，不新增消息类型或绕过保存链。
+- 布局调整只属于呈现层：可折叠“插入组合标签”、把提示移入工具栏、在检查器先显示粒子说明与预设；不得删除既有入口、改变按钮文字/aria 名称/CSS 选择器/测试选择器，也不得改变 XML/JS 写回、命令 payload、冻结代次或引擎契约。
+- 工具升级同步 `tools.json` 哈希、工程清单/调试/构建版本检查、模板/测试与真实 `--check`/KPAK 回归；v0.11.3 仍为 story 8 / UI 3 / save 9 / profile 1 / read 1 / 隐藏槽 1 / KPAK 1、2 与 demo content-version=11。

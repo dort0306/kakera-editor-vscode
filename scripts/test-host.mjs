@@ -16,7 +16,7 @@ const hostUiScript = path.join(root, 'content', 'scripts', 'ui.js');
 await writeFile(hostUiScript, (await readFile(hostUiScript, 'utf8')) + '\nevent.register("kakera.test.start", ctx => { ctx.open("hud"); ctx.restart("opening"); });\n');
 const storyPath = path.join(root, 'content', 'story.xml');
 await writeFile(storyPath, '\uFEFF' + (await readFile(storyPath, 'utf8')).replace(/^\uFEFF/, ''));
-await writeFile(path.join(root, 'project.kakera-editor.json'), JSON.stringify({ editorSchema: 1, engineContract: '0.11.2', contentRoot: 'content' }));
+await writeFile(path.join(root, 'project.kakera-editor.json'), JSON.stringify({ editorSchema: 1, engineContract: '0.11.3', contentRoot: 'content' }));
 const executable = process.env.VSCODE_EXECUTABLE || path.join(process.env.LOCALAPPDATA, 'Programs', 'Microsoft VS Code', 'Code.exe');
 await runTests({
   vscodeExecutablePath: executable, extensionDevelopmentPath: process.cwd(), extensionTestsPath: path.resolve('.test-work/host.cjs'),

@@ -7,7 +7,14 @@ import { normalizeColor, parseColor } from '../../domain/src/colors';
 import { HslPickerGraphic, pickerGeometry } from './color-picker';
 const color = (s: string | undefined, fallback: string) => { try { return normalizeColor(s ?? ''); } catch { return fallback; } };
 const pickerColor = (s: string | undefined) => { try { return parseColor(s ?? '#FF0000FF'); } catch { return parseColor('#FF0000FF'); } };
-export function UiCanvas({ design, screen, story, frame, textures, selected, select, disabled, commit }: { design: UiDesign; screen: UiScreen; story?: Story; frame?: string; textures: UiTextures; selected: string; select: (id: string) => void; disabled: boolean; commit: (id: string, patch: Record<string, string>) => void }) {
+/** Deterministic static samples for the emitter region: the canvas never runs the particle clock. */
+function particleSamples(seed: string, count = 18): { x: number; y: number; size: number; angle: number; alpha: number }[] {
+  let state = 2166136261;
+  for (const ch of seed) { state ^= ch.codePointAt(0)!; state = Math.imul(state, 16777619); }
+  const next = () => { state ^= state << 13; state ^= state >>> 17; state ^= state << 5; return (state >>> 0) / 4294967296; };
+  return Array.from({ length: count }, () => ({ x: next(), y: next(), size: next(), angle: next(), alpha: next() }));
+}
+export function UiCanvas({ design, screen, story, frame, textures, selected, select, disabled, commit, duplicate, remove, busy = false, hint }: { design: UiDesign; screen: UiScreen; story?: Story; frame?: string; textures: UiTextures; selected: string; select: (id: string) => void; disabled: boolean; commit: (id: string, patch: Record<string, string>) => void; duplicate?: () => void; remove?: () => void; busy?: boolean; hint?: string }) {
   const [zoom, setZoom] = useState(.65), [snap, setSnap] = useState(true), [showHidden, setShowHidden] = useState(true), [local, setLocal] = useState<Record<string, string>>();
   const svg = useRef<SVGSVGElement>(null), gesture = useRef<{ id: string; x: number; y: number; original: [number, number, number, number]; resize: boolean; moved: boolean; pointer: number } | undefined>(undefined);
   const prefix = useId().replaceAll(':', '');
@@ -35,6 +42,8 @@ export function UiCanvas({ design, screen, story, frame, textures, selected, sel
     cancel(); if (svg.current?.hasPointerCapture?.(e.pointerId)) svg.current.releasePointerCapture(e.pointerId);
   };
   const skin = (item: UiPreviewNode) => {
+    // Emitters paint their own texture samples; the region itself is never a stretched image.
+    if (item.node.kind === 'particles') return null;
     const texture = textures[item.image ?? '']; if (!texture) return null;
     const [x, y, w, h] = item.rect;
     if (item.node.kind === 'nine-patch' && texture.spec) {
@@ -45,8 +54,28 @@ export function UiCanvas({ design, screen, story, frame, textures, selected, sel
     const view = region?.length === 4 && region.every(Number.isFinite) ? region : [0, 0, texture.width, texture.height];
     return <svg x={x} y={y} width={w} height={h} viewBox={view.join(' ')} preserveAspectRatio={item.node.attrs.fit === 'contain' ? 'xMidYMid meet' : item.node.attrs.fit === 'cover' ? 'xMidYMid slice' : 'none'}><image href={texture.uri} width={texture.width} height={texture.height}/></svg>;
   };
+  /** v0.11.3 emitter region: dashed bounds plus fixed sample particles (no clock, RNG or engine state). */
+  const particleField = (item: UiPreviewNode) => {
+    const a = item.node.attrs, [x, y, w, h] = item.rect, texture = textures[a.image ?? ''];
+    const tint = color(a.color, '#C9E4FF'), aspect = texture && texture.width > 0 ? texture.height / texture.width : 1;
+    const minSize = Math.max(1, Number(a.size ?? 16)), maxSize = Math.max(minSize, Number(a['size-max'] ?? minSize));
+    const minSpin = Number(a.spin ?? 0), maxSpin = Math.max(minSpin, Number(a['spin-max'] ?? minSpin)), fade = a.fade !== 'false';
+    return <>
+      <rect x={x} y={y} width={w} height={h} fill="#10303a" opacity=".35" pointerEvents="none"/>
+      <rect x={x} y={y} width={w} height={h} fill="none" stroke="#67c8b9" strokeDasharray="6 4" pointerEvents="none"/>
+      <text x={x + 8} y={y + 16} fontSize="13" fill="#9fe8dc">粒子 · {a.image}{Number(a.rate ?? 0) > 0 ? ` · ${a.rate}/s` : ''}{Number(a.burst ?? 0) > 0 ? ` · burst ${a.burst}` : ''}{a.autostart === 'true' ? ' · 自动' : ''}</text>
+      {particleSamples(`${item.instance}|${item.node.id}`).map((sample, index) => {
+        const width = minSize + (maxSize - minSize) * sample.size, height = width * aspect;
+        const cx = x + 10 + Math.max(1, w - 20) * sample.x, cy = y + 24 + Math.max(1, h - 34) * sample.y;
+        const angle = minSpin + (maxSpin - minSpin) * sample.angle, opacity = fade ? (.2 + .65 * sample.alpha).toFixed(2) : '.85';
+        return texture
+          ? <image key={index} href={texture.uri} x={cx - width / 2} y={cy - height / 2} width={width} height={height} opacity={opacity} preserveAspectRatio="none" transform={`rotate(${angle.toFixed(1)} ${cx} ${cy})`} pointerEvents="none"/>
+          : <circle key={index} cx={cx} cy={cy} r={width / 2} fill={tint} opacity={opacity} pointerEvents="none"/>;
+      })}
+    </>;
+  };
   return <section className="ui-canvas-wrap" aria-label="UI 设计画布">
-    <div className="ui-canvas-toolbar"><button aria-label="缩小 UI 画布" onClick={() => setZoom(z => Math.max(.2, z - .1))}>−</button><span>{Math.round(zoom * 100)}%</span><button aria-label="放大 UI 画布" onClick={() => setZoom(z => Math.min(2, z + .1))}>＋</button><button onClick={() => setZoom(.65)}>适合常用窗口</button><label><input type="checkbox" checked={snap} onChange={e => setSnap(e.target.checked)}/>8px 吸附</label><label><input type="checkbox" checked={showHidden} onChange={e => setShowHidden(e.target.checked)}/>显示隐藏控件</label></div>
+    <div className="ui-canvas-toolbar"><button aria-label="缩小 UI 画布" onClick={() => setZoom(z => Math.max(.2, z - .1))}>−</button><span>{Math.round(zoom * 100)}%</span><button aria-label="放大 UI 画布" onClick={() => setZoom(z => Math.min(2, z + .1))}>＋</button><button onClick={() => setZoom(.65)}>适合常用窗口</button><label><input type="checkbox" checked={snap} onChange={e => setSnap(e.target.checked)}/>8px 吸附</label><label><input type="checkbox" checked={showHidden} onChange={e => setShowHidden(e.target.checked)}/>显示隐藏控件</label>{hint && <span className="ui-canvas-hint" title={hint}>{hint}</span>}{selected && (duplicate || remove) && <span className="ui-canvas-quick"><button aria-label="复制选中控件" title="复制选中控件（Ctrl+D）" disabled={disabled || busy} onClick={duplicate}>复制</button><button aria-label="删除选中控件" title="删除选中控件（Delete）" disabled={disabled || busy} onClick={remove}>删除</button></span>}</div>
     <p className="muted">静态设计示例 · 拖动或缩放后自动保存 · 列表显示示例数据，精确效果请试玩</p>
     <div className="ui-canvas-scroll"><svg ref={svg} className="ui-canvas" width={design.width * zoom} height={design.height * zoom} viewBox={`0 0 ${design.width} ${design.height}`} tabIndex={0} role="group" aria-label="UI 控件画布" onPointerDown={e => { if (e.target === svg.current) select(''); }}
       onKeyDown={e => { if (e.key === 'Escape') { e.preventDefault(); cancel(); } else if (!disabled && selected && ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key)) { e.preventDefault(); const item = items.find(n => n.node.id === selected && !n.template); if (item) { const amount = e.shiftKey ? 8 : 1; commit(selected, { x: String(Number(item.node.attrs.x ?? 0) + (e.key === 'ArrowLeft' ? -amount : e.key === 'ArrowRight' ? amount : 0)), y: String(Number(item.node.attrs.y ?? 0) + (e.key === 'ArrowUp' ? -amount : e.key === 'ArrowDown' ? amount : 0)) }); } } }}
@@ -68,7 +97,8 @@ export function UiCanvas({ design, screen, story, frame, textures, selected, sel
           <title>{item.node.kind} · {item.node.id} · {item.node.file}:{item.node.line}{item.template ? ' · 模板实例' : ''}{a.effect ? ' · 效果请试玩确认' : ''}</title>
           <defs><clipPath id={clip}><rect x={item.clip[0]} y={item.clip[1]} width={item.clip[2]} height={item.clip[3]}/></clipPath></defs>
           <g clipPath={`url(#${clip})`}>
-            <rect x={x} y={y} width={w} height={h} rx={Number(a.radius ?? 0)} fill={item.node.kind === 'label' || item.node.kind === 'image' || item.node.kind === 'repeat' || item.node.kind === 'color-picker' || item.node.kind === 'component' ? 'transparent' : color(item.colorValue ?? a.color, item.node.kind === 'button' ? '#29455f' : item.node.kind === 'panel' ? '#1b2c3e' : '#1a3044')} stroke={item.node.kind === 'repeat' || item.node.kind === 'scene' ? '#476983' : item.node.kind === 'component' ? '#8a7bd8' : 'none'} strokeDasharray={item.node.kind === 'repeat' || item.node.kind === 'component' ? '6 4' : undefined}/>
+            <rect x={x} y={y} width={w} height={h} rx={Number(a.radius ?? 0)} fill={item.node.kind === 'label' || item.node.kind === 'image' || item.node.kind === 'repeat' || item.node.kind === 'color-picker' || item.node.kind === 'component' || item.node.kind === 'particles' ? 'transparent' : color(item.colorValue ?? a.color, item.node.kind === 'button' ? '#29455f' : item.node.kind === 'panel' ? '#1b2c3e' : '#1a3044')} stroke={item.node.kind === 'repeat' || item.node.kind === 'scene' ? '#476983' : item.node.kind === 'component' ? '#8a7bd8' : 'none'} strokeDasharray={item.node.kind === 'repeat' || item.node.kind === 'component' ? '6 4' : undefined}/>
+            {item.node.kind === 'particles' && particleField(item)}
             {item.node.kind === 'component' && <text x={x + 8} y={y + 16} fontSize="14" fill="#b9a9f2">{item.node.component ?? 'x-component'} · 组合标签（展开效果请试玩）</text>}
             {pickerLayout ? <svg x={x} y={y} width={w} height={h} viewBox={`0 0 ${w} ${h}`} className="ui-color-picker-preview" aria-label="color-picker 静态预览">
               <HslPickerGraphic color={pickerColor(item.colorValue)} alpha={pickerAlpha} geometry={pickerLayout}/>

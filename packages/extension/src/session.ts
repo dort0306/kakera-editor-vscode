@@ -150,7 +150,7 @@ export async function findRoot(uri: vscode.Uri): Promise<string> {
   while (true) {
     try {
       const manifest = JSON.parse(await fs.readFile(path.join(directory, 'project.kakera-editor.json'), 'utf8'));
-      if (manifest.editorSchema !== 1 || !['0.8.3', '0.8.4', '0.9.0', '0.9.1', '0.10.0', '0.10.1', '0.11.0', '0.11.1', '0.11.2'].includes(manifest.engineContract)) throw new Error('工程清单版本不支持');
+      if (manifest.editorSchema !== 1 || !['0.8.3', '0.8.4', '0.9.0', '0.9.1', '0.10.0', '0.10.1', '0.11.0', '0.11.1', '0.11.2', '0.11.3'].includes(manifest.engineContract)) throw new Error('工程清单版本不支持');
       return await safePath(directory, manifest.contentRoot);
     } catch (e) { if ((e as NodeJS.ErrnoException).code !== 'ENOENT') throw e; }
     try { await fs.access(path.join(directory, 'story.xml')); return directory; } catch { /* ascend */ }

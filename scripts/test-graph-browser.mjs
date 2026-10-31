@@ -76,7 +76,7 @@ try {
   const uiStart = await center('[data-ui-node="caption"] .ui-node-hit');
   await mouse('mousePressed', uiStart); for (let i = 1; i <= 4; i++) { await mouse('mouseMoved', { x: uiStart.x + 13 * i, y: uiStart.y + 6.5 * i }); await flush(); } await mouse('mouseReleased', { x: uiStart.x + 52, y: uiStart.y + 26 }); await flush();
   assert.deepEqual(await evaluate('uiTest.operations.at(-1)'), { action: 'patchNode', id: 'caption', patch: { x: '104', y: '72' } });
-  await delay(80); const handle = await center('[aria-label="调整控件大小"]'); await flush(); await mouse('mousePressed', handle); await mouse('mouseMoved', { x: handle.x + 52, y: handle.y + 26 }); await mouse('mouseReleased', { x: handle.x + 52, y: handle.y + 26 }); await flush();
+  await delay(80); const handle = await center('[aria-label="调整控件大小"]'); await flush(); await mouse('mousePressed', handle); await mouse('mouseMoved', { x: handle.x + 52, y: handle.y + 26 }); await flush(); await mouse('mouseReleased', { x: handle.x + 52, y: handle.y + 26 }); await flush();
   assert.deepEqual(await evaluate('uiTest.operations.at(-1)'), { action: 'patchNode', id: 'caption', patch: { width: '384', height: '80' } });
   const beforeCancel = await evaluate('uiTest.operations.length'), uiCancel = await center('[data-ui-node="caption"] .ui-node-hit');
   await mouse('mousePressed', uiCancel); await mouse('mouseMoved', { x: uiCancel.x + 30, y: uiCancel.y + 20 }); await key('Escape', 27); await mouse('mouseReleased', { x: uiCancel.x + 30, y: uiCancel.y + 20 }); await flush(); assert.equal(await evaluate('uiTest.operations.length'), beforeCancel);
@@ -94,6 +94,27 @@ try {
   await evaluate('document.querySelector(".lifecycle-editor .actions button").scrollIntoView({block:"nearest"})'); await flush();
   await click('.lifecycle-editor .actions button');
   assert.deepEqual(await evaluate('uiTest.operations.at(-1)'), { action: 'lifecycle', kind: 'screenClose', owner: 'hud', mode: 'page', target: 'help' });
+  // v0.11.3 particles: static emitter preview, preset draft, save and the workbench shortcuts.
+  await evaluate("[...document.querySelectorAll('.ui-tree-node')].find(b => b.textContent?.includes('emitter')).click()"); await flush();
+  assert.equal(await evaluate(`document.querySelector('[data-ui-node="emitter"]').getAttribute("aria-pressed")`), 'true');
+  assert.ok(await evaluate(`document.querySelectorAll('[data-ui-node="emitter"] image').length`) >= 8, '粒子示意应绘制纹理样本');
+  assert.match(await evaluate(`document.querySelector('[data-ui-node="emitter"]').textContent`), /粒子 · dust · 40\/s/);
+  await click('.particle-presets button'); await flush();
+  assert.equal(await evaluate(`document.querySelector('input[aria-label="UI rate"]').value`), '55');
+  await evaluate("[...document.querySelectorAll('button')].find(b => b.textContent === '保存属性').click()"); await flush();
+  let particleOp = await evaluate('uiTest.operations.at(-1)');
+  assert.deepEqual([particleOp.action, particleOp.id, particleOp.patch.rate], ['patchNode', 'emitter', '55']);
+  await combo('c', 'KeyC', 67, 2); await combo('v', 'KeyV', 86, 2);
+  particleOp = await evaluate('uiTest.operations.at(-1)');
+  assert.deepEqual([particleOp.action, particleOp.id], ['duplicateNode', 'emitter']);
+  await combo('d', 'KeyD', 68, 2);
+  assert.equal(await evaluate('uiTest.operations.at(-1).action'), 'duplicateNode');
+  await key('Delete', 46);
+  assert.deepEqual([await evaluate('uiTest.operations.at(-1).action'), await evaluate('uiTest.operations.at(-1).id')], ['deleteNode', 'emitter']);
+  await click('.particle-presets button:nth-of-type(2)'); await flush();
+  await combo('s', 'KeyS', 83, 2);
+  particleOp = await evaluate('uiTest.operations.at(-1)');
+  assert.deepEqual([particleOp.action, particleOp.patch.rate], ['patchNode', '18']);
   await writeFile(path.join(directory, 'ui-editor.png'), Buffer.from((await command('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false })).data, 'base64'));
   await click('[data-ui-node="picker"] .ui-node-hit');
   assert.equal(await evaluate('document.querySelector(\'select[aria-label="UI color-picker value"]\').value'), 'ui.bgDraft');

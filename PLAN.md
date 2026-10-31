@@ -6,14 +6,14 @@
 
 ## 1. 当前状态
 
-- 插件 0.11.2 开发预览版，匹配 Kakera v0.11.2 播放器/打包器；story 8 / UI 3 / save 9，调试协议 v1，KPAK 1/2，demo content-version=11。
+- 插件 0.11.3 开发预览版，匹配 Kakera v0.11.3 播放器/打包器；story 8 / UI 3 / save 9，调试协议 v1，KPAK 1/2，demo content-version=11。
 - 首版面向 Windows x64 本地桌面 VS Code；浏览器版、SSH/容器远程、Code-OSS 分叉、原生舞台内嵌与 JS 行级调试不在范围内。
 - 已交付范围见 [20 能力与状态](doc/20-capabilities-status.zh-cn.md) 的表格；未完成与未验收项见 [12 实现与验证记录](doc/12-implementation-status.zh-cn.md) 的“尚未完成或未验收”。
 - 尚未公开发布 Marketplace，也未上传任何游戏。
 
 ## 2. 版本号与交付规则
 
-- 插件版本 `x.y.z` 的 `x.y` 必须与匹配的上游引擎一致；上游升级到 `vX.Y.*` 时插件同步到 `X.Y`，`z` 只表示同一引擎兼容范围内的插件修复或增量。当前匹配 v0.11.2。
+- 插件版本 `x.y.z` 的 `x.y` 必须与匹配的上游引擎一致；上游升级到 `vX.Y.*` 时插件同步到 `X.Y`，`z` 只表示同一引擎兼容范围内的插件修复或增量。当前匹配 v0.11.3。
 - 用户未指定版本号时，打包默认把 `package.json` 的 patch 位 +1，并同步 `package-lock.json`、`package` 脚本制品名、README 当前版本与 CHANGELOG。
 - 制品输出到 `artifacts/kakera-editor-vscode-x.y.z.vsix`，交付时记录实际文件数与 SHA-256；纯文档、注释与测试整理不重新打包。
 - 规划条目必须可验收：写清出口条件与判定方式，不只写方向；阈值在实测前标注“规划值”，验收后不得把估算写成实测。

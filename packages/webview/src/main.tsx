@@ -140,7 +140,7 @@ function Home() {
   const cards: [string, React.ReactNode, string, string][] = [
     ['kakera.storyboard.open', <Icon name="film" size={20} />, '可视分镜', '台词、构图与明确分支'],
     ['kakera.ui.open', <Icon name="layout" size={20} />, 'UI 编辑器', '页面、控件与可视布局'],
-    ['kakera.tools.configure', <Icon name="wrench" size={20} />, '准备工具', '配置 v0.11.1 播放器和打包器'],
+    ['kakera.tools.configure', <Icon name="wrench" size={20} />, '准备工具', '配置 v0.11.3 播放器和打包器'],
     ['kakera.ai.configure', <Icon name="sparkles" size={20} />, '可选 AI', '用户配置的服务，原文先审阅'],
     ['kakera.debug.start', <Icon name="bug" size={20} />, '真实试玩', '帧级断点和只读运行状态']
   ];
@@ -376,7 +376,7 @@ export function App() {
       {copied.length > 0 && <span className="status-item" title="Ctrl+V 在当前幕之后粘贴副本">已复制 {copied.length} 幕</span>}
       <span className="status-spacer" />
       <span className="status-item">{routeKind === 'end' ? '结束幕' : routeKind === 'choice' ? '选择幕' : routeKind ? '推进幕' : '脚本路线'}</span>
-      <span className="status-item"><Icon name="check" size={13} />Kakera v0.11.2</span>
+      <span className="status-item"><Icon name="check" size={13} />Kakera v0.11.3</span>
     </footer>
 
     <div className={`drawer-scrim ${drawer ? 'open' : ''}`} onClick={() => setDrawer(null)} aria-hidden="true" />

@@ -241,3 +241,13 @@ Windows 播放器为 GUI 子系统。自动化必须等待进程退出并捕获�
 - repeat 分页：`page-size`（1–200）与 `page-bind`（已声明 UI int，`min="1"`，一变量一 repeat）成对出现；只读元数据 `repeat.<完整节点ID>.<字段>` 支持 `page/pages/pageSize/total/start/end/canPrev/canNext/pageText`，JS 侧同名快照为 `ctx.repeats[完整ID]`。换页只重置该 repeat 滚动；页数 `max(1, ceil(total/pageSize))`，空集固定第 1 页且禁用翻页；缩短源时夹取到最后一页并写回候选 UI int。页码/缓存/滚动/焦点不入剧情槽或隐藏交接文件。
 - 工程热更、`--check` 与两种 KPAK 都走同一条展开流水线；包内保留原始组合标签 XML 与脚本，独立重载时重新展开。`--check` 校验声明、变量独占、容量、前向引用与空源，但不执行普通事件回调，也不读玩家存档。
 - 编辑器规则：只静态认识可证明的顶层字面量注册与实例属性，画布不执行 expand、组件实例只允许布局属性补丁；`x-tabs`/`x-pagination` 由编辑器内置并插入到已声明脚本、入口变量与事件中。旧播放器拒绝新语法，编辑器不做迁移。
+
+## 17. v0.11.3 总音量与 2D 图片粒子
+
+- 应用版本 0.11.3；story 8 / UI 3 / save 9 / profile 1 / read 1 / 隐藏槽 1 / KPAK 1、2 与 demo content-version=11 不变。
+- 总音量：`settings.master_volume`（0–1，默认 1）与四项分项相乘，`ctx.setting("master_volume", ctx.value)` 是普通 UI 命令；音乐、语音、剧情音效、UI 音效和 sequence 视频音轨都走同一增益，在播声音只改增益。settings.json 缺少 `master_volume` 按坏设置提示并使用完整默认值，不做字段补齐。编辑器把该键列入设置白名单与静态示例，不写 settings.json。
+- 粒子节点：`<particles>` 是普通 UI 节点，可放在 screen 或 panel/nine-patch 的直接子节点位置，不能放在 repeat 模板中；位置由父节点偏移决定，绘制按兄弟顺序，粒子被本节点矩形裁剪。共享属性只有 `id/x/y/width/height/visible/color`，另有 `image/rate/burst/max/life/life-max/size/size-max/vx/vx-max/vy/vy-max/accel-x/accel-y/spin/spin-max/fade/autostart`；`image` 必须是已声明 image/cg 资源，`rate` 0–200、`burst` 0–128 且两者不能同时为 0，`max` 1–512（默认 128），`life` 0.1–10、`size` 0.5–512、速度与加速度 ±2000、转速 ±720，每一对 `-max` 不得小于下限；未知属性、非有限值、越界、范围倒置、未声明图片与 repeat 内声明都按严格 XML 报错。
+- 预算：每页最多 4 个发射器、整份 UI 最多 32 个，全局存活粒子 2048、单发射器 512、单次更新最多生成 256 个、物理步长最多 0.1 秒；超预算只钳制生成而不使候选失败。持续发射用累积器，长帧不补发。
+- JS 命令：`ctx.particles(id)` 返回冻结对象，方法只有 `start()`/`stop()`/`clear()`/`burst()`；start 要求 `rate > 0`，burst 要求已声明 `burst`；同一发射器一次只能有一个命令，页面必须出现在提交后的页面栈中，`game.enter` 与 `screen.open/close` 不接受粒子命令。
+- 时钟与恢复：粒子使用 UI 演出时钟（菜单暂停时继续，失焦/宿主提示/调试暂停冻结且不补积累），随页面关闭清理；读档、重开、首次进入与成功热更按当前页面栈重建声明初态，不重放 burst；实例、随机状态与纹理句柄不入 Model、存档、隐藏槽、偏好或截图。
+- 编辑器规则：只写上述属性与固定命令，画布静态示意不执行发射；新控件需要已声明纹理，属性检查器按同一范围校验并拒绝 `enabled` 等未知属性；`ctx.particles` 的循环/动态写法保持源码维护。

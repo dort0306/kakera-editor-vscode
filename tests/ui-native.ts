@@ -122,6 +122,17 @@ export async function verifyUiEditor(tools: { player: string; packer: string }, 
   assert.equal(readUiDesign(next).gallery.find(g => g.id === 'cg.test')!.title, '测试 CG');
   const soundOnly = apply({action:'addNode',screen:page,kind:'button'}).selected!;
   apply({action:'patchNode',id:soundOnly,patch:{sound:'ui.click'}});
+  // v0.11.3 2D particles: declared texture, range-valid emitter and fixed JS commands.
+  await fs.writeFile(path.join(content, 'ui-particle.png'), pngFixture());
+  next.set('story.xml', next.get('story.xml')!.replace('</assets>', '<image id="editor.particle" src="ui-particle.png"/></assets>'));
+  const emitter = apply({ action: 'addNode', screen: page, kind: 'particles', image: 'editor.particle' }).selected!;
+  apply({ action: 'patchNode', id: emitter, patch: { rate: '20', burst: '12', max: '48', life: '0.6', 'life-max': '1.2', size: '6', 'size-max': '12', vy: '60', 'vy-max': '120', autostart: 'true' } });
+  control(page, 'button', 'editor.particlesStart', 'particles', { targetValue: emitter, particleAction: 'start' });
+  control(page, 'button', 'editor.particlesBurst', 'particles', { targetValue: emitter, particleAction: 'burst' });
+  assert.ok(next.get('scripts/ui.js')!.includes(`ctx.particles("${emitter}").start();`));
+  assert.ok(next.get('scripts/ui.js')!.includes(`ctx.particles("${emitter}").burst();`));
+  const particleEvent = readUiDesign(next).events.find(event => event.name === 'editor.particlesBurst')!;
+  assert.deepEqual([particleEvent.command, particleEvent.commandTarget, particleEvent.particleAction], ['particles', emitter, 'burst']);
   apply({ action: 'variable', file: 'ui/state.xml', name: 'hugeInteger', type: 'int', initial: '9007199254740993' });
   next.set('scripts/ui.js', next.get('scripts/ui.js')! + `\nframe('opening').enter(ctx => ctx.setUi('windowTitle', '进入'));\nframe('opening').exit(ctx => ctx.open(${JSON.stringify(page)}));\nui(${JSON.stringify(page)}).bind('screen.open', ctx => ctx.sequence('ui.reveal'));\nui(${JSON.stringify(page)}).bind('screen.close', ctx => ctx.resume('opening'));\n`);
   assert.equal(readGameTitle(next).text, 'UI 编辑器真实校验'); assert.ok(readUiDesign(next).screens.some(s => s.id === page));
@@ -144,9 +155,9 @@ export async function verifyUiEditor(tools: { player: string; packer: string }, 
     const entries = format === 2 ? await archiveEntries(output) : await pathsV1(output);
     assert.ok(!entries.some(e => e.path === 'ui-audio.json')); assert.ok(!entries.some(e => e.path === 'flow-checkpoint.json'));
     assert.ok(!entries.some(e => e.path === 'keybindings.json')); assert.ok(!entries.some(e => e.path === 'ui-colors.json'));
-    assert.ok(entries.some(e => e.path === 'ui-tone.wav')); assert.ok(entries.some(e => e.path === 'ui.xml')); assert.ok(!entries.some(e => e.path.startsWith('ui/'))); assert.ok(entries.some(e => e.path === 'scripts/ui.js'));
+    assert.ok(entries.some(e => e.path === 'ui-tone.wav')); assert.ok(entries.some(e => e.path === 'ui.xml')); assert.ok(!entries.some(e => e.path.startsWith('ui/'))); assert.ok(entries.some(e => e.path === 'scripts/ui.js')); assert.ok(entries.some(e => e.path === 'ui-particle.png'));
   }
   for (const [file, text] of before) assert.equal(await fs.readFile(path.join(content, file), 'utf8'), text);
   assert.ok(next.get('ui/pages/hud.xml')!.includes(button));
-  console.log('UI EDITOR NATIVE PASS: nested includes, cross-file title/control edits, independent events with XML/script bindings, pages/buttons/toggle/UI i64 variables, CG asset/visual/gallery/progress/unlock bindings, UI sequences/sound groups/sound-only buttons, present/resume events, frame/screen lifecycle registrations, palette/color-bind/color-picker with generated ctx.setUi handlers, shortcut capture/keybinding/reset/color-preference/quit commands, quick modal popup, invalid fade target rejection, audio preference and hidden-checkpoint exclusion, real engine validation, KPAK 1/2 merge, independent package check and original source preservation.');
+  console.log('UI EDITOR NATIVE PASS: nested includes, cross-file title/control edits, independent events with XML/script bindings, pages/buttons/toggle/UI i64 variables, CG asset/visual/gallery/progress/unlock bindings, UI sequences/sound groups/sound-only buttons, v0.11.3 particle emitters with start/burst commands, present/resume events, frame/screen lifecycle registrations, palette/color-bind/color-picker with generated ctx.setUi handlers, shortcut capture/keybinding/reset/color-preference/quit commands, quick modal popup, invalid fade target rejection, audio preference and hidden-checkpoint exclusion, real engine validation, KPAK 1/2 merge, independent package check and original source preservation.');
 }

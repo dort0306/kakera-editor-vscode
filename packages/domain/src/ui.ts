@@ -1,6 +1,6 @@
 import type { Variable } from './index';
 import type { NinePatchSpec } from './textures';
-export const UI_KINDS = ['scene', 'panel', 'image', 'nine-patch', 'label', 'button', 'slider', 'toggle', 'repeat', 'color-picker'] as const;
+export const UI_KINDS = ['scene', 'panel', 'image', 'nine-patch', 'label', 'button', 'slider', 'toggle', 'repeat', 'color-picker', 'particles'] as const;
 export type UiKind = typeof UI_KINDS[number];
 /** Host control kinds plus instances of a JS composition tag (`component.register("x-…")`). */
 export type UiNodeKind = UiKind | 'component';
@@ -16,8 +16,19 @@ export const UI_ATTRIBUTES: Record<UiKind, string[]> = {
   slider: [...common, 'value', 'min', 'max', 'event'],
   toggle: [...common, 'text', 'text-key', 'text-key-bind', 'value', 'event', 'font-size', 'color-bind'],
   repeat: [...common, 'source', 'columns', 'item-width', 'item-height', 'gap', 'page-size', 'page-bind'],
-  'color-picker': ['x', 'y', 'width', 'height', 'visible', 'enabled', 'value', 'event', 'alpha']
+  'color-picker': ['x', 'y', 'width', 'height', 'visible', 'enabled', 'value', 'event', 'alpha'],
+  // v0.11.3 image emitters share the rect/tint attributes but have no `enabled`,
+  // event or binding attribute (engine §39.2).
+  particles: ['x', 'y', 'width', 'height', 'color', 'visible', 'image', 'rate', 'burst', 'max', 'life', 'life-max', 'size', 'size-max', 'vx', 'vx-max', 'vy', 'vy-max', 'accel-x', 'accel-y', 'spin', 'spin-max', 'fade', 'autostart']
 };
+/** Hard emitter budgets/attribute ranges of the matching v0.11.3 engine (API §39.2). */
+export const UI_PARTICLES = {
+  perScreen: 4, total: 32, rateMax: 200, burstMax: 128, maxMax: 512,
+  lifeMin: 0.1, lifeMax: 10, sizeMin: 0.5, sizeMax: 512, speed: 2000, accel: 2000, spin: 720
+} as const;
+/** Methods of the frozen `ctx.particles(id)` handle (engine §39.3). */
+export const UI_PARTICLE_ACTIONS = ['start', 'stop', 'clear', 'burst'] as const;
+export type UiParticleAction = typeof UI_PARTICLE_ACTIONS[number];
 /** v0.11.2 composition tags keep their instance layout attributes reserved (engine §38.2). */
 export const UI_COMPONENT_ATTRIBUTES: readonly string[] = ['x', 'y', 'width', 'height', 'visible', 'enabled'];
 /** Read-only `repeat.<节点ID>.<字段>` metadata bindings added in v0.11.2. */
@@ -51,7 +62,7 @@ export interface UiPaletteSlot extends UiLocation { id: string; initial: string 
 export interface UiGalleryEntry { id: string; image: string; title: string; unlocked: boolean; file?: string; line?: number; /** Added automatically from a <cg> resource, not declared in UI XML. */ implicit?: boolean; /** v0.10.1 static title message key. */ titleKey?: string }
 /** Static localization target collected from UI XML for coverage and argument checks. */
 export interface UiTextUsage { key: string; file: string; line: number; label: string; arguments?: string[]; dynamic?: boolean }
-export type UiEventCommand = 'open' | 'close' | 'advance' | 'restart' | 'choose' | 'setting' | 'setUi' | 'sequence' | 'playSound' | 'soundEnabled' | 'soundActor' | 'soundExclude' | 'present' | 'resume' | 'unlock' | 'captureShortcut' | 'cancelShortcutCapture' | 'keybinding' | 'resetKeybindings' | 'colorPreference' | 'resetColors' | 'quit' | 'locale';
+export type UiEventCommand = 'open' | 'close' | 'advance' | 'restart' | 'choose' | 'setting' | 'setUi' | 'sequence' | 'playSound' | 'soundEnabled' | 'soundActor' | 'soundExclude' | 'present' | 'resume' | 'unlock' | 'captureShortcut' | 'cancelShortcutCapture' | 'keybinding' | 'resetKeybindings' | 'colorPreference' | 'resetColors' | 'quit' | 'locale' | 'particles';
 export interface UiEvent extends UiLocation {
   /** Independent event ID registered through `event.register(name, callback)`. */
   name: string;
@@ -82,6 +93,8 @@ export interface UiEvent extends UiLocation {
   /** locale: text/voice channel and canonical locale or null (follow system). */
   channel?: 'text' | 'voice';
   locale?: string | null;
+  /** particles: one of start/stop/clear/burst on the emitter named by commandTarget (v0.11.3). */
+  particleAction?: UiParticleAction;
   /** Control/page IDs proven to attach this definition through XML `event` or `ui(id).bind(id)`. */
   targets?: string[];
 }
@@ -139,7 +152,7 @@ export type UiEdit =
   | { action: 'addPopup'; file: string; name?: string; title?: string; message?: string; confirmText?: string; cancelText?: string; accept?: 'close' | 'event' | 'quit'; /** existing event.register ID referenced by the generated confirm button. */ event?: string }
   | { action: 'variable'; file: string; id?: string; name?: string; type: 'int' | 'bool' | 'string'; initial: string; min?: string; max?: string }
   | { action: 'deleteVariable'; id: string }
-  | { action: 'event'; name: string; /** optional new binding target for a newly created event: control/page ID, `$game`, or empty for an unbound definition. */ target?: string; command: UiEventCommand; targetValue?: string; /** resume only: open this screen before starting/restoring the story. */ page?: string; /** existing event ID when editing instead of appending. */ original?: string; /** captureShortcut / keybinding action. */ actionValue?: string; /** captureShortcut result event ID. */ resultEvent?: string; /** keybinding canonical value or empty string for null. */ binding?: string; /** colorPreference slot. */ slot?: string; /** colorPreference color or empty string for null. */ color?: string; /** colorPreference UI string variable read through ctx.ui. */ colorVariable?: string; /** locale channel. */ channel?: string; /** locale canonical ID or empty string for null. */ locale?: string }
+  | { action: 'event'; name: string; /** optional new binding target for a newly created event: control/page ID, `$game`, or empty for an unbound definition. */ target?: string; command: UiEventCommand; targetValue?: string; /** resume only: open this screen before starting/restoring the story. */ page?: string; /** existing event ID when editing instead of appending. */ original?: string; /** captureShortcut / keybinding action. */ actionValue?: string; /** captureShortcut result event ID. */ resultEvent?: string; /** keybinding canonical value or empty string for null. */ binding?: string; /** colorPreference slot. */ slot?: string; /** colorPreference color or empty string for null. */ color?: string; /** colorPreference UI string variable read through ctx.ui. */ colorVariable?: string; /** locale channel. */ channel?: string; /** locale canonical ID or empty string for null. */ locale?: string; /** particles: start/stop/clear/burst on targetValue. */ particleAction?: string }
   | { action: 'deleteEvent'; name: string }
   | { action: 'gallery'; original?: string; id: string; image: string; title: string; /** v0.10.1 static title message key; mutually exclusive with title. */ titleKey?: string; unlocked: boolean }
   | { action: 'deleteGallery'; id: string };
